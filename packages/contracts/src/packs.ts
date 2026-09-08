@@ -364,6 +364,107 @@ export const DecisionGuideSchema = z
   .strict();
 export type DecisionGuide = z.infer<typeof DecisionGuideSchema>;
 
+/**
+ * A single named legal/regulatory standard relevant to this class of
+ * decision.
+ *
+ * Grounded in `packages/scenarios/src/tools/license-lookup.ts`, which is the
+ * model this shape describes: that fixture tool already does real
+ * compliance-shaped work -- confirms a contractor's licence is active, its
+ * class covers the scope, its certificate of insurance is active, and the
+ * certificate's named insured matches the licence holder -- without the
+ * manifest anywhere calling it that. `PackComplianceStandardSchema` gives a
+ * pack author a place to say, in a reader's own language, what a real-world
+ * standard actually requires, where it comes from, what the product checks
+ * for it automatically (if anything), and what stays a human's own
+ * responsibility -- so "this product does compliance work" stops being an
+ * implicit property nobody can see and becomes something a human can read
+ * (the product owner's own framing: "I basically just want to include
+ * things like compliance, b/c thats big").
+ *
+ * No URL/link field. The only existing precedent for a pack-author-facing
+ * URL anywhere in this codebase is `Source.url` in case.ts, and that is
+ * case-scoped submitted evidence a human or agent supplies at runtime, never
+ * static pack-manifest content an author ships once and everyone reads
+ * forever. `packs.ts` itself has never declared a URL field on any schema.
+ * `citation` below is a plain identifying string (e.g. "FAR 13.104(b)") a
+ * reader can look up on their own -- not a live link a pack author could
+ * point anywhere, which would make this schema a link-injection vector
+ * `DecisionGuideSchema`'s own header comment already documents this file's
+ * general refusal to add.
+ */
+export const PackComplianceStandardSchema = z
+  .object({
+    id: idString(),
+    /** The standard's own name, in plain language, e.g. "Minimum competitive bids for public construction contracts." */
+    label: safeString(200),
+    /** What the standard actually requires, in plain language -- not a legal paraphrase a reader would need to double-check against the citation before trusting it. */
+    summary: safeString(1000),
+    /** The specific statute or regulation section this standard comes from, e.g. "FAR 13.104(b)" or "N.C. Gen. Stat. § 143-132." A citation only, never a link -- see the schema comment above. */
+    citation: safeString(300),
+    /** Who issues or enforces the standard, e.g. "U.S. Federal Acquisition Regulation" or "North Carolina General Assembly." Named explicitly so a reader is never left wondering whose rule this is. */
+    authority: safeString(200),
+    /**
+     * What the product actually verifies automatically for this standard,
+     * if anything -- e.g. "Confirms the contractor's licence is active, its
+     * class covers this scope, and its certificate of insurance names the
+     * licence holder."
+     *
+     * Optional, deliberately: several real standards this field can
+     * describe (competitive-bid minimums, for instance) are informational
+     * only. The product can count how many bids exist in a case, but it has
+     * no way to confirm how many sources were actually SOLICITED before an
+     * award -- the fact the statute actually gates on -- so a standard with
+     * no automated check must be representable without inventing one it
+     * cannot honestly perform.
+     */
+    automatedCheck: safeString(1000).optional(),
+    /**
+     * What stays a human's own responsibility for this standard, e.g.
+     * confirming which jurisdiction's rule actually applies to this case, or
+     * that a solicitation genuinely reached the required number of sources.
+     * Always present, unlike `automatedCheck` above: even a fully automated
+     * check still requires a human to confirm the underlying facts are
+     * right for their own situation and to make the actual award decision --
+     * this product gives no legal advice and asserts no jurisdictional
+     * conclusion on a reader's behalf.
+     */
+    humanResponsibility: safeString(1000),
+  })
+  .strict();
+export type PackComplianceStandard = z.infer<typeof PackComplianceStandardSchema>;
+
+/**
+ * The pack-level declaration of the real-world rules and standards this
+ * class of decision is governed by: statutory minimums, licensing and
+ * insurance requirements, and the like.
+ *
+ * Optional for the identical reason `decisionGuide` and `discovery` are (see
+ * `DecisionPackManifestSchema.decisionGuide`'s comment for the full
+ * mechanism): a pack that declares no `compliance` must still compile, pass
+ * conformance, and -- critically -- produce the identical `compiledHash` it
+ * always has, because `CasePackPin` (case.ts) pins that hash on every
+ * stored case, and `canonicalizeManifest`
+ * (packages/packs/src/canonicalize.ts) already drops `undefined` object
+ * values before hashing, so an omitted `compliance` and an absent one
+ * serialize identically. `compiler.test.ts`'s existing inline-snapshot hash
+ * test proves this property for `decisionGuide`; this field carries an
+ * equivalent proof of its own.
+ *
+ * `disclaimer` carries the one framing sentence that applies to every
+ * standard below it -- informational only, never legal advice, and a
+ * human's own responsibility to confirm against their actual jurisdiction --
+ * so no individual `PackComplianceStandard` entry has to repeat it.
+ */
+export const PackComplianceSchema = z
+  .object({
+    /** e.g. "These are informational minimums on the party making the award, not legal advice -- confirm what applies in your own jurisdiction before relying on them." */
+    disclaimer: safeString(1000),
+    standards: z.array(PackComplianceStandardSchema).max(20),
+  })
+  .strict();
+export type PackCompliance = z.infer<typeof PackComplianceSchema>;
+
 export const DecisionPackManifestSchema = z
   .object({
     schemaVersion: z.literal('1.0'),
@@ -421,6 +522,13 @@ export const DecisionPackManifestSchema = z
      * omitted `discovery` and an absent one serialize identically.
      */
     discovery: PackDiscoveryDefinitionSchema.optional(),
+    /**
+     * The real-world rules and standards this class of decision is
+     * governed by. See `PackComplianceSchema` above for the full shape and
+     * the exact optional/hash-stability reasoning, which is identical to
+     * `decisionGuide`'s and `discovery`'s immediately above.
+     */
+    compliance: PackComplianceSchema.optional(),
   })
   .strict();
 export type DecisionPackManifest = z.infer<typeof DecisionPackManifestSchema>;

@@ -2470,6 +2470,7 @@ export function App() {
             onResetDemo={handleResetDemo}
             resetPending={resetPending}
             helpButtonRef={helpButtonRef}
+            compliance={activePack?.compliance ?? null}
             layout={layout}
           />
         ) : (
@@ -3054,6 +3055,7 @@ export function App() {
         open={firstRunGuideOpen}
         onDismiss={handleDismissFirstRunGuide}
         returnFocusTo={helpButtonRef}
+        compliance={activePack?.compliance ?? null}
       />
 
       {runtimeInspectorOpen ? (

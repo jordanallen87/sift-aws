@@ -31,6 +31,7 @@
  * asserting a capability.
  */
 import type { Ref } from 'react';
+import type { PackCompliance } from '@sift/contracts';
 import { CircleQuestionMarkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,9 +72,18 @@ export interface HelpButtonProps {
    * still drops `<HelpButton />` in with no props at all.
    */
   readonly ref?: Ref<HTMLButtonElement>;
+  /**
+   * The active case's declared compliance content, forwarded straight to
+   * `HowSiftWorksContent`. Optional and omitted by the two callers that
+   * render this before any case exists (`VehicleCatalogFlow`,
+   * `DemoLauncher`) -- see `HowSiftWorksContentProps.compliance`'s own doc
+   * comment for the full reasoning and the "render nothing" behavior an
+   * absent value produces.
+   */
+  readonly compliance?: PackCompliance | null | undefined;
 }
 
-export function HelpButton({ ref }: HelpButtonProps = {}) {
+export function HelpButton({ ref, compliance }: HelpButtonProps = {}) {
   return (
     <Sheet>
       {/*
@@ -137,7 +147,7 @@ export function HelpButton({ ref }: HelpButtonProps = {}) {
           role="region"
           aria-label={HOW_SIFT_WORKS_TITLE}
         >
-          <HowSiftWorksContent />
+          <HowSiftWorksContent compliance={compliance} />
         </SheetBody>
       </SheetContent>
     </Sheet>

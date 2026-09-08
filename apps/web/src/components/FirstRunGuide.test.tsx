@@ -5,16 +5,21 @@ import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { AppProviders } from '../app/AppProviders.js';
 import { InMemoryModelContextAdapter } from '../model-context/adapter.js';
+import type { FirstRunGuideProps } from './FirstRunGuide.js';
 import { FirstRunGuide } from './FirstRunGuide.js';
 import { ASSISTANT_PHRASES, HOW_SIFT_WORKS_TITLE } from './HowSiftWorks.js';
 
-function renderGuide(open: boolean, onDismiss: () => void = vi.fn()) {
+function renderGuide(
+  open: boolean,
+  onDismiss: () => void = vi.fn(),
+  props: Partial<Omit<FirstRunGuideProps, 'open' | 'onDismiss'>> = {},
+) {
   return render(
     <AppProviders webMcpAdapter={new InMemoryModelContextAdapter()}>
       <button type="button" data-testid="outside-trigger">
         outside
       </button>
-      <FirstRunGuide open={open} onDismiss={onDismiss} />
+      <FirstRunGuide open={open} onDismiss={onDismiss} {...props} />
     </AppProviders>,
   );
 }
@@ -137,5 +142,32 @@ describe('FirstRunGuide', () => {
     const { baseElement } = renderGuide(true);
     await screen.findByTestId('first-run-guide');
     expect(await axe(baseElement)).toHaveNoViolations();
+  });
+
+  it('forwards a supplied compliance value into the "What gets checked" section', async () => {
+    renderGuide(true, vi.fn(), {
+      compliance: {
+        disclaimer: 'Informational only.',
+        standards: [
+          {
+            id: 'sample-standard',
+            label: 'Sample standard',
+            summary: 'A sample requirement.',
+            citation: 'Sample Citation',
+            authority: 'Sample Authority',
+            humanResponsibility: 'Confirm this applies to your situation.',
+          },
+        ],
+      },
+    });
+    const guide = await screen.findByTestId('first-run-guide');
+    expect(within(guide).getByTestId('how-sift-works-compliance')).toBeInTheDocument();
+    expect(within(guide).getByText('Sample standard')).toBeInTheDocument();
+  });
+
+  it('renders no "What gets checked" section when no compliance is supplied (the default)', async () => {
+    renderGuide(true);
+    const guide = await screen.findByTestId('first-run-guide');
+    expect(within(guide).queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
   });
 });

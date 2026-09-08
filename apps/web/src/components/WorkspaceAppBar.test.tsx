@@ -248,6 +248,46 @@ describe('WorkspaceAppBar', () => {
     expect(screen.getByTestId('help-button')).toBeInTheDocument();
   });
 
+  // Proves the `compliance` prop actually reaches the rendered Help sheet
+  // rather than being accepted and silently dropped -- the same class of
+  // defect `docs/decisions/0004-consumer-workspace-information-
+  // architecture.md`'s audit found for other threaded-but-unused props.
+  it('forwards a supplied compliance value through Help into the "What gets checked" section', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkspaceAppBar
+        {...buildProps({
+          compliance: {
+            disclaimer: 'Informational only, not legal advice.',
+            standards: [
+              {
+                id: 'sample-standard',
+                label: 'Sample standard',
+                summary: 'A sample requirement.',
+                citation: 'Sample Citation',
+                authority: 'Sample Authority',
+                humanResponsibility: 'Confirm this applies to your situation.',
+              },
+            ],
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByTestId('help-button'));
+    expect(screen.getByTestId('how-sift-works-compliance')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('how-sift-works-compliance-standard-sample-standard'),
+    ).toHaveTextContent('Sample standard');
+  });
+
+  it('renders no "What gets checked" section in Help when compliance is omitted (the default)', async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceAppBar {...buildProps()} />);
+    await user.click(screen.getByTestId('help-button'));
+    expect(screen.queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
+  });
+
   it('renders a discoverable developer-view control and calls onOpenDeveloperView when activated', async () => {
     const user = userEvent.setup();
     const onOpenDeveloperView = vi.fn();

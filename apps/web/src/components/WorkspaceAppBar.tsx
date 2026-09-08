@@ -307,6 +307,7 @@
  * any control, unconditionally.
  */
 import type { Ref } from 'react';
+import type { PackCompliance } from '@sift/contracts';
 import {
   ChevronDownIcon,
   CircleQuestionMarkIcon,
@@ -379,6 +380,17 @@ export interface WorkspaceAppBarProps {
    * so the bar neither reads nor reacts to it.
    */
   helpButtonRef?: Ref<HTMLButtonElement>;
+  /**
+   * The active case's declared compliance content, forwarded straight to
+   * `HelpButton` (and from there to `HowSiftWorksContent`). Optional and
+   * omitted-safe: `App.tsx` is the only caller that can supply it (it alone
+   * computes `activePack` from the live case + installed pack list), and a
+   * caller with nothing to pass produces a Help sheet with no "What gets
+   * checked" section rather than an empty one -- see
+   * `HowSiftWorksContentProps.compliance`'s own doc comment for the full
+   * "render nothing" reasoning.
+   */
+  compliance?: PackCompliance | null | undefined;
   layout: 'narrow' | 'expanded';
 }
 
@@ -515,6 +527,7 @@ export function WorkspaceAppBar({
   onResetDemo,
   resetPending = false,
   helpButtonRef,
+  compliance,
   layout,
 }: WorkspaceAppBarProps) {
   const connection = CONNECTION_META[connectionState];
@@ -838,7 +851,10 @@ export function WorkspaceAppBar({
             layouts, per ADR 0008's "every capability must be reachable in
             both [modes]." */}
         <div className="flex shrink-0 items-center gap-[var(--space-1)]">
-          <HelpButton {...(helpButtonRef !== undefined ? { ref: helpButtonRef } : {})} />
+          <HelpButton
+            {...(helpButtonRef !== undefined ? { ref: helpButtonRef } : {})}
+            compliance={compliance}
+          />
 
           {/* Icon-only at every width, so this one was already wrapped
               unconditionally before the third post-ship repair made every

@@ -49,6 +49,7 @@
  * mode worse than saying nothing.
  */
 import type { ReactNode } from 'react';
+import type { PackCompliance } from '@sift/contracts';
 import { useWebMcpSupported } from '../app/AppProviders.js';
 import {
   SIFT_WEBMCP_TOOL_NAMES,
@@ -153,6 +154,52 @@ function ControlRow({ name, children }: { name: string; children: ReactNode }) {
   );
 }
 
+/**
+ * One real-world standard the active case is governed by, and what Sift
+ * does and does not verify about it -- `PackComplianceStandard`
+ * (`@sift/contracts`).
+ *
+ * Deliberately silent about WHERE this content came from. ADR 0004 decision
+ * item 1 removed Decision Pack identity from the consumer surface entirely
+ * ("Decision Pack id, version, and compiled hash leave the consumer surface
+ * entirely"), and this file's own product.md-grounded voice never says
+ * "this pack declares" or "this pack checks" anywhere else -- so this row
+ * is framed the same way every other row in this sheet already is: what
+ * happens, for the reader, never which internal object it came from. No
+ * evidence-level vocabulary either (E1/E2/E3 stay developer-only per the
+ * same ADR), which is why `automatedCheck`/`humanResponsibility` are
+ * rendered as plain "Sift checks" / "Your responsibility" lines rather than
+ * anything resembling a verification tier.
+ */
+function ComplianceStandardRow({ standard }: { standard: PackCompliance['standards'][number] }) {
+  return (
+    <div
+      data-testid={`how-sift-works-compliance-standard-${standard.id}`}
+      className="flex flex-col gap-[var(--space-1)] rounded-[var(--radius-sm)] bg-[color:var(--color-surface-sunken)] px-[var(--space-3)] py-[var(--space-2)]"
+    >
+      <p className="m-0 text-[length:var(--font-size-sm)] leading-[var(--line-height-snug)] font-[var(--font-weight-medium)] text-foreground">
+        {standard.label}
+      </p>
+      <p className="m-0 text-[length:var(--font-size-xs)] leading-[var(--line-height-normal)] text-muted-foreground">
+        {standard.citation} — {standard.authority}
+      </p>
+      <p className="m-0 text-[length:var(--font-size-sm)] leading-[var(--line-height-normal)] text-foreground">
+        {standard.summary}
+      </p>
+      {standard.automatedCheck !== undefined ? (
+        <p className="m-0 text-[length:var(--font-size-xs)] leading-[var(--line-height-normal)] text-foreground">
+          <strong className="font-[var(--font-weight-semibold)]">Sift checks:</strong>{' '}
+          <span className="text-muted-foreground">{standard.automatedCheck}</span>
+        </p>
+      ) : null}
+      <p className="m-0 text-[length:var(--font-size-xs)] leading-[var(--line-height-normal)] text-foreground">
+        <strong className="font-[var(--font-weight-semibold)]">Your responsibility:</strong>{' '}
+        <span className="text-muted-foreground">{standard.humanResponsibility}</span>
+      </p>
+    </div>
+  );
+}
+
 export interface HowSiftWorksContentProps {
   /**
    * Test/host override for the real `adapter.supported()` signal. Omitted
@@ -160,12 +207,41 @@ export interface HowSiftWorksContentProps {
    * shared adapter, so the copy and `WebMcpStatus` cannot disagree.
    */
   readonly webMcpSupported?: boolean;
+  /**
+   * The active case's declared real-world compliance content
+   * (`CompiledDecisionPack.compliance`), or `null`/omitted when there is no
+   * active case or the active case's pack declares none.
+   *
+   * `App.tsx` is the only real caller that can ever have something to pass
+   * here (it alone computes `activePack` from a live case + the installed
+   * pack list); `VehicleCatalogFlow`/`DemoLauncher` render `HelpButton`
+   * before any case exists and simply omit this prop, which is exactly
+   * correct -- there is nothing yet to check.
+   *
+   * Renders nothing at all when absent or empty, matching this codebase's
+   * established "no empty shell" rule (`WorkspaceAlertBanner`'s own `return
+   * null` when it has nothing to say, and ADR 0004 decision item 2's "Do not
+   * render an empty conceptual region merely because CaseState contains a
+   * corresponding field"): a person who opens Help on a case with nothing
+   * declared here should see the sections above and below, not a section
+   * titled "What gets checked" that says nothing.
+   */
+  readonly compliance?: PackCompliance | null | undefined;
 }
 
-export function HowSiftWorksContent({ webMcpSupported }: HowSiftWorksContentProps = {}) {
+export function HowSiftWorksContent({
+  webMcpSupported,
+  compliance,
+}: HowSiftWorksContentProps = {}) {
   const detected = useWebMcpSupported();
   const supported = webMcpSupported ?? detected;
   const toolCount = SIFT_WEBMCP_TOOL_NAMES.length;
+  // Both default to the empty/blank case so the render guard below
+  // (`standards.length > 0`) is the single source of truth for whether the
+  // section appears at all -- `complianceDisclaimer` is never read unless
+  // `compliance` (and therefore this string) is genuinely present.
+  const standards = compliance?.standards ?? [];
+  const complianceDisclaimer = compliance?.disclaimer ?? '';
 
   return (
     <div className="flex flex-col gap-[var(--space-5)]">
@@ -249,6 +325,37 @@ export function HowSiftWorksContent({ webMcpSupported }: HowSiftWorksContentProp
           ))}
         </dl>
       </HelpSection>
+
+      {/*
+        What gets checked -- the compliance surface. Renders nothing at all
+        (not even the section heading) when the active case has no
+        compliance content, per the "no empty shell" rule this file's own
+        `HowSiftWorksContentProps.compliance` doc comment explains.
+
+        Placed after "Talking to your assistant" and before "What it cannot
+        do": this is real, checked content, so it earns a place beside the
+        controls above it -- and it precedes the authority boundary because
+        both are "important things to read once, then reach again from
+        here," read together as the sheet's closing pair.
+      */}
+      {standards.length > 0 ? (
+        <HelpSection label="What gets checked" testId="how-sift-works-compliance">
+          <p
+            data-testid="how-sift-works-compliance-disclaimer"
+            className="text-[length:var(--font-size-sm)] leading-[var(--line-height-normal)] text-muted-foreground"
+          >
+            {complianceDisclaimer}
+          </p>
+          <div
+            data-testid="how-sift-works-compliance-standards"
+            className="flex flex-col gap-[var(--space-2)]"
+          >
+            {standards.map((standard) => (
+              <ComplianceStandardRow key={standard.id} standard={standard} />
+            ))}
+          </div>
+        </HelpSection>
+      ) : null}
 
       {/*
         The authority boundary, given its own block rather than a trailing

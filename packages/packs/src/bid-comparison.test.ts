@@ -565,6 +565,159 @@ describe('decisionGuide (§46/§47 pack-level Decision Guide)', () => {
   });
 });
 
+// Compliance: the pack-level "real-world rules and standards this class of
+// decision is governed by" declaration (packs.ts's `PackComplianceSchema`).
+// Every citation is verified real content, not invented, so this suite
+// checks against the exact statutes/regulations named in the brief rather
+// than merely "some non-empty string exists."
+describe('compliance (real-world rules and standards)', () => {
+  it('declares a compliance value with a disclaimer and every named standard', () => {
+    const compliance = BID_COMPARISON_MANIFEST.compliance;
+    expect(compliance).toBeDefined();
+    expect(compliance?.disclaimer.length).toBeGreaterThan(0);
+    expect(compliance?.standards.map((standard) => standard.id).sort()).toEqual(
+      [
+        'far-13-104-b-simplified-acquisitions',
+        'nc-gs-143-132-public-construction',
+        'comparable-state-bid-minimums',
+        'license-and-insurance-verification',
+      ].sort(),
+    );
+  });
+
+  it('cites FAR 13.104(b) for the federal simplified-acquisition minimum', () => {
+    const standard = BID_COMPARISON_MANIFEST.compliance?.standards.find(
+      (entry) => entry.id === 'far-13-104-b-simplified-acquisitions',
+    );
+    expect(standard?.citation).toContain('FAR 13.104(b)');
+    expect(standard?.summary).toContain('at least three sources');
+  });
+
+  it('cites N.C. Gen. Stat. § 143-132 for the North Carolina public-construction minimum, including the water/sewer carve-out', () => {
+    const standard = BID_COMPARISON_MANIFEST.compliance?.standards.find(
+      (entry) => entry.id === 'nc-gs-143-132-public-construction',
+    );
+    expect(standard?.citation).toBe('N.C. Gen. Stat. § 143-132');
+    expect(standard?.summary).toContain('at least three competitive bids');
+    expect(standard?.summary).toContain('July 7, 2026');
+  });
+
+  it('names Idaho, Pennsylvania, and Louisiana as comparable state minimums', () => {
+    const standard = BID_COMPARISON_MANIFEST.compliance?.standards.find(
+      (entry) => entry.id === 'comparable-state-bid-minimums',
+    );
+    expect(standard?.summary).toContain('Idaho');
+    expect(standard?.summary).toContain('Pennsylvania');
+    expect(standard?.summary).toContain('Louisiana');
+  });
+
+  it('describes license/insurance verification as an automated check, matching what license-lookup.ts actually verifies', () => {
+    const standard = BID_COMPARISON_MANIFEST.compliance?.standards.find(
+      (entry) => entry.id === 'license-and-insurance-verification',
+    );
+    expect(standard?.automatedCheck).toBeDefined();
+    expect(standard?.automatedCheck).toContain('license is active');
+    expect(standard?.automatedCheck).toContain('named insured');
+  });
+
+  // The three competitive-bid-minimum standards are read-only, informational
+  // content: this pack cannot observe how many sources were solicited
+  // (only how many bid documents exist in a case), so none of them may
+  // claim an automated check it cannot honestly perform. See
+  // `PackComplianceStandardSchema.automatedCheck`'s own doc comment.
+  it('declares no automatedCheck for any of the three competitive-bid-minimum standards', () => {
+    const bidMinimumIds = [
+      'far-13-104-b-simplified-acquisitions',
+      'nc-gs-143-132-public-construction',
+      'comparable-state-bid-minimums',
+    ];
+    for (const id of bidMinimumIds) {
+      const standard = BID_COMPARISON_MANIFEST.compliance?.standards.find(
+        (entry) => entry.id === id,
+      );
+      expect(standard?.automatedCheck, `${id} must not claim an automated check`).toBeUndefined();
+    }
+  });
+
+  it('every standard states a humanResponsibility -- this pack never claims a compliance determination on its own', () => {
+    for (const standard of BID_COMPARISON_MANIFEST.compliance?.standards ?? []) {
+      expect(standard.humanResponsibility.length, standard.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('states minimums on the awarding party, never a cap on bid count or a claim that any count is typical', () => {
+    const compliance = BID_COMPARISON_MANIFEST.compliance;
+    expect(compliance?.disclaimer.toLowerCase()).toContain('not a cap');
+    expect(compliance?.disclaimer.toLowerCase()).toContain('not a claim');
+  });
+
+  it('is not legal advice -- the disclaimer and every human-facing string say so or defer to the reader explicitly', () => {
+    expect(BID_COMPARISON_MANIFEST.compliance?.disclaimer.toLowerCase()).toContain(
+      'not legal advice',
+    );
+  });
+
+  // This scenario is separately being scaled from 3 bids to 12 bids
+  // (packages/scenarios/fixtures/bids/*, out of this task's scope). No
+  // compliance string may hard-code a claim about how many bids THIS case
+  // holds -- only the cited statutes' own "at least three" language, which
+  // is a rule about sourcing before an award, not a fact about this case.
+  it('never asserts a specific bid count for this case (only the cited statutes own minimums)', () => {
+    const compliance = BID_COMPARISON_MANIFEST.compliance;
+    const allText = [
+      compliance?.disclaimer ?? '',
+      ...(compliance?.standards.flatMap((standard) => [
+        standard.summary,
+        standard.humanResponsibility,
+        standard.automatedCheck ?? '',
+      ]) ?? []),
+    ].join(' \n ');
+    expect(allText).not.toMatch(/\bthe three bids\b/i);
+    expect(allText).not.toMatch(/\bthree bids in this case\b/i);
+  });
+
+  /**
+   * The consumer-invisibility rule ADR 0004 decision item 1 enforces, asserted
+   * against the content this pack ACTUALLY ships rather than against a test
+   * fixture.
+   *
+   * `HowSiftWorks.test.tsx` already asserts that the rendering component adds
+   * none of this vocabulary, but it renders `samplePackCompliance()` -- a
+   * synthetic fixture. That proves the component is clean; it cannot prove the
+   * shipped copy is, because the component faithfully renders whatever a pack
+   * author wrote. This pack shipped exactly that gap once: the FAR standard's
+   * `humanResponsibility` read "this pack can show how many bids are recorded"
+   * and would have rendered the word "pack" into the consumer surface, with
+   * the component test passing throughout.
+   *
+   * Every string here is user-visible (`HowSiftWorks.tsx` renders `summary`,
+   * `citation`, `authority`, `automatedCheck`, and `humanResponsibility`), so
+   * the whole block is checked, not a sample of it.
+   */
+  it('ships no pack/manifest/evidence-level vocabulary in any user-visible string', () => {
+    const compliance = BID_COMPARISON_MANIFEST.compliance;
+    expect(compliance).toBeDefined();
+    const visible = [
+      compliance?.disclaimer ?? '',
+      ...(compliance?.standards.flatMap((standard) => [
+        standard.label,
+        standard.summary,
+        standard.citation,
+        standard.authority,
+        standard.humanResponsibility,
+        standard.automatedCheck ?? '',
+      ]) ?? []),
+    ].join(' \n ');
+
+    expect(visible).not.toMatch(/\bpack\b/i);
+    expect(visible).not.toMatch(/\bmanifest\b/i);
+    expect(visible).not.toMatch(/\bobligation\b/i);
+    expect(visible).not.toMatch(/\bdisposition\b/i);
+    expect(visible).not.toMatch(/\breadiness\b/i);
+    expect(visible).not.toMatch(/\bE[0-3]\b/);
+  });
+});
+
 describe('full manifest fidelity', () => {
   // See home-energy-guardian.test.ts's identical suite for the full
   // rationale: structural suites above don't pin individual field values,

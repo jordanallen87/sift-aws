@@ -35,6 +35,7 @@
  * so there is no path out of this overlay that forgets to record it.
  */
 import type { RefObject } from 'react';
+import type { PackCompliance } from '@sift/contracts';
 import {
   Sheet,
   SheetBody,
@@ -74,9 +75,17 @@ export interface FirstRunGuideProps {
    * caller that has nothing to hand back to is never worse off.
    */
   readonly returnFocusTo?: RefObject<HTMLElement | null>;
+  /**
+   * The active case's declared compliance content, forwarded straight to
+   * `HowSiftWorksContent`. Optional: this guide can open before the active
+   * case's pack has finished loading, in which case there is nothing yet to
+   * show and the section this renders simply does not appear -- see
+   * `HowSiftWorksContentProps.compliance`'s own doc comment.
+   */
+  readonly compliance?: PackCompliance | null | undefined;
 }
 
-export function FirstRunGuide({ open, onDismiss, returnFocusTo }: FirstRunGuideProps) {
+export function FirstRunGuide({ open, onDismiss, returnFocusTo, compliance }: FirstRunGuideProps) {
   return (
     <Sheet
       open={open}
@@ -134,7 +143,7 @@ export function FirstRunGuide({ open, onDismiss, returnFocusTo }: FirstRunGuideP
           role="region"
           aria-label={HOW_SIFT_WORKS_TITLE}
         >
-          <HowSiftWorksContent />
+          <HowSiftWorksContent compliance={compliance} />
         </SheetBody>
         {/*
           A `shrink-0` footer OUTSIDE `SheetBody`, so the dismiss control is

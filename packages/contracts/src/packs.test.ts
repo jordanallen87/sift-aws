@@ -7,6 +7,8 @@ import {
   EntityTypeDefinitionSchema,
   ObligationTemplateSchema,
   OrchestrationDefinitionSchema,
+  PackComplianceSchema,
+  PackComplianceStandardSchema,
   PackEvaluationDefinitionSchema,
   PolicyDefinitionSchema,
   PresentationDefinitionSchema,
@@ -31,6 +33,42 @@ function validDecisionGuide() {
       'Prefer a typed custom field over noting an important comparison factor only in prose.',
     presentationGuidance:
       'Show deal and ownership cost together; they are usually compared jointly.',
+  };
+}
+
+function validComplianceStandard() {
+  return {
+    id: 'three-bid-minimum',
+    label: 'Minimum competitive bids for public construction contracts',
+    summary:
+      'Several jurisdictions require a public entity to solicit or receive at least three competitive bids before awarding a public construction contract.',
+    citation: 'N.C. Gen. Stat. § 143-132',
+    authority: 'North Carolina General Assembly',
+    automatedCheck: undefined,
+    humanResponsibility:
+      'Confirm which jurisdiction actually governs this award and that the required number of sources was genuinely solicited.',
+  };
+}
+
+function validCompliance() {
+  return {
+    disclaimer:
+      'These are informational minimums on the party making the award, not legal advice -- confirm what applies in your own jurisdiction before relying on them.',
+    standards: [
+      validComplianceStandard(),
+      {
+        id: 'license-and-insurance',
+        label: 'Active license and insurance covering the scope of work',
+        summary:
+          "A contractor's license must be active and cover the scope of work, and its certificate of insurance must name the license holder as the insured.",
+        citation: 'Varies by jurisdiction',
+        authority: 'State contractor licensing board',
+        automatedCheck:
+          "Confirms the contractor's licence is active, its class covers this scope, and its certificate of insurance names the licence holder.",
+        humanResponsibility:
+          'Confirm the licensing board record itself is current and that no additional local permit is required.',
+      },
+    ],
   };
 }
 
@@ -354,6 +392,87 @@ describe('DecisionGuideSchema (§46/§47 pack-level Decision Guide)', () => {
   });
 });
 
+describe('PackComplianceStandardSchema / PackComplianceSchema', () => {
+  it('parses a valid standard with an automatedCheck present', () => {
+    const result = PackComplianceStandardSchema.safeParse({
+      ...validComplianceStandard(),
+      automatedCheck: 'Confirms the licence and insurance certificate on file.',
+    });
+    expect(result.success, JSON.stringify('error' in result ? result.error : null)).toBe(true);
+  });
+
+  // The exact case `automatedCheck` exists to represent honestly: a real
+  // standard (the competitive-bid minimums) this product cannot actually
+  // verify automatically -- it can count bids in a case, not confirm how
+  // many sources were solicited, which is what the statute actually gates
+  // on. See the schema's own doc comment for the full reasoning.
+  it('parses a valid standard that omits automatedCheck entirely', () => {
+    const { automatedCheck: _omit, ...withoutAutomatedCheck } = validComplianceStandard();
+    const result = PackComplianceStandardSchema.safeParse(withoutAutomatedCheck);
+    expect(result.success, JSON.stringify('error' in result ? result.error : null)).toBe(true);
+    expect(result.success && result.data.automatedCheck).toBeUndefined();
+  });
+
+  it('rejects a standard missing humanResponsibility -- unlike automatedCheck, it is always required', () => {
+    const { humanResponsibility: _omit, ...withoutHumanResponsibility } = validComplianceStandard();
+    expect(PackComplianceStandardSchema.safeParse(withoutHumanResponsibility).success).toBe(false);
+  });
+
+  it('rejects a standard with an unrecognized top-level key', () => {
+    expect(
+      PackComplianceStandardSchema.safeParse({ ...validComplianceStandard(), extraField: true })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects executable-looking content in the summary', () => {
+    expect(
+      PackComplianceStandardSchema.safeParse({
+        ...validComplianceStandard(),
+        summary: '<script>alert(1)</script>',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a citation longer than its declared bound', () => {
+    expect(
+      PackComplianceStandardSchema.safeParse({
+        ...validComplianceStandard(),
+        citation: 'x'.repeat(301),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('parses a valid PackCompliance value with multiple standards', () => {
+    const result = PackComplianceSchema.safeParse(validCompliance());
+    expect(result.success, JSON.stringify('error' in result ? result.error : null)).toBe(true);
+  });
+
+  it('rejects a PackCompliance value with an unrecognized top-level key', () => {
+    expect(PackComplianceSchema.safeParse({ ...validCompliance(), extraField: true }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects a standards array beyond the declared bound', () => {
+    expect(
+      PackComplianceSchema.safeParse({
+        ...validCompliance(),
+        standards: Array.from({ length: 21 }, (_, i) => ({
+          ...validComplianceStandard(),
+          id: `standard-${i}`,
+        })),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts an empty standards array -- a compliance declaration need not name any yet', () => {
+    expect(PackComplianceSchema.safeParse({ ...validCompliance(), standards: [] }).success).toBe(
+      true,
+    );
+  });
+});
+
 describe('DecisionPackManifestSchema', () => {
   it('parses the full car-purchase-shaped manifest', () => {
     const result = DecisionPackManifestSchema.safeParse(validManifest());
@@ -490,6 +609,34 @@ describe('DecisionPackManifestSchema: discovery declaration', () => {
           ],
           blindSpots: [],
         },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('DecisionPackManifestSchema: compliance declaration', () => {
+  it('parses a manifest that declares no compliance at all -- the field is optional', () => {
+    const manifest = validManifest();
+    expect('compliance' in manifest).toBe(false);
+    const result = DecisionPackManifestSchema.safeParse(manifest);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.compliance).toBeUndefined();
+  });
+
+  it('accepts a manifest that declares compliance standards', () => {
+    const result = DecisionPackManifestSchema.safeParse({
+      ...validManifest(),
+      compliance: validCompliance(),
+    });
+    expect(result.success, JSON.stringify('error' in result ? result.error : null)).toBe(true);
+    expect(result.success && result.data.compliance?.standards).toHaveLength(2);
+  });
+
+  it('rejects a manifest whose compliance value fails its own validation', () => {
+    expect(
+      DecisionPackManifestSchema.safeParse({
+        ...validManifest(),
+        compliance: { ...validCompliance(), disclaimer: '<script>alert(1)</script>' },
       }).success,
     ).toBe(false);
   });

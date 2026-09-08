@@ -12,12 +12,45 @@ import {
 } from './HowSiftWorks.js';
 
 /** WebMCP present: the real `InMemoryModelContextAdapter.supported()` returns `true`. */
-function renderWithWebMcp() {
+function renderWithWebMcp(props: Parameters<typeof HowSiftWorksContent>[0] = {}) {
   return render(
     <AppProviders webMcpAdapter={new InMemoryModelContextAdapter()}>
-      <HowSiftWorksContent />
+      <HowSiftWorksContent {...props} />
     </AppProviders>,
   );
+}
+
+/**
+ * A realistic `PackCompliance` value, shaped like `bid-comparison.ts`'s real
+ * declaration but kept minimal: one standard with an `automatedCheck`, one
+ * without, so both rendering branches in `ComplianceStandardRow` are
+ * exercised.
+ */
+function samplePackCompliance() {
+  return {
+    disclaimer:
+      'These are informational minimums, not legal advice -- confirm what applies in your own jurisdiction.',
+    standards: [
+      {
+        id: 'three-bid-minimum',
+        label: 'Minimum competitive bids for public construction contracts',
+        summary: 'Several jurisdictions require at least three competitive bids before an award.',
+        citation: 'N.C. Gen. Stat. § 143-132',
+        authority: 'North Carolina General Assembly',
+        humanResponsibility: 'Confirm which jurisdiction actually governs this award.',
+      },
+      {
+        id: 'license-and-insurance',
+        label: 'Active license and insurance covering the scope of work',
+        summary: "A contractor's license must be active and cover the scope of work.",
+        citation: 'Varies by jurisdiction',
+        authority: 'State contractor licensing board',
+        automatedCheck:
+          "Confirms the contractor's licence is active and its certificate of insurance names the licence holder.",
+        humanResponsibility: 'Confirm the licensing board record itself is current.',
+      },
+    ],
+  };
 }
 
 /**
@@ -123,5 +156,74 @@ describe('HowSiftWorks shared content', () => {
 
     const unsupported = renderWithoutWebMcp();
     expect(await axe(unsupported.container)).toHaveNoViolations();
+  });
+});
+
+// "What gets checked" (the compliance surface, packs.ts's
+// `PackComplianceSchema`). Mirrors `WorkspaceAlertBanner`'s established
+// "render nothing, not an empty shell" rule and ADR 0004's ban on surfacing
+// Decision Pack identity -- these tests exist specifically to catch a
+// regression toward either one.
+describe('HowSiftWorks: what gets checked (compliance)', () => {
+  it('renders no compliance section at all when compliance is omitted -- the default, pre-case case', () => {
+    renderWithWebMcp();
+    expect(screen.queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
+  });
+
+  it('renders no compliance section when compliance is explicitly null', () => {
+    renderWithWebMcp({ compliance: null });
+    expect(screen.queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
+  });
+
+  it('renders no compliance section when compliance declares zero standards', () => {
+    renderWithWebMcp({ compliance: { disclaimer: 'x', standards: [] } });
+    expect(screen.queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
+  });
+
+  it('renders the disclaimer and every declared standard when compliance is present', () => {
+    const compliance = samplePackCompliance();
+    renderWithWebMcp({ compliance });
+    const section = screen.getByTestId('how-sift-works-compliance');
+    expect(within(section).getByText(compliance.disclaimer)).toBeInTheDocument();
+    for (const standard of compliance.standards) {
+      const row = within(section).getByTestId(`how-sift-works-compliance-standard-${standard.id}`);
+      expect(within(row).getByText(standard.label)).toBeInTheDocument();
+      expect(within(row).getByText(standard.summary)).toBeInTheDocument();
+      expect(row).toHaveTextContent(standard.citation);
+      expect(row).toHaveTextContent(standard.authority);
+      expect(row).toHaveTextContent(standard.humanResponsibility);
+    }
+  });
+
+  it('renders "Sift checks" only for a standard that declares an automatedCheck', () => {
+    const compliance = samplePackCompliance();
+    renderWithWebMcp({ compliance });
+    const withCheck = screen.getByTestId(
+      'how-sift-works-compliance-standard-license-and-insurance',
+    );
+    expect(withCheck).toHaveTextContent('Sift checks:');
+    const withoutCheck = screen.getByTestId('how-sift-works-compliance-standard-three-bid-minimum');
+    expect(withoutCheck).not.toHaveTextContent('Sift checks:');
+  });
+
+  // The exact consumer-invisibility properties ADR 0004 requires: this
+  // section never names the pack, the manifest, an obligation, a
+  // disposition, "readiness," or an evidence-level token, no matter what a
+  // pack author declares in its compliance content.
+  it('never renders pack/manifest/evidence-level vocabulary anywhere in this section', () => {
+    const compliance = samplePackCompliance();
+    renderWithWebMcp({ compliance });
+    const section = screen.getByTestId('how-sift-works-compliance');
+    expect(section).not.toHaveTextContent(/\bpack\b/i);
+    expect(section).not.toHaveTextContent(/\bmanifest\b/i);
+    expect(section).not.toHaveTextContent(/\bobligation\b/i);
+    expect(section).not.toHaveTextContent(/\bdisposition\b/i);
+    expect(section).not.toHaveTextContent(/\breadiness\b/i);
+    expect(section).not.toHaveTextContent(/\bE[0-3]\b/);
+  });
+
+  it('has no axe violations with a real compliance section rendered', async () => {
+    const rendered = renderWithWebMcp({ compliance: samplePackCompliance() });
+    expect(await axe(rendered.container)).toHaveNoViolations();
   });
 });

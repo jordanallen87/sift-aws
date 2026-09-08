@@ -64,6 +64,41 @@ describe('HelpButton', () => {
     expect(screen.queryByTestId('help-sheet')).not.toBeInTheDocument();
   });
 
+  it('forwards a supplied compliance value into the sheet\'s "What gets checked" section', async () => {
+    const user = userEvent.setup();
+    render(
+      <HelpButton
+        compliance={{
+          disclaimer: 'Informational only.',
+          standards: [
+            {
+              id: 'sample-standard',
+              label: 'Sample standard',
+              summary: 'A sample requirement.',
+              citation: 'Sample Citation',
+              authority: 'Sample Authority',
+              humanResponsibility: 'Confirm this applies to your situation.',
+            },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByTestId('help-button'));
+    const sheet = await screen.findByTestId('help-sheet');
+    expect(within(sheet).getByTestId('how-sift-works-compliance')).toBeInTheDocument();
+    expect(within(sheet).getByText('Sample standard')).toBeInTheDocument();
+  });
+
+  it('renders no "What gets checked" section when no compliance is supplied (the default)', async () => {
+    const user = userEvent.setup();
+    render(<HelpButton />);
+
+    await user.click(screen.getByTestId('help-button'));
+    const sheet = await screen.findByTestId('help-sheet');
+    expect(within(sheet).queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
+  });
+
   it('has no axe violations closed or open', async () => {
     const user = userEvent.setup();
     const { container } = render(<HelpButton />);

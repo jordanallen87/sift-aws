@@ -176,6 +176,44 @@ exports[`full manifest fidelity > matches its full manifest snapshot 1`] = `
       "valueType": "boolean",
     },
   ],
+  "compliance": {
+    "disclaimer": "These are informational minimums on the party making the award -- not a cap on how many bids may be received, and not a claim that any particular number is typical. They are not legal advice: confirm which rules actually govern this award in your own jurisdiction before relying on them.",
+    "standards": [
+      {
+        "authority": "U.S. Federal Acquisition Regulation",
+        "citation": "FAR 13.104(b) (48 C.F.R. § 13.104(b))",
+        "humanResponsibility": "Confirm whether this award is a federal simplified acquisition subject to FAR Part 13, and that the required number of sources was actually solicited -- Sift can show how many bids are recorded in this case, not how many sources were invited to bid.",
+        "id": "far-13-104-b-simplified-acquisitions",
+        "label": "Minimum sources for federal simplified acquisitions",
+        "summary": "For federal simplified acquisitions, the contracting officer must "consider solicitation of at least three sources to promote competition to the maximum extent practicable" before making an award.",
+      },
+      {
+        "authority": "North Carolina General Assembly",
+        "citation": "N.C. Gen. Stat. § 143-132",
+        "humanResponsibility": "Confirm this award is subject to Chapter 143 of the North Carolina General Statutes, and whether the temporary water/sewer carve-out applies before treating two bids as sufficient.",
+        "id": "nc-gs-143-132-public-construction",
+        "label": "Minimum competitive bids for North Carolina public construction contracts",
+        "summary": "A North Carolina public construction contract may not be awarded "unless at least three competitive bids have been received"; if fewer arrive, the contracting entity must re-advertise. A temporary carve-out effective July 7, 2026 permits two bids for water and sewer system contracts specifically.",
+      },
+      {
+        "authority": "Idaho, Pennsylvania, and Louisiana state legislatures",
+        "citation": "Idaho Code § 67-2805; 62 Pa. Cons. Stat. § 3902; La. Rev. Stat. § 38:2212",
+        "humanResponsibility": "Confirm which state's threshold, if any, actually governs this award -- the trigger dollar amount and the required bid count both differ by state, and none of them is assumed to apply by default.",
+        "id": "comparable-state-bid-minimums",
+        "label": "Comparable minimum-bid thresholds in other states",
+        "summary": "Idaho, Pennsylvania, and Louisiana each set their own minimum competitive-bid or -quote requirements for public contracts, similar in spirit to North Carolina's rule but not identical in trigger amount or required bid count: Idaho sets a statewide minimum under Idaho Code § 67-2805; Pennsylvania requires competitive quotes for contracts in the $13,200-$24,500 range; Louisiana requires them in the $10,000-$30,000 range.",
+      },
+      {
+        "authority": "State contractor licensing board",
+        "automatedCheck": "Confirms each bid's contractor license is active and its class covers this scope of work, that the certificate of insurance is active, and that the certificate's named insured matches the license holder.",
+        "citation": "State contractor licensing statutes (requirements vary by jurisdiction)",
+        "humanResponsibility": "Confirm the licensing board record itself is current and that no additional local permit or inspection is required beyond licensing and insurance.",
+        "id": "license-and-insurance-verification",
+        "label": "Active license and insurance covering the scope of work",
+        "summary": "A contractor awarded a bid should hold a license that is active and whose class covers the scope of work, and should carry a certificate of insurance that names the license holder as the insured.",
+      },
+    ],
+  },
   "criteria": {
     "allowUserDefined": true,
     "defaults": [

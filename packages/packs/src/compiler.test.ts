@@ -97,6 +97,56 @@ describe('compilePack: success path', () => {
     );
   });
 
+  // Compliance (the pack-level "real-world rules and standards this class of
+  // decision is governed by" declaration, packs.ts's `PackComplianceSchema`):
+  // `compliance` is `.optional()` on `DecisionPackManifestSchema` for the
+  // exact same reason `decisionGuide` is (see that field's own comment) --
+  // `canonicalizeManifest` drops `undefined` object values before hashing,
+  // so a manifest that never declares `compliance` must produce the exact
+  // same `compiledHash` every already-compiled, guideless-AND-
+  // compliance-less pack always has. This reuses the literal hash the test
+  // immediately above already pins: `validManifest()` declares neither
+  // `decisionGuide` nor `discovery` nor `compliance`, so if adding the
+  // `compliance` field to the schema had perturbed this manifest's hash in
+  // any way -- a forgotten `.optional()`, a default value, `undefined`
+  // canonicalizing differently -- the test above would already have failed
+  // with a visible diff. This test names that guarantee explicitly for
+  // `compliance` specifically, rather than leaving it as an unstated
+  // side-effect of a test that was written for a different field.
+  it('produces the identical compiledHash for a manifest that declares no compliance (same hash as the no-decisionGuide case)', () => {
+    const compiled = compilePack(validManifest(), validCatalog(), fixedClock);
+    expect(compiled.compiledHash).toMatchInlineSnapshot(
+      `"958efa0850a8e6082c0f4af05bd7900138a9aef8a87309b7cfd09c6c17bc570a"`,
+    );
+  });
+
+  it('produces a different compiledHash once a manifest declares a real compliance value', () => {
+    const withoutCompliance = compilePack(validManifest(), validCatalog(), fixedClock);
+    const withCompliance = compilePack(
+      validManifest({
+        compliance: {
+          disclaimer:
+            'These are informational minimums on the party making the award, not legal advice.',
+          standards: [
+            {
+              id: 'three-bid-minimum',
+              label: 'Minimum competitive bids for public construction contracts',
+              summary:
+                'Several jurisdictions require at least three competitive bids before a public construction contract may be awarded.',
+              citation: 'N.C. Gen. Stat. § 143-132',
+              authority: 'North Carolina General Assembly',
+              humanResponsibility:
+                'Confirm which jurisdiction actually governs this award and that the required number of sources was genuinely solicited.',
+            },
+          ],
+        },
+      }),
+      validCatalog(),
+      fixedClock,
+    );
+    expect(withCompliance.compiledHash).not.toBe(withoutCompliance.compiledHash);
+  });
+
   it('produces the same compiledHash regardless of compiledAt (clock)', () => {
     const a = compilePack(validManifest(), validCatalog(), fixedClock);
     const b = compilePack(validManifest(), validCatalog(), laterClock);

@@ -60,8 +60,8 @@ no network access.
 ### Install
 
 ```bash
-git clone https://github.com/jordanallen87/sift.git
-cd sift
+git clone https://github.com/jordanallen87/sift-aws.git
+cd sift-aws
 pnpm install
 cp .env.example .env
 ```

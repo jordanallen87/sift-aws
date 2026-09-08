@@ -12,6 +12,33 @@
 # have to carry the native build output either way; staying single-stage
 # keeps the Dockerfile simple and avoids a second image needing its own
 # native rebuild.
+#
+# No `--platform` pin on this `FROM`, on purpose: AgentCore Runtime requires
+# linux/arm64 and validates the ELF header of every native (`.node`) binary
+# in the image, hard-failing `CREATE_FAILED` on a mismatch
+# (docs/research/aws-platform.md "1.3 Runtime deployment contract"). Because
+# `better-sqlite3` is compiled by `pnpm install` inside *this* stage (see
+# above -- there is no separate builder stage whose output gets copied), the
+# whole stage must actually execute as the target platform, not merely carry
+# a same-named final layer. BuildKit already resolves an unpinned `FROM` to
+# whatever `--platform` the outer `docker build`/`buildx build` invocation
+# requested (confirmed empirically: pinning this line to the equivalent
+# `--platform=$TARGETPLATFORM` builds identically but trips buildx's own
+# `RedundantTargetPlatform` lint) -- so `docker buildx build --platform
+# linux/arm64 .` (docs/research/aws-platform.md's own documented AgentCore
+# packaging command) already, correctly, compiles `better-sqlite3` as arm64
+# with zero Dockerfile change, while Railway's existing build (which never
+# passes `--platform`) keeps resolving to its build host's own default
+# architecture, unchanged. Two pins would look like an "improvement" here but
+# would each break something: `--platform=$BUILDPLATFORM` is the right idiom
+# for a *different* shape -- a builder stage that cross-compiles once,
+# natively, then a final stage copies in the already-built target-arch
+# artifact -- pinning to it here would keep `pnpm install` running on the
+# build host's own architecture regardless of the requested target and ship
+# a `better_sqlite3.node` compiled for the wrong platform inside an
+# image labeled arm64, silently reintroducing the exact failure this comment
+# exists to prevent; a bare `--platform=linux/arm64` pin would force
+# Railway's own build onto arm64 too, which this task must not do.
 FROM node:22-bookworm-slim
 
 # python3/make/g++ are required to compile `better-sqlite3` (and any other

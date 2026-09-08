@@ -1,5 +1,5 @@
 {
-  "repositoryUrl": "https://github.com/jordanallen87/sift",
+  "repositoryUrl": "https://github.com/jordanallen87/sift-aws",
   "deployedUrl": "https://sift-hackathon-production.up.railway.app",
   "submittedCommitSha": "",
   "submittedCommitShaNote": "Left empty deliberately: this field must name the tagged release commit, and no tag exists yet (`git tag` returns nothing). The last complete `pnpm verify:release` ran at 7fd62c71e796d0ad9c6a88798f7016101d0ad3cf; the documentation commit that records its results is its child. Set this to the commit you actually tag and submit, then re-run `pnpm verify` so `release-verification-sha` matches it.",
@@ -89,8 +89,9 @@
   "_todo": [
     "Record the WebMCP demo video (docs/submissions/webmcp/demo-script.md) and set webmcpVideoUrl once uploaded (must be under 3:00).",
     "Record the Agents for Humans demo video (docs/submissions/agents-for-humans/demo-script.md) and set agentsForHumansVideoUrl once uploaded (must be 5:00 or under).",
-    "Verified 2026-09-05 via `gh repo view jordanallen87/sift --json visibility,licenseInfo`: repository is PUBLIC with an MIT license on file. No action needed.",
+    "RELEASE BLOCKER: make the repository public. `gh repo view jordanallen87/sift-aws --json visibility,licenseInfo` (2026-09-07) returns visibility PRIVATE with an MIT license on file. Run `gh repo edit jordanallen87/sift-aws --visibility public` before submitting. (The superseded 2026-09-05 note here recorded jordanallen87/sift as PUBLIC; that was the WebMCP repository, before the 2026-09-07 split.)",
     "List the exact WebMCP test clients/browser versions actually used in webmcpTestClients once tested (e.g. 'ChatGPT in-app browser, build X' or 'Chrome NNN with WebMCP origin trial flag Y').",
     "If AWS credentials become available, deploy to Bedrock AgentCore and fill in agentCore.deployed=true plus its own endpoint/CloudWatch correlation details."
-  ]
+  ],
+  "repositoryUrlNote": "Changed 2026-09-07. The Agents for Humans submission is jordanallen87/sift-aws. The earlier jordanallen87/sift carries the WebMCP Challenge submission and was restored to its submitted state (tag webmcp-submitted -> 61824c1); it is not this submission's repository. NOTE: sift-aws is PRIVATE and must be made public before submitting -- the AWS rules require a public repository with a visible license."
 }

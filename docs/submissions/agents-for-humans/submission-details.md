@@ -56,7 +56,7 @@ A live demo and AgentCore deployment are not required, but the official judging 
 | `27730` | Country of Residence | Yes | Participant supplies the truthful country. |
 | `27731` | Organization name | No | Complete only when applicable. |
 | `27732` | Competition Track | Yes | Recommended answer: `Everyday Agents`. |
-| `27733` | Public code repository URL | Yes | `https://github.com/jordanallen87/sift` — confirmed public with a visible MIT license (`gh repo view jordanallen87/sift --json visibility,licenseInfo`: `"visibility":"PUBLIC"`, `"licenseInfo":{"key":"mit"}`). |
+| `27733` | Public code repository URL | Yes | `https://github.com/jordanallen87/sift-aws` — **not yet usable: the repository is private as of 2026-09-07** (`gh repo view jordanallen87/sift-aws --json visibility,licenseInfo`: `"visibility":"PRIVATE"`, `"licenseInfo":{"key":"mit","name":"MIT License","nickname":""}`). An MIT `LICENSE` file is present at the repository root (verified via `ls LICENSE` and `head -3 LICENSE`), but the repository itself must be made public (`gh repo edit jordanallen87/sift-aws --visibility public`) before this field can be truthfully completed — an outstanding **release blocker**. |
 | `27734` | Architecture diagram | Yes | Upload final PNG or PDF; do not treat a URL answer as the file upload. |
 | `27735` | AWS Builder ID | Yes | Participant must supply. |
 | `27736` | Live demo URL | No | Strongly recommended; use verified Railway URL. |
@@ -220,7 +220,7 @@ Cover the real Strands trajectory, why deterministic readiness sits outside the 
 
 - [ ] Confirm registration and eligibility in Devpost.
 - [ ] Select `Everyday Agents` in the final form.
-- [ ] Add the public repository URL and visible MIT license (already true: `https://github.com/jordanallen87/sift` is public with an MIT license — just paste the URL into field `27733`).
+- [ ] Add the public repository URL and visible MIT license — **not yet true.** `https://github.com/jordanallen87/sift-aws` is private as of 2026-09-07 (`gh repo view jordanallen87/sift-aws --json visibility` → `"PRIVATE"`); an MIT `LICENSE` file exists at the repository root, but the repository must be made public (`gh repo edit jordanallen87/sift-aws --visibility public`) before it can be pasted into field `27733`. This is a release blocker.
 - [ ] Add the AWS Builder ID.
 - [ ] Export and upload the required architecture diagram.
 - [ ] Add the verified Railway URL.

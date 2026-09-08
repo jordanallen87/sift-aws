@@ -282,11 +282,24 @@ export type AddNoteInput = z.infer<typeof AddNoteInputSchema>;
 export const SiftAddNoteToolInputSchema = AddNoteInputSchema;
 
 // --- FocusOptionInput (webmcp.md `sift_focus_option`) ---
-
+//
+// `optionId` is `.nullable()`, not just `idString()`: `CaseState.
+// selectedOptionId` (case.ts) is itself `idString().nullable()`, and
+// `SelectionPatch`/`updateSelection()` (apps/agent/src/store/case-store.ts)
+// already accept and persist an explicit `null` to CLEAR the selection --
+// that store-level support predates this schema change and was simply
+// unreachable through this command. Before this, a caller that wanted to
+// un-focus an option (the option card's `aria-pressed` toggle-button
+// semantics promise this is possible) had no value it could send: leaving
+// `optionId` required meant "clear the selection" was inexpressible in the
+// contract, even though the persistence layer beneath it always supported
+// it. `null` is the one extra value this field needs, not `.optional()`
+// (which would mean "field absent", a different, unneeded state -- every
+// caller already sends `optionId` on every call).
 export const FocusOptionInputSchema = z
   .object({
     caseId: idString(),
-    optionId: idString(),
+    optionId: idString().nullable(),
     expectedSequence,
   })
   .strict();
@@ -549,11 +562,16 @@ export const ReviewCaseExtensionInputSchema = z
 export type ReviewCaseExtensionInput = z.infer<typeof ReviewCaseExtensionInputSchema>;
 
 // --- FocusEvidenceInput (webmcp.md `sift_focus_evidence`) ---
-
+//
+// `evidenceId` is `.nullable()` for the identical reason `FocusOptionInput
+// Schema.optionId` is, immediately above: `CaseState.selectedEvidenceId` is
+// itself `idString().nullable()`, and `SelectionPatch`/`updateSelection()`
+// already persist an explicit `null` clear -- this field only needed to stop
+// blocking that value from reaching it.
 export const FocusEvidenceInputSchema = z
   .object({
     caseId: idString(),
-    evidenceId: idString(),
+    evidenceId: idString().nullable(),
     expectedSequence,
   })
   .strict();

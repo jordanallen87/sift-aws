@@ -1789,8 +1789,15 @@ export function App() {
   // missed visual focus update, not a lost decision, so it does not earn a
   // new blocking error surface the way `requestInvestigation`/
   // `reviewProposal`/`setEvidenceDisposition` do.
+  // `optionId: string | null` -- `null` clears the focused option
+  // (FocusOptionInputSchema's own doc comment, packages/contracts/src/
+  // commands.ts). The three option views compute `null` themselves when the
+  // clicked card is already the selected one, so this handler stays a plain
+  // pass-through: it does not itself decide select vs. clear, matching every
+  // other command handler in this file that reports intent rather than
+  // deciding it.
   const handleFocusOption = useCallback(
-    (optionId: string) => {
+    (optionId: string | null) => {
       if (snapshot === null || activeCaseId === null) return;
       void resolveExpectedSequence()
         .then((expectedSequence) =>

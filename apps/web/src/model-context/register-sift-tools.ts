@@ -416,12 +416,22 @@ function buildFocusEvidenceTool(
   return buildCaseScopedCommandTool<FocusEvidenceInput, CommandReceipt>({
     name: 'sift_focus_evidence',
     description:
-      'Changes the evidence item highlighted in the shared page. This is the primary WebMCP collaboration tool: the user can select an item manually, or ChatGPT can focus it before discussing or revising the case.',
+      'Changes the evidence item highlighted in the shared page. This is the primary WebMCP collaboration tool: the user can select an item manually, or ChatGPT can focus it before discussing or revising the case. Pass evidenceId: null to clear the highlight instead of pointing it at another item -- the UI\'s own focus control is a toggle (aria-pressed) and this is how a caller reaches its "off" state.',
     inputSchema: FocusEvidenceInputSchema,
     activeCaseId,
     call: (input, options) => commands.focusEvidence(input, options),
-    successMessage: (input) => `Evidence "${input.evidenceId}" focused.`,
-    ui: (input) => ({ changed: true, focusTarget: input.evidenceId }),
+    successMessage: (input) =>
+      input.evidenceId === null
+        ? 'Evidence focus cleared.'
+        : `Evidence "${input.evidenceId}" focused.`,
+    // `focusTarget` (ToolEnvelopeUi, tool-support.ts) is `string | undefined`,
+    // not nullable -- there is no real target id to report once the focus is
+    // cleared, so `null` becomes "omit the field" rather than a literal
+    // `null` value that type does not accept.
+    ui: (input) => ({
+      changed: true,
+      ...(input.evidenceId !== null ? { focusTarget: input.evidenceId } : {}),
+    }),
   });
 }
 
@@ -429,12 +439,17 @@ function buildFocusOptionTool(commands: SiftCommands, activeCaseId: string): Web
   return buildCaseScopedCommandTool<FocusOptionInput, CommandReceipt>({
     name: 'sift_focus_option',
     description:
-      "Changes the current option highlighted in the shared page and includes its safe summary in subsequent case context. This is the car-buying demo's primary shared-attention tool, but the contract works for any pack-defined option kind.",
+      'Changes the current option highlighted in the shared page and includes its safe summary in subsequent case context. This is the car-buying demo\'s primary shared-attention tool, but the contract works for any pack-defined option kind. Pass optionId: null to clear the highlight instead of pointing it at another option -- the UI\'s own focus control is a toggle (aria-pressed) and this is how a caller reaches its "off" state.',
     inputSchema: FocusOptionInputSchema,
     activeCaseId,
     call: (input, options) => commands.focusOption(input, options),
-    successMessage: (input) => `Option "${input.optionId}" focused.`,
-    ui: (input) => ({ changed: true, focusTarget: input.optionId }),
+    successMessage: (input) =>
+      input.optionId === null ? 'Option focus cleared.' : `Option "${input.optionId}" focused.`,
+    // Same `focusTarget` reasoning as `buildFocusEvidenceTool` immediately above.
+    ui: (input) => ({
+      changed: true,
+      ...(input.optionId !== null ? { focusTarget: input.optionId } : {}),
+    }),
   });
 }
 

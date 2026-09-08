@@ -125,13 +125,13 @@ const CATALOG: CatalogFixture[] = [
   {
     name: 'sift_focus_evidence',
     description:
-      'Changes the evidence item highlighted in the shared page. This is the primary WebMCP collaboration tool: the user can select an item manually, or ChatGPT can focus it before discussing or revising the case.',
+      'Changes the evidence item highlighted in the shared page. This is the primary WebMCP collaboration tool: the user can select an item manually, or ChatGPT can focus it before discussing or revising the case. Pass evidenceId: null to clear the highlight instead of pointing it at another item -- the UI\'s own focus control is a toggle (aria-pressed) and this is how a caller reaches its "off" state.',
     sourceSchema: FocusEvidenceInputSchema,
   },
   {
     name: 'sift_focus_option',
     description:
-      "Changes the current option highlighted in the shared page and includes its safe summary in subsequent case context. This is the car-buying demo's primary shared-attention tool, but the contract works for any pack-defined option kind.",
+      'Changes the current option highlighted in the shared page and includes its safe summary in subsequent case context. This is the car-buying demo\'s primary shared-attention tool, but the contract works for any pack-defined option kind. Pass optionId: null to clear the highlight instead of pointing it at another option -- the UI\'s own focus control is a toggle (aria-pressed) and this is how a caller reaches its "off" state.',
     sourceSchema: FocusOptionInputSchema,
   },
   {

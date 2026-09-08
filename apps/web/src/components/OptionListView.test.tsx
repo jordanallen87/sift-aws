@@ -671,6 +671,35 @@ describe('OptionListView', () => {
     expect(onFocusOption).toHaveBeenCalledExactlyOnceWith('candidate-crv');
   });
 
+  // Regression test for the reported defect: the card's focus button carries
+  // `aria-pressed={isSelected}`, promising assistive technology a real
+  // toggle. Clicking the button that IS the current selection a second time
+  // used to re-send the same id and leave the card stuck selected forever --
+  // a dead end, and a lie about what `aria-pressed` claimed the control
+  // could do. It must now clear the selection (`onFocusOption(null)`)
+  // instead.
+  it('clicking the already-selected card clears the selection instead of re-selecting it', async () => {
+    const user = userEvent.setup();
+    const onFocusOption = vi.fn();
+    render(listView({ selectedOptionId: 'candidate-crv', onFocusOption }));
+
+    await user.click(screen.getByTestId('option-list-view-focus-candidate-crv'));
+    expect(onFocusOption).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("marks only the selected card's focus button aria-pressed, and every other card false", () => {
+    render(listView({ selectedOptionId: 'candidate-crv' }));
+
+    expect(screen.getByTestId('option-list-view-focus-candidate-crv')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('option-list-view-focus-candidate-rav4')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   it('is keyboard operable: pressing Enter on a focused card button fires onFocusOption', async () => {
     const user = userEvent.setup();
     const onFocusOption = vi.fn();

@@ -132,8 +132,8 @@ export interface OptionCompareViewProps {
   pinnedAttributeIds?: string[] | undefined;
   /** Caller-decided information architecture (ADR 0005 Decision 4) -- this component never calls `matchMedia`. */
   layout: 'narrow' | 'expanded';
-  /** Fired when a user or WebMCP-driven caller focuses an option's column header. Shared-focus plumbing (§30) lives in the caller; this component only reports the intent. */
-  onFocusOption?: (optionId: string) => void;
+  /** Fired when a user or WebMCP-driven caller focuses an option's column header, or clears the focus (`null`) when the already-selected header is clicked again -- see `OptionListView.tsx`'s header comment's "toggle button must be able to un-press" section. Shared-focus plumbing (§30) lives in the caller; this component only reports the intent. */
+  onFocusOption?: (optionId: string | null) => void;
 }
 
 interface AttributeGroupView {
@@ -658,7 +658,10 @@ export function OptionCompareView({
                         <button
                           type="button"
                           data-testid={`option-compare-view-focus-${option.id}`}
-                          onClick={() => onFocusOption?.(option.id)}
+                          // Toggle, not always-select: clicking the
+                          // already-selected header clears the selection --
+                          // see `onFocusOption`'s own doc comment above.
+                          onClick={() => onFocusOption?.(isSelected ? null : option.id)}
                           aria-pressed={isSelected}
                           className="w-full min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit]"
                         >

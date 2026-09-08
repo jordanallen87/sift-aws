@@ -49,6 +49,16 @@ import {
   HowSiftWorksContent,
 } from './HowSiftWorks.js';
 
+/**
+ * The tooltip's second line -- see `WorkspaceAppBar.tsx`'s header comment
+ * ("Third post-ship repair: tooltips say what a control DOES, not just its
+ * name") for the full design rationale this follows. `HelpButton` is not
+ * itself part of that file (it is reused verbatim across several top-level
+ * screens, per this file's own header comment), so its description lives
+ * here rather than being threaded through as a new prop.
+ */
+const HELP_DESCRIPTION = 'What Sift does and how to use it.';
+
 export interface HelpButtonProps {
   /**
    * Optional handle on the underlying trigger button.
@@ -67,13 +77,24 @@ export function HelpButton({ ref }: HelpButtonProps = {}) {
   return (
     <Sheet>
       {/*
-       * The tooltip only repeats the `aria-label` that already names this
-       * button -- it is a pointer-only reminder of what a bare "?" glyph
-       * does, and this control is unchanged for the touch and screen-reader
-       * users who never see it (see `ui/tooltip.tsx`'s header comment).
-       * `side="bottom"`: every caller renders this in the top row of the
-       * pane, where a top-side tooltip would immediately be flipped by
-       * collision handling anyway.
+       * The tooltip's first line repeats the `aria-label` that already names
+       * this button verbatim (WCAG 2.5.3, "Label in Name" -- the same
+       * convention `ui/tooltip.tsx` and `WorkspaceAppBar.tsx` both document
+       * at length), so voice control and the visible name can never drift.
+       * The second line is new information -- what the sheet this opens
+       * actually contains -- and reaches assistive tech the same
+       * `aria-describedby` way the first line always did, never as a second
+       * accessible name (see `ui/tooltip.tsx`'s header comment). Joined as
+       * one string with a real `\n`, not two sibling elements: verified
+       * against this app's own `toHaveAccessibleDescription` stack that two
+       * adjacent nodes with no literal character between them compute to a
+       * description with no space at all, so a plain string join is the
+       * technique that is correct by construction (see `WorkspaceAppBar.tsx`
+       * "Third post-ship repair" for the full probe). This control is
+       * unchanged for the touch and screen-reader users who never see the
+       * tooltip open at all. `side="bottom"`: every caller renders this in
+       * the top row of the pane, where a top-side tooltip would immediately
+       * be flipped by collision handling anyway.
        */}
       <Tooltip>
         <TooltipTrigger asChild>
@@ -91,7 +112,9 @@ export function HelpButton({ ref }: HelpButtonProps = {}) {
             </Button>
           </SheetTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Help and instructions</TooltipContent>
+        <TooltipContent side="bottom" className="whitespace-pre-line">
+          {`Help and instructions\n${HELP_DESCRIPTION}`}
+        </TooltipContent>
       </Tooltip>
       <SheetContent data-testid="help-sheet" side="bottom">
         <SheetHeader>

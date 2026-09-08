@@ -214,6 +214,97 @@
  * Radix supplies arrow keys, typeahead, Enter/Space and Escape-restores-
  * focus, all asserted behaviourally in the sibling test file rather than
  * assumed.
+ *
+ * ---
+ *
+ * **Third post-ship repair: tooltips say what a control DOES, not just its
+ * name -- and now show at every width.**
+ *
+ * The project owner, watching the bar run live: "we need to have tooltips in
+ * a lot of places... hovering over them -- I'd want to know what each does."
+ * The gap was real but not "missing tooltips" -- every control already had
+ * one (the erstwhile `GlyphTooltip`, narrow-only). The actual defect was that
+ * a tooltip's text was always the control's `aria-label` *verbatim* -- e.g.
+ * "Findings, 0" -- which names the control but never says what a "finding"
+ * IS or what clicking it shows a first-time viewer (a hackathon judge with no
+ * prior context). Repeating the name back to someone who is already reading
+ * it is not an answer to "what does this do."
+ *
+ * `ControlTooltip` (renamed from `GlyphTooltip` -- see below) fixes this by
+ * adding a short, plain-language DESCRIPTION as a second line, while leaving
+ * every control's accessible NAME completely untouched:
+ *
+ * - The `aria-label` on every wrapped `<Button>` is byte-for-byte identical
+ *   to what it was before this repair. WCAG 2.5.3 ("Label in Name") and this
+ *   file's own established convention -- the tooltip's first line is the
+ *   name verbatim, so voice control and the visible label can never drift --
+ *   both hold exactly as they did.
+ * - The description is NOT a second accessible name (that would risk two
+ *   different "names" reaching two different users, which is the thing
+ *   2.5.3 exists to prevent). It reaches assistive tech the same way
+ *   `ui/tooltip.tsx`'s header comment already documents Radix wiring every
+ *   tooltip: `aria-describedby`, and only `aria-describedby`, pointed at the
+ *   (visible, hover/focus-gated) `TooltipContent` -- never `aria-labelledby`.
+ *   Nothing new was built for this; it is the primitive's existing, audited
+ *   behaviour, now carrying one more line of real content.
+ * - The two lines are rendered as a single joined string (`` `${label}\n
+ *   ${description}` ``, `whitespace-pre-line` to keep the visual break) --
+ *   NOT as two separate sibling elements. That is not a style preference:
+ *   probed directly against this app's real `toHaveAccessibleDescription`
+ *   stack (`dom-accessibility-api`, the same engine `jest-dom` uses), two
+ *   adjacent `<span>`s with no literal character between them compute to a
+ *   description with NO space -- `"Findings, 0Things Sift flagged..."` --
+ *   because nothing in the DOM subtree actually contains a space character
+ *   for the flattening algorithm to find. A real newline character is a real
+ *   character every implementation preserves (and every screen reader reads
+ *   as a pause), so it is the one join that is correct by construction
+ *   rather than by browser accident.
+ *
+ * **Tooltips are now unconditional -- `enabled` is gone.** The old
+ * `enabled={!isExpanded}` gate existed because at expanded width the name
+ * was already visible as text, and a tooltip that only repeated that name
+ * was pure noise. That reasoning no longer covers the whole tooltip: the
+ * DESCRIPTION line is new information nowhere else on the page shows, at
+ * *any* width, so suppressing the tooltip at expanded width would hide the
+ * one thing this repair exists to add. The name line stays in the content at
+ * every width too, rather than branching the tooltip's shape on `isExpanded`
+ * -- one unconditional two-line format for every control is simpler to
+ * reason about and test than a format that silently changes shape depending
+ * on layout, and at narrow width (no visible text at all) that first line is
+ * still load-bearing exactly as it always was.
+ *
+ * This does knowingly reintroduce, at expanded width only, the exact
+ * "repeats a label already on screen" redundancy the narrow/expanded gate
+ * was built to avoid -- e.g. hovering the visibly-labelled "Findings"
+ * button now also shows "Findings, 0" as the tooltip's first line. That
+ * redundancy is judged acceptable now for two reasons the original gate did
+ * not have to weigh: it buys a single content shape instead of two (less
+ * code, less to keep in sync), and it is genuinely minor -- one short,
+ * already-visible word repeated once, ahead of a full new sentence of actual
+ * information. `WorkspaceAppBar.test.tsx`'s old "does not repeat a label the
+ * expanded row already shows" test asserted the opposite of this new,
+ * deliberate behaviour and has been rewritten (see that file) rather than
+ * quietly weakened -- it now asserts the tooltip both appears at expanded
+ * width AND carries the new description, which is the actual contract this
+ * repair establishes.
+ *
+ * **Reset demo's copy is behaviour, not guesswork.** `App.tsx`'s
+ * `handleResetDemo` calls `commands.startDemo({ demoId })` with the *current*
+ * case's own pack id and, on success, swaps `activeCaseId` to the freshly
+ * returned case -- it does not confirm, and it does not offer any path back
+ * to the case that was just replaced (`docs/build-log.md`'s own dated entry:
+ * "'Reset demo' restarts the same pack"). So `RESET_DEMO_DESCRIPTION` says
+ * exactly that: nothing here survives the click, and the click itself is not
+ * gated behind a confirmation this component could point to instead.
+ *
+ * **Rename: `GlyphTooltip` -> `ControlTooltip`.** The old name and its own
+ * header comment specifically justified narrow-only wrapping by naming the
+ * case it existed for -- "a control that is currently rendering as a bare
+ * glyph." That justification is gone now that every control in this row is
+ * wrapped at every width, glyph or not, so the name describing *when* it
+ * applied would have gone stale the moment `enabled` did. `ControlTooltip`
+ * names what it actually does now: attaches a name+description tooltip to
+ * any control, unconditionally.
  */
 import type { Ref } from 'react';
 import {
@@ -330,44 +421,79 @@ const PRIORITIES_LABEL = 'Adjust priorities';
 const SWITCH_DECISION_LABEL = 'Start a different decision';
 
 /**
- * A pointer-only label for a control that is currently rendering as a bare
- * glyph, following the precedent `HelpButton` already sets in this row.
+ * Tooltip DESCRIPTIONS (second line, plain-language, second person) -- see
+ * this file's header comment, "Third post-ship repair," for the accessible-
+ * name/description split these pair with, and for why `Reset demo`'s copy in
+ * particular is grounded in `App.tsx`'s real `handleResetDemo` behaviour
+ * rather than assumed.
  *
- * `enabled` rather than always-on, because this row's controls change shape
- * with `layout`: at expanded width `Add option`, `Findings`, `References` and
- * `Reset demo` render their own visible text, and a tooltip that repeats a
- * label the user is already reading is noise. At narrow width the same
- * controls collapse to icon-and-count, which is exactly the case
- * `ui/tooltip.tsx` describes -- "a control whose meaning is otherwise carried
- * by an icon alone". `Developer view` is icon-only at every width, so it is
- * always wrapped.
+ * Voice follows `activity-labels.ts`'s established rule: plain, concrete,
+ * non-jargon words a first-time viewer (a hackathon judge with zero prior
+ * context) already knows -- never "obligation," "disposition," "readiness,"
+ * or an evidence-level code, and never the raw mechanism ("command," "run")
+ * where a plain-English effect says the same thing.
+ */
+const CREATE_MENU_DESCRIPTION =
+  'Add an option, a note, or a question — or change how much each factor matters to you.';
+const FINDINGS_DESCRIPTION = 'Things Sift flagged that need a second look from you.';
+const REFERENCES_DESCRIPTION = 'The sources behind what Sift found.';
+const DEVELOPER_VIEW_DESCRIPTION = 'The raw, step-by-step timeline of everything Sift did.';
+/**
+ * Grounded in `App.tsx`'s real `handleResetDemo`, not guessed: it calls
+ * `commands.startDemo({ demoId })` for the case's own pack and swaps
+ * `activeCaseId` to the new case the moment that resolves -- no confirmation
+ * step exists anywhere in that path, and there is no control anywhere in
+ * this product that can bring back the case that was just replaced.
+ */
+const RESET_DEMO_DESCRIPTION =
+  "Starts this demo over from scratch — nothing here is saved, and you can't undo it.";
+
+/**
+ * Attaches a name+description tooltip to any control in this row,
+ * unconditionally, at every width -- see this file's header comment ("Third
+ * post-ship repair") for why the earlier narrow-only `enabled` gate (and
+ * this helper's earlier name, `GlyphTooltip`) no longer fit once tooltips
+ * started carrying a second line of information nowhere else on the page
+ * shows.
  *
- * The label passed here is deliberately the control's `aria-label` verbatim,
- * per that primitive's own convention: the two can then never drift, and a
+ * `label` is deliberately the control's `aria-label` verbatim, per
+ * `ui/tooltip.tsx`'s own convention: the two can then never drift, and a
  * voice-control user can say the words they see (WCAG 2.5.3, "Label in
- * Name"). Nothing depends on the tooltip -- every control below already
- * carries a real accessible name and stays fully usable with the tooltip
- * deleted, which is what keeps this honest for the touch and screen-reader
- * users who never see one.
+ * Name"). `description` is genuinely new information, never a name --
+ * it reaches assistive tech through the same, unmodified `aria-describedby`
+ * wiring `ui/tooltip.tsx`'s header comment already documents Radix providing
+ * (never `aria-labelledby`), so it can never be mistaken for a second name.
+ * Nothing below depends on the tooltip opening at all: every wrapped control
+ * already carries a real accessible name on its own and stays fully usable
+ * with this wrapper deleted, exactly as `ui/tooltip.tsx` requires.
+ *
+ * The two lines join as ONE string with a real `\n`, not as two sibling
+ * elements -- verified against this app's own `toHaveAccessibleDescription`
+ * stack that two adjacent nodes with no literal character between them
+ * compute to a description with no space at all (`"NameDescription"`), so a
+ * plain string join is the one technique that is correct by construction
+ * rather than by browser accident. `whitespace-pre-line` is what turns that
+ * one real newline back into the visible second line.
  *
  * `side="bottom"` for the same reason `HelpButton` uses it: this is the top
  * row of the pane, so a top-side panel would only be flipped by collision
  * handling anyway.
  */
-function GlyphTooltip({
+function ControlTooltip({
   label,
-  enabled,
+  description,
   children,
 }: {
   readonly label: string;
-  readonly enabled: boolean;
+  readonly description: string;
   readonly children: React.ReactElement;
 }): React.JSX.Element {
-  if (!enabled) return children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
+      <TooltipContent side="bottom" className="whitespace-pre-line">
+        {`${label}\n${description}`}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -506,10 +632,11 @@ export function WorkspaceAppBar({
           {/* One trigger, three create actions -- see this file's header
               comment (second post-ship repair) for why this is a menu now
               and why that does not contradict fix 2's grouping decision.
-              `GlyphTooltip` sits OUTSIDE `DropdownMenuTrigger` so both Radix
-              layers anchor to the one real `Button` element underneath;
-              the tooltip only fires at narrow width, where the trigger has
-              no visible text of its own. */}
+              `ControlTooltip` sits OUTSIDE `DropdownMenuTrigger` so both
+              Radix layers anchor to the one real `Button` element
+              underneath; it fires at every width now (third post-ship
+              repair) since the description line is new information even
+              where the trigger already shows visible "Add" text. */}
           <DropdownMenu
             // `modal={false}` on purpose. Every item here opens a `Sheet`
             // (a Radix Dialog), and a modal menu closing in the same tick a
@@ -523,7 +650,7 @@ export function WorkspaceAppBar({
             // page, neither of which a three-item create menu needs.
             modal={false}
           >
-            <GlyphTooltip label={CREATE_MENU_LABEL} enabled={!isExpanded}>
+            <ControlTooltip label={CREATE_MENU_LABEL} description={CREATE_MENU_DESCRIPTION}>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
@@ -542,7 +669,7 @@ export function WorkspaceAppBar({
                   ) : null}
                 </Button>
               </DropdownMenuTrigger>
-            </GlyphTooltip>
+            </ControlTooltip>
             {/* `align="end"`: this trigger sits at the right edge of the row
                 in both layouts, so an end-aligned panel opens inward instead
                 of being shifted back in by collision handling. */}
@@ -612,7 +739,10 @@ export function WorkspaceAppBar({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <GlyphTooltip label={`Findings, ${String(findingsCount)}`} enabled={!isExpanded}>
+          <ControlTooltip
+            label={`Findings, ${String(findingsCount)}`}
+            description={FINDINGS_DESCRIPTION}
+          >
             <Button
               type="button"
               data-testid="workspace-app-bar-findings"
@@ -647,7 +777,7 @@ export function WorkspaceAppBar({
                 {findingsCount}
               </Badge>
             </Button>
-          </GlyphTooltip>
+          </ControlTooltip>
 
           {/* The reference library: the case's collected research, and the
               durable half of what the model remembers about this decision.
@@ -656,7 +786,10 @@ export function WorkspaceAppBar({
               are global chrome, reachable identically in both layouts.
               Absent, not disabled, when no caller wired it. */}
           {onOpenReferenceLibrary !== undefined ? (
-            <GlyphTooltip label={`References, ${String(referenceCount)}`} enabled={!isExpanded}>
+            <ControlTooltip
+              label={`References, ${String(referenceCount)}`}
+              description={REFERENCES_DESCRIPTION}
+            >
               <Button
                 type="button"
                 data-testid="workspace-app-bar-references"
@@ -676,7 +809,7 @@ export function WorkspaceAppBar({
                   {referenceCount}
                 </Badge>
               </Button>
-            </GlyphTooltip>
+            </ControlTooltip>
           ) : null}
         </div>
 
@@ -707,9 +840,10 @@ export function WorkspaceAppBar({
         <div className="flex shrink-0 items-center gap-[var(--space-1)]">
           <HelpButton {...(helpButtonRef !== undefined ? { ref: helpButtonRef } : {})} />
 
-          {/* Icon-only at every width, so unlike its neighbours this one is
-              always wrapped. */}
-          <GlyphTooltip label="Developer view" enabled>
+          {/* Icon-only at every width, so this one was already wrapped
+              unconditionally before the third post-ship repair made every
+              other control in the row match it. */}
+          <ControlTooltip label="Developer view" description={DEVELOPER_VIEW_DESCRIPTION}>
             <Button
               type="button"
               data-testid="workspace-app-bar-developer-view"
@@ -721,10 +855,10 @@ export function WorkspaceAppBar({
             >
               <TerminalIcon aria-hidden="true" className="size-4" />
             </Button>
-          </GlyphTooltip>
+          </ControlTooltip>
 
           {onResetDemo ? (
-            <GlyphTooltip label="Reset demo" enabled={!isExpanded}>
+            <ControlTooltip label="Reset demo" description={RESET_DEMO_DESCRIPTION}>
               <Button
                 type="button"
                 data-testid="workspace-app-bar-reset-demo"
@@ -755,7 +889,7 @@ export function WorkspaceAppBar({
                   <RotateCcwIcon aria-hidden="true" className="size-4" />
                 )}
               </Button>
-            </GlyphTooltip>
+            </ControlTooltip>
           ) : null}
         </div>
       </div>

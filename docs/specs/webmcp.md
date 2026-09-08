@@ -90,8 +90,10 @@ Changes the evidence item highlighted in the shared page. This is a primary WebM
 Input:
 
 ```ts
-{ caseId: string; evidenceId: string; expectedSequence: number }
+{ caseId: string; evidenceId: string | null; expectedSequence: number }
 ```
+
+`evidenceId: null` clears the highlight rather than moving it to another item -- the same shape `CaseState.selectedEvidenceId` (`packages/contracts/src/case.ts`) already carries. This is what makes the page's focus button a real toggle: its `aria-pressed` state promises a control that can un-press, and before this input accepted `null` there was no value a caller (human click or WebMCP call alike) could send to reach that "off" state.
 
 Effect: visible selection state only via `updateSelection()`; no evidence is deleted or changed, and it cannot invalidate a recommendation.
 
@@ -102,8 +104,10 @@ Changes the current option highlighted in the shared page and includes its safe 
 Input:
 
 ```ts
-{ caseId: string; optionId: string; expectedSequence: number }
+{ caseId: string; optionId: string | null; expectedSequence: number }
 ```
+
+`optionId: null` clears the highlight rather than moving it to another option -- identical reasoning to `sift_focus_evidence.evidenceId` immediately above.
 
 Effect: visible selection state only via `updateSelection()`. It does not change ranking or evidence.
 

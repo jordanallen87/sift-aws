@@ -494,6 +494,50 @@ describe('OptionCompareView', () => {
     expect(onFocusOption).toHaveBeenCalledExactlyOnceWith('candidate-crv');
   });
 
+  // Regression test for the reported defect: this header button carries
+  // `aria-pressed={isSelected}`, promising a real toggle. Clicking the
+  // already-selected header used to re-send the same id and leave it
+  // permanently selected -- a dead end and an `aria-pressed` lie. It must
+  // now clear the selection (`onFocusOption(null)`) instead.
+  it('clicking the already-selected header clears the selection instead of re-selecting it', async () => {
+    const user = userEvent.setup();
+    const onFocusOption = vi.fn();
+    render(
+      <OptionCompareView
+        options={OPTIONS}
+        attributeDefinitions={DEFINITIONS}
+        presentation={null}
+        selectedOptionId="candidate-crv"
+        layout="expanded"
+        onFocusOption={onFocusOption}
+      />,
+    );
+
+    await user.click(screen.getByTestId('option-compare-view-focus-candidate-crv'));
+    expect(onFocusOption).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it('marks only the selected header aria-pressed, and every other header false', () => {
+    render(
+      <OptionCompareView
+        options={OPTIONS}
+        attributeDefinitions={DEFINITIONS}
+        presentation={null}
+        selectedOptionId="candidate-crv"
+        layout="expanded"
+      />,
+    );
+
+    expect(screen.getByTestId('option-compare-view-focus-candidate-crv')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('option-compare-view-focus-candidate-rav4')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   it('is keyboard operable: pressing Enter on a focused option header fires onFocusOption', async () => {
     const user = userEvent.setup();
     const onFocusOption = vi.fn();

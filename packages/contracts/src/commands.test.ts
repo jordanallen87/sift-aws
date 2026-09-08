@@ -531,6 +531,43 @@ describe('FocusOptionInputSchema / FocusEvidenceInputSchema', () => {
       }).success,
     ).toBe(true);
   });
+
+  /**
+   * `optionId`/`evidenceId` are `.nullable()`, not `idString()` alone -- see
+   * this schema's own doc comment. `null` is the value a caller sends to
+   * CLEAR the selection: the option card's `aria-pressed` toggle-button
+   * semantics promise a control that can un-press, and before this the
+   * schema had no value that could express "nothing is focused now" (the
+   * defect this test guards against regressing).
+   */
+  it('accepts null to clear the current selection', () => {
+    expect(
+      FocusOptionInputSchema.safeParse({ caseId: 'case-1', optionId: null, expectedSequence: 1 })
+        .success,
+    ).toBe(true);
+    expect(
+      FocusEvidenceInputSchema.safeParse({
+        caseId: 'case-1',
+        evidenceId: null,
+        expectedSequence: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  // `.nullable()`, deliberately not `.optional()`: every caller already
+  // sends this field on every call (it is the whole point of the command),
+  // so the field being entirely ABSENT is not a state this contract needs to
+  // represent -- only "a real id" and "explicitly none" are. Omitting it
+  // must still be rejected, or a caller could silently skip stating intent
+  // rather than explicitly clearing it.
+  it('rejects an entirely absent optionId/evidenceId (nullable, not optional)', () => {
+    expect(
+      FocusOptionInputSchema.safeParse({ caseId: 'case-1', expectedSequence: 1 }).success,
+    ).toBe(false);
+    expect(
+      FocusEvidenceInputSchema.safeParse({ caseId: 'case-1', expectedSequence: 1 }).success,
+    ).toBe(false);
+  });
 });
 
 describe('DefineCaseAttributeInputSchema', () => {

@@ -158,7 +158,8 @@ export interface WorkspaceViewSwitcherProps {
    * sameness that ADR argues against.
    */
   scoreboard?: WorkspaceScoreboard | undefined;
-  onFocusOption: (optionId: string) => void;
+  /** `null` clears the focused option -- forwarded straight through to whichever of the three option views (List/Board/Compare) rendered the click; see `OptionListView.tsx`'s `onFocusOption` doc comment for the toggle contract each view implements. */
+  onFocusOption: (optionId: string | null) => void;
   /** Opens the full per-option profile for one option. Optional the whole way down: a caller with no profile surface wired yet gets cards with no dead "View details" control on them. */
   onOpenProfile?: ((optionId: string) => void) | undefined;
 

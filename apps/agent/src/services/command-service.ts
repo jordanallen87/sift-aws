@@ -1071,7 +1071,14 @@ export class CommandService {
     if (loaded.status !== 'ok') return loaded;
     const snapshot = loaded.value;
 
-    if (!snapshot.entities.some((entity) => entity.id === input.optionId)) {
+    // `null` means "clear the selection" (FocusOptionInputSchema's own doc
+    // comment, commands.ts) and names no real option, so the existence check
+    // below -- which exists to reject a caller pointing at an option that is
+    // not actually on this case -- only applies when a real id was supplied.
+    if (
+      input.optionId !== null &&
+      !snapshot.entities.some((entity) => entity.id === input.optionId)
+    ) {
       return validationFailure(
         `Option "${input.optionId}" was not found on case "${input.caseId}".`,
       );
@@ -1093,7 +1100,10 @@ export class CommandService {
           commandId,
           type: 'command.accepted',
           phase: 'completed',
-          summary: `Focused option "${input.optionId}".`,
+          summary:
+            input.optionId === null
+              ? 'Cleared the focused option.'
+              : `Focused option "${input.optionId}".`,
           safeDetails: { [PRESENTATION_ONLY_ACTIVITY_DETAIL]: true },
         },
         commandOrigin,
@@ -1776,7 +1786,14 @@ export class CommandService {
     if (loaded.status !== 'ok') return loaded;
     const snapshot = loaded.value;
 
-    if (!snapshot.evidenceLinks.some((link) => link.id === input.evidenceId)) {
+    // `null` means "clear the selection" (FocusEvidenceInputSchema's own doc
+    // comment, commands.ts) and names no real evidence link, so the
+    // existence check below only applies when a real id was supplied --
+    // identical reasoning to `focusOption` immediately above.
+    if (
+      input.evidenceId !== null &&
+      !snapshot.evidenceLinks.some((link) => link.id === input.evidenceId)
+    ) {
       return validationFailure(
         `Evidence "${input.evidenceId}" was not found on case "${input.caseId}".`,
       );
@@ -1798,7 +1815,10 @@ export class CommandService {
           commandId,
           type: 'command.accepted',
           phase: 'completed',
-          summary: `Focused evidence "${input.evidenceId}".`,
+          summary:
+            input.evidenceId === null
+              ? 'Cleared the focused evidence.'
+              : `Focused evidence "${input.evidenceId}".`,
           safeDetails: { [PRESENTATION_ONLY_ACTIVITY_DETAIL]: true },
         },
         commandOrigin,

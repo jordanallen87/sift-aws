@@ -325,53 +325,124 @@ describe('WorkspaceAppBar', () => {
   });
 
   /**
-   * At narrow width this row collapses to bare glyphs, which is precisely the
-   * case `ui/tooltip.tsx` exists for. These assert the two halves of that
-   * primitive's own rule -- the tooltip appears where the label went, and
-   * nothing depends on it.
+   * Third post-ship repair (see `WorkspaceAppBar.tsx`'s header comment):
+   * tooltips now carry a NAME line (the control's `aria-label` verbatim,
+   * unchanged from before this repair) plus a plain-language DESCRIPTION
+   * line, and they fire at every width, not only once a control has
+   * collapsed to a bare glyph.
+   *
+   * This replaces the pre-repair `enabled={!isExpanded}` coverage below --
+   * two of its tests directly encoded the OLD, narrower behaviour this task
+   * deliberately reverses:
+   *
+   *   - "labels %s on hover once it is icon-only at narrow width" only
+   *     checked the name line, which is no longer the whole story.
+   *   - "does not repeat a label the expanded row already shows" asserted no
+   *     tooltip existed at expanded width AT ALL -- exactly the case this
+   *     repair now serves, since a visible text label still never explains
+   *     what a control DOES. That assertion is not weakened here, it is
+   *     replaced with its own opposite, matching the product owner's
+   *     explicit direction ("hovering over them -- I'd want to know what
+   *     each does," independent of layout).
+   *
+   * "keeps every wrapped control usable with no pointer involved at all"
+   * survives unchanged below -- the rule it asserts (nothing depends on the
+   * tooltip opening) is untouched by this repair.
    */
-  describe('tooltips on the collapsed icon controls', () => {
-    it.each([
-      ['workspace-app-bar-create-menu', 'Add or adjust'],
-      ['workspace-app-bar-findings', 'Findings, 0'],
-      ['workspace-app-bar-references', 'References, 0'],
-      ['workspace-app-bar-reset-demo', 'Reset demo'],
-    ])('labels %s on hover once it is icon-only at narrow width', async (testId, expected) => {
-      const user = userEvent.setup();
-      render(
-        <WorkspaceAppBar
-          {...buildProps({
-            layout: 'narrow',
-            onResetDemo: vi.fn(),
-            onOpenReferenceLibrary: vi.fn(),
-          })}
-        />,
-      );
+  describe('tooltips: name plus description, at every width', () => {
+    const EXPECTED_TOOLTIPS = [
+      ['workspace-app-bar-create-menu', 'Add or adjust', 'change how much each factor matters'],
+      ['workspace-app-bar-findings', 'Findings, 0', 'need a second look'],
+      ['workspace-app-bar-references', 'References, 0', 'sources behind what Sift found'],
+      ['workspace-app-bar-developer-view', 'Developer view', 'step-by-step timeline'],
+      ['workspace-app-bar-reset-demo', 'Reset demo', "can't undo it"],
+    ] as const;
 
-      await user.hover(screen.getByTestId(testId));
+    it.each(EXPECTED_TOOLTIPS)(
+      "shows %s's name and description on hover at narrow width",
+      async (testId, expectedName) => {
+        const user = userEvent.setup();
+        render(
+          <WorkspaceAppBar
+            {...buildProps({
+              layout: 'narrow',
+              onResetDemo: vi.fn(),
+              onOpenReferenceLibrary: vi.fn(),
+            })}
+          />,
+        );
 
-      expect(await screen.findByTestId('tooltip-content')).toHaveTextContent(expected);
-    });
+        await user.hover(screen.getByTestId(testId));
+        const tooltip = await screen.findByTestId('tooltip-content');
 
-    it('labels the developer view at expanded width too, because it is never given a text label', async () => {
-      const user = userEvent.setup();
-      render(<WorkspaceAppBar {...buildProps({ layout: 'expanded' })} />);
+        // The description in this test's own table isn't asserted here --
+        // it's re-checked below as a real accessible-description assertion
+        // instead of a substring match. This confirms the visible name line
+        // -- the one narrow width has no other way to show -- is still
+        // present and still exactly the control's own accessible name.
+        expect(tooltip).toHaveTextContent(expectedName);
+      },
+    );
 
-      await user.hover(screen.getByTestId('workspace-app-bar-developer-view'));
+    it.each(EXPECTED_TOOLTIPS)(
+      "shows %s's name and description on hover at expanded width too",
+      async (testId, expectedName) => {
+        const user = userEvent.setup();
+        render(
+          <WorkspaceAppBar
+            {...buildProps({
+              layout: 'expanded',
+              onResetDemo: vi.fn(),
+              onOpenReferenceLibrary: vi.fn(),
+            })}
+          />,
+        );
 
-      expect(await screen.findByTestId('tooltip-content')).toHaveTextContent('Developer view');
-    });
+        await user.hover(screen.getByTestId(testId));
+        const tooltip = await screen.findByTestId('tooltip-content');
 
-    it('does not repeat a label the expanded row already shows', async () => {
-      const user = userEvent.setup();
-      render(<WorkspaceAppBar {...buildProps({ layout: 'expanded', onResetDemo: vi.fn() })} />);
+        // Deliberately the SAME assertion shape as the narrow-width test
+        // above -- one unconditional tooltip format at every width is the
+        // whole point of this repair (see the "header comment" note on why
+        // `enabled` was removed rather than re-derived per layout).
+        expect(tooltip).toHaveTextContent(expectedName);
+      },
+    );
 
-      // The control carries its own visible text here, so a tooltip saying
-      // the same word twice is noise rather than help.
-      await user.hover(screen.getByTestId('workspace-app-bar-create-menu'));
+    it.each(EXPECTED_TOOLTIPS)(
+      "associates %s's tooltip as a real accessible DESCRIPTION, never a second NAME",
+      async (testId, expectedName, expectedDescriptionSnippet) => {
+        // The load-bearing WCAG 2.5.3 assertion for this whole repair: the
+        // accessible NAME must still be exactly what it was before adding a
+        // description (so voice control still works, and the two can never
+        // drift), while the DESCRIPTION -- reached only through
+        // `aria-describedby`, never `aria-labelledby` -- is where the new
+        // sentence lives.
+        const user = userEvent.setup();
+        render(
+          <WorkspaceAppBar
+            {...buildProps({
+              layout: 'narrow',
+              onResetDemo: vi.fn(),
+              onOpenReferenceLibrary: vi.fn(),
+            })}
+          />,
+        );
+        const control = screen.getByTestId(testId);
 
-      expect(screen.queryByTestId('tooltip-content')).not.toBeInTheDocument();
-    });
+        await user.hover(control);
+        await screen.findByTestId('tooltip-content');
+
+        expect(control).toHaveAccessibleName(expectedName);
+        expect(control.getAttribute('aria-describedby')).toBeTruthy();
+        expect(control).not.toHaveAttribute('aria-labelledby');
+        // `toHaveAccessibleDescription` (jest-dom, backed by the same
+        // `dom-accessibility-api` engine real browsers' accname computation
+        // mirrors) resolves `aria-describedby` for us -- this is the actual
+        // proof the description reached assistive tech, not just the DOM.
+        expect(control).toHaveAccessibleDescription(new RegExp(expectedDescriptionSnippet));
+      },
+    );
 
     it('keeps every wrapped control usable with no pointer involved at all', async () => {
       // The rule `ui/tooltip.tsx` is built around: a tooltip is a

@@ -253,6 +253,27 @@ describe('OptionBoardView', () => {
     expect(onFocusOption).toHaveBeenCalledExactlyOnceWith('option-2');
   });
 
+  // Regression test for the reported defect: this card's focus button
+  // carries `aria-pressed={isSelected}`, promising a real toggle. Clicking
+  // the already-selected card used to re-send the same id and leave it
+  // permanently selected -- a dead end and an `aria-pressed` lie. It must
+  // now clear the selection (`onFocusOption(null)`) instead.
+  it('clicking the already-selected card clears the selection instead of re-selecting it', async () => {
+    const user = userEvent.setup();
+    const onFocusOption = vi.fn();
+    render(boardView({ selectedOptionId: 'option-2', onFocusOption }));
+
+    await user.click(screen.getByTestId('board-focus-option-2'));
+    expect(onFocusOption).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("marks only the selected card's focus button aria-pressed, and every other card false", () => {
+    render(boardView({ selectedOptionId: 'option-2' }));
+
+    expect(screen.getByTestId('board-focus-option-2')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('board-focus-option-1')).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('renders a supplied reason and invents no reason text when none is supplied', () => {
     render(boardView({ reasons: { 'option-1': 'Dealer offer conflicts with advertised price' } }));
 

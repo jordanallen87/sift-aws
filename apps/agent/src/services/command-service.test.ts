@@ -1354,6 +1354,38 @@ describe('CommandService', () => {
       });
       expect(result.status).toBe('conflict');
     });
+
+    /**
+     * `optionId: null` clears the selection (`FocusOptionInputSchema`'s own
+     * doc comment, `packages/contracts/src/commands.ts`) -- the fix for the
+     * option card's `aria-pressed` toggle button having no way to un-press.
+     * Two things distinguish this from the "focus a real option" path
+     * above: `null` must skip the "does this option exist on the case"
+     * check entirely (it names no option, so there is nothing to look up),
+     * and it must actually reach `selectedOptionId` as `null`, not `undefined`
+     * or the previously-selected id.
+     */
+    it('clears selectedOptionId when optionId is null, without requiring an existing option', () => {
+      const { snapshot, optionId } = withOption();
+      const focused = service.focusOption('cmd-3', {
+        caseId: snapshot.id,
+        optionId,
+        expectedSequence: snapshot.eventSequence,
+      });
+      requireOk(focused);
+      const afterFocus = requireSnapshot(focused.value);
+      expect(afterFocus.selectedOptionId).toBe(optionId);
+
+      const cleared = service.focusOption('cmd-4', {
+        caseId: snapshot.id,
+        optionId: null,
+        expectedSequence: afterFocus.eventSequence,
+      });
+      requireOk(cleared);
+      const afterClear = requireSnapshot(cleared.value);
+      expect(afterClear.selectedOptionId).toBeNull();
+      expect(afterClear.eventSequence).toBe(snapshot.eventSequence);
+    });
   });
 
   describe('setView', () => {
@@ -3732,6 +3764,32 @@ describe('CommandService', () => {
         expectedSequence: snapshot.eventSequence,
       });
       expect(result.status).toBe('conflict');
+    });
+
+    // Identical reasoning to `focusOption`'s own "clears ... when optionId
+    // is null" test above: `evidenceId: null` clears the selection and must
+    // skip the "does this evidence link exist" check, which only makes
+    // sense for a real id.
+    it('clears selectedEvidenceId when evidenceId is null, without requiring an existing evidence link', () => {
+      const { snapshot, evidenceId } = withEvidence();
+      const focused = service.focusEvidence('cmd-3', {
+        caseId: snapshot.id,
+        evidenceId,
+        expectedSequence: snapshot.eventSequence,
+      });
+      requireOk(focused);
+      const afterFocus = requireSnapshot(focused.value);
+      expect(afterFocus.selectedEvidenceId).toBe(evidenceId);
+
+      const cleared = service.focusEvidence('cmd-4', {
+        caseId: snapshot.id,
+        evidenceId: null,
+        expectedSequence: afterFocus.eventSequence,
+      });
+      requireOk(cleared);
+      const afterClear = requireSnapshot(cleared.value);
+      expect(afterClear.selectedEvidenceId).toBeNull();
+      expect(afterClear.eventSequence).toBe(snapshot.eventSequence);
     });
   });
 

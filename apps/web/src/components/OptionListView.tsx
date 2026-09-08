@@ -83,6 +83,16 @@
  * `--color-status-ready-bg` tint and inline "Selected" label `OptionCompareView`'s header cell and
  * `OptionBoardView`'s card already use, so the four views read as one family.
  *
+ * **A toggle button must be able to un-press (accessibility fix).** The card's focus button
+ * carries `aria-pressed={isSelected}`, which is a promise to assistive technology that the button
+ * toggles. Before this fix the click handler always called `onFocusOption(option.id)`, so a card
+ * could be pressed but never un-pressed -- a real dead end (there was no way to clear the
+ * selection) and an honest `aria-pressed` lie (the control could not do what its own ARIA state
+ * claimed). The handler now passes `null` -- "clear the selection"
+ * (`FocusOptionInputSchema.optionId`'s own doc comment, `packages/contracts/src/commands.ts`) --
+ * when the clicked card is already selected, and the option's real id otherwise, so the button's
+ * pressed state and its actual toggle behavior finally agree.
+ *
  * **Purely presentational.** No fetching, no context, no command dispatch -- every input is a
  * caller-supplied projection, and `onFocusOption`/`onOpenProfile` only report intent. A card never
  * appends a `CaseEvent`, advances `eventSequence`, or touches a `Criterion`; it reads `criteria`
@@ -140,8 +150,8 @@ export interface OptionListViewProps {
   scoreboard?: WorkspaceScoreboard | undefined;
   /** Caller-decided information architecture (ADR 0005 Decision 4) -- this component never calls `matchMedia` itself. */
   layout: 'narrow' | 'expanded';
-  /** Fired when a user or WebMCP-driven caller focuses a card. This component never decides focus itself. */
-  onFocusOption: (optionId: string) => void;
+  /** Fired when a user or WebMCP-driven caller focuses a card, or clears the focused card (`null`) by clicking it a second time. This component never decides focus itself -- see the header comment's "toggle button must be able to un-press" section. */
+  onFocusOption: (optionId: string | null) => void;
   /** Opens the full per-option profile. Optional on purpose: when a caller has no profile surface to open, the affordance is not rendered at all -- a dead control is worse than no control. */
   onOpenProfile?: ((optionId: string) => void) | undefined;
 }
@@ -266,7 +276,7 @@ interface OptionListCardProps {
   scoreboard: WorkspaceScoreboard | undefined;
   layout: 'narrow' | 'expanded';
   isSelected: boolean;
-  onFocusOption: (optionId: string) => void;
+  onFocusOption: (optionId: string | null) => void;
   onOpenProfile: ((optionId: string) => void) | undefined;
 }
 
@@ -332,7 +342,11 @@ function OptionListCard({
       <button
         type="button"
         data-testid={`option-list-view-focus-${option.id}`}
-        onClick={() => onFocusOption(option.id)}
+        // A second click on the already-selected card clears the selection
+        // (`onFocusOption(null)`) instead of re-selecting it -- see the
+        // header comment's "toggle button must be able to un-press" section
+        // for why `aria-pressed` demanded this.
+        onClick={() => onFocusOption(isSelected ? null : option.id)}
         aria-pressed={isSelected}
         // No `truncate` here, deliberately and permanently: an option's label
         // is the one thing on the card a person must be able to read in full,

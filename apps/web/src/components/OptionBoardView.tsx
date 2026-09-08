@@ -195,7 +195,8 @@ export interface OptionBoardViewProps {
   layout: 'narrow' | 'expanded';
   /** Reports an intended move. This component never applies the move itself -- see the header comment's "human authority" note; the caller decides whether/how to persist it. */
   onMoveOption: (optionId: string, toColumnId: string) => void;
-  onFocusOption: (optionId: string) => void;
+  /** Fired when a card is focused, or `null` when the already-selected card is clicked again to clear the selection -- see `OptionListView.tsx`'s header comment's "toggle button must be able to un-press" section for why this exists. */
+  onFocusOption: (optionId: string | null) => void;
   /** Opens the full per-option profile. Optional on purpose: when a caller has no profile surface to open, the affordance is not rendered at all -- a dead control is worse than no control. */
   onOpenProfile?: ((optionId: string) => void) | undefined;
 }
@@ -474,7 +475,10 @@ export function OptionBoardView({
                           <button
                             type="button"
                             data-testid={`board-focus-${option.id}`}
-                            onClick={() => onFocusOption(option.id)}
+                            // Toggle, not always-select: clicking the
+                            // already-selected card clears the selection --
+                            // see `onFocusOption`'s own doc comment above.
+                            onClick={() => onFocusOption(isSelected ? null : option.id)}
                             aria-pressed={isSelected}
                             // `min-h-[var(--size-touch-target-min)]` keeps
                             // this row a real >=44px hit area even though

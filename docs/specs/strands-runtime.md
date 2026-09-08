@@ -206,6 +206,19 @@ The narrow steering handler uses `Proceed`, `Guide`, and `Confirm`. General guar
 
 `Confirm` is a Strands `InterventionAction` valid only on `beforeToolCall`. `ConsequenceGuard` therefore cannot be a free-floating mid-run checkpoint; it must gate a specific tool call the orchestrator invokes to create a consequential artifact (for example `propose_recommendation` in the car pack or `create_inspection_proposal` in the energy pack). The orchestrator calls that tool only when it intends to hand a proposal to the deterministic core; `ConsequenceGuard`'s `beforeToolCall` handler is what pauses execution and requests human confirmation before the call proceeds.
 
+### Standing Watch: `HumanInTheLoop` composes with `ConsequenceGuard`
+
+**Specified, not yet implemented.** Full rationale in docs/decisions/0015-standing-watch-and-background-triggers.md Decision 1. A pack's declaration of which tools are consequential does not change for a background run — `PolicyDefinition`/`ToolDeclaration.effect` stay the single, deterministic, core-owned source of that fact, exactly as today. What changes is the **mechanism** enforcing the pause, selected by the run's origin:
+
+- A **foreground** run (a click, or a WebMCP tool call made while a browser is attached) keeps using `ConsequenceGuard` (`apps/agent/src/runtime/interventions.ts`) unchanged — `intervention.confirm`, answered synchronously, `resolveConfirmation` available for deterministic tests.
+- A **watch-initiated (background)** run has no live consumer to answer a confirm, and the pause must survive a process restart or an AgentCore Runtime idle timeout. It uses the SDK's `HumanInTheLoop` (`@strands-agents/sdk/vended-interventions/hitl`) instead: the default mode pauses the agent with `stopReason: 'interrupt'`, the interrupt state persists through the run's own `SessionManager` snapshot (the `'session'` preset's field list includes `'interrupts'`, confirmed in `docs/research/strands-spikes.md`'s spike 1), and resuming is `agent.invoke([new InterruptResponseContent({ interruptId, response })])` in a later process — there is no separate `resume()` method in the installed SDK version.
+
+One `consequentialToolIds`/`forbiddenToolIds` declaration; two handlers, chosen at run construction by origin, never both registered on the same agent instance because a run has exactly one origin. `strands-adapter.ts`'s existing per-run intervention-list construction is the seam: selecting `ConsequenceGuard` or `HumanInTheLoop` there, keyed on run origin, is additive to that construction, not a rewrite of it. `pending_interrupts` (`architecture.md` "Standing Watch scheduler") is the durable, case-scoped record of an unresolved `HumanInTheLoop` pause — what lets the case workspace show "something needs your attention" without decoding a Strands session file.
+
+### Cedar authorization: proven, flag-gated, not the default
+
+**Proven in `docs/research/strands-spikes.md` spike 2; not wired into the hero path.** `CedarAuthorization` (`@strands-agents/sdk/vended-interventions/cedar`) evaluates a tool call against Cedar policy text with a `principalResolver` reading `invocationState`, and fails closed (denies) when the resolver cannot identify a principal. The spike's own policy example is `bid-comparison`'s real deny case, verbatim: `price-analyst` must not call `license-lookup`, while `credential-checker` may. `ScopeAuthorization` remains the shipped deny mechanism for every build this specification covers (docs/decisions/0015 Decision 2) — rewiring the mechanism behind an already-tested, baselined deny beat is a risk this build declines to take for a presentational gain. Cedar is documented here as a real, proven, AWS-native alternative available behind configuration (`SIFT_AUTHORIZATION_MODE=scope|cedar`, named but not implemented), and as evidence for a submission that wants to name it, not as running code.
+
 Every intervention emits:
 
 ```ts
@@ -235,6 +248,15 @@ Deterministic context providers track tool name, normalized arguments, result st
 - a search repeats a prior query family without explaining a new angle.
 
 The guidance identifies an allowed alternative technique from the active skill. If no technique remains, the engine records accepted uncertainty when allowed or pauses as blocked. Steering may change the run plan, active skill, specialist, or allowed next step; it may not mutate the compiled pack.
+
+### Standing Watch: vended LLM steering does watch triage, never tool-call guarding
+
+**Specified, not yet implemented.** Full rationale in docs/decisions/0015-standing-watch-and-background-triggers.md Decision 3. `RetrySteering` and a watch's triage step both use Strands steering machinery, and they never contend, because they act in different phases:
+
+- `RetrySteering` guards tool calls **during** a run, registered as an `InterventionHandler` on the orchestrator/specialist agent, evaluating each `beforeToolCall` against the deterministic `ToolLedger` — exactly as described above, unchanged.
+- Watch **triage** — is a detected change material enough to justify starting a background run at all — happens **before** any run exists, using the SDK's vended `LLMSteeringHandler` (`@strands-agents/sdk/vended-interventions/steering`, proven in `docs/research/strands-spikes.md` spike 4) as a single-shot, separately-modelled triage agent invoked by the scheduler dispatcher: its own inner `Agent`, its own model, no shared mutable state with whatever agent a resulting run might later construct. A custom `SteeringContextProvider` (spike 4's `FakeFeedDeltaProvider` pattern) supplies "what changed since the case's last run" as the triage prompt's context. Its `'guide'` output cancels nothing, because it gates no tool call of its own — it produces a proposed subset of `WatchDeclaration.reopens` plus a plain-language note, which is a triage **verdict**, not a steering **action** on a live agent loop.
+
+They cannot both fire on one tool call: triage never gates a tool call, and `RetrySteering` never runs before a run exists. A run that triage approves is an ordinary bounded orchestrator/specialist execution with `RetrySteering` registered on it exactly as any other run has, on a tightened `BudgetGuard` (`WatchDeclaration.budget`). This is a structural fact about which agent each handler is registered on, not a coincidence of current configuration — a future change that registered `LLMSteeringHandler`-based triage on the same agent `RetrySteering` guards would violate this section, not merely surprise a reader of it.
 
 ## Evidence output
 

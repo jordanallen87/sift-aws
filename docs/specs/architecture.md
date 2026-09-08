@@ -102,6 +102,8 @@ The service exposes:
 - `GET /api/debug/runs/:runId/events` as SSE;
 - `GET /api/debug/runs/:runId/export`;
 - `GET /api/catalog/years`, `GET /api/catalog/makes`, `GET /api/catalog/models`, `GET /api/catalog/body-styles`, `GET /api/catalog/vehicles`, `GET /api/catalog/vehicles/:id` — read-only, bounded, offline vehicle catalog queries (docs/decisions/0003), backed by `@sift/catalog`;
+- `GET /api/cases` — **specified, not yet implemented** (docs/decisions/0015-standing-watch-and-background-triggers.md, "Prerequisites"): a bounded summary of every case (id, title, pack, watch/attention state, last-activity timestamp), the read model a case list needs and the only one that does not exist yet among the routes on this list;
+- `GET /api/events` — **specified, not yet implemented** (ADR 0015): a global SSE stream carrying enough of each case's summary to keep a case list live without one connection per case. Today's `GET /api/cases/:caseId/events` remains the per-case detail stream; this is additive, not a replacement;
 - `GET /ping` for AgentCore;
 - `POST /invocations` for AgentCore.
 
@@ -249,6 +251,12 @@ Two commands qualify today (`CommandService.loadForIndependentMutation`, which c
 - **`setCandidateDisposition`** — carries the complete desired value of one candidate's own disposition rather than a delta, is last-writer-wins per candidate by construction (undo is the forward command `unreviewed`), and derives `previousDisposition` from the current snapshot, so a behind caller produces a *more* accurate record than a stale read would.
 
 Every other command keeps strict equality. This is an opt-in, not a relaxed default: a command that reads the case to decide what to write — `reviewProposal`, `setEvidenceDisposition`, `updateCriteria`, `upsertOption`, `setOptionAttribute`, `defineCaseAttribute` — does not qualify.
+
+#### Per-case run serialization
+
+**Specified, not yet implemented** (docs/decisions/0015-standing-watch-and-background-triggers.md, "Prerequisites"). `RunService.requestInvestigation` (`apps/agent/src/services/run-service.ts`) already starts an engine detached from the HTTP request it accepted — `void runInSpanScope(runId, () => this.deps.engines?.[snapshot.pack.id]?.trigger(...))` — and nothing today prevents two such runs on the same case interleaving, because every existing caller has been a single person clicking one control at a time. That stops being true the moment anything other than a click can start a run: a watch-initiated background run racing a person's own click on the same case is the first genuinely new failure mode Standing Watch introduces, and it must be closed before that feature ships, not discovered from it.
+
+The required shape is a per-case queue — at most one active run per case, later requests for the same case wait or are rejected with a reason rather than interleaving — with a global concurrency cap bounding total background work across every case at once (a household's five open jobs, each with watches, must not be able to saturate the process). This is scheduling discipline over the existing `InvestigationEngine.trigger` call, not a new execution engine; a queued-but-not-yet-started run is exactly the `run.queued` activity phase this contract already has a name for.
 
 ### Two persistence paths: `append()` versus `updateSelection()`
 
@@ -477,6 +485,32 @@ The cause is supplied by the command that changed the case (`setCandidateDisposi
 - `GET /api/cases/:caseId/run-plan` → `{ plan, history }`. History is returned with the current plan because the two are only meaningful together.
 - `plan.created` and `plan.revised` are public activity events. The `plan.revised` summary names the trigger and what was reused; its `safeDetails` carry `reused`/`added`/`rerun`/`cancelled` counts so a consumer renders them without re-deriving.
 
+## Standing Watch scheduler
+
+**Specified, not yet implemented.** Full rationale in docs/decisions/0015-standing-watch-and-background-triggers.md; this section is the architecture-level contract that decision commits to.
+
+A case's `bid-comparison` pack (only that pack — see ADR 0015's "Pack scope") may declare `watches[]` (`packs-and-routing.md`). Once a case exists, the scheduler is what keeps evaluating those declarations after the case's first recommendation, without a person clicking anything. It runs **in-process with Express**, not as a separate worker or queue service — a second deployable is unjustified operational surface for a hackathon build, and Railway's single-writable-replica constraint (below) already means there is exactly one process that could run it.
+
+All of its state is rows, never in-memory timers:
+
+- **`watches`** — one row per case × declared watch id, carrying the watch's cursor into its feed, `lastCheckedAt`, `lastFiredAt`, and status (`active | suppressed | disabled`). This is the durable form of "what is this case watching, and how far did it get."
+- **`pending_interrupts`** — one row per unresolved `HumanInTheLoop` background confirmation (docs/decisions/0015 Decision 1): run id, watch id, tool name, reason, `createdAt`, nullable `resolvedAt`/`response`. This is what lets the case workspace answer "is something waiting on me" without decoding a Strands session snapshot.
+- **`read_markers`** — one row per case (`lastSeenActivitySequence`, `updatedAt`). This product has no accounts or multi-user collaboration (`product.md`, "Explicit scope cuts"), so a read marker is per-case, not per-case-per-viewer.
+
+On boot, the scheduler rehydrates every `active` `watches` row and resumes ticking; a Railway restart or an AgentCore Runtime idle timeout is therefore not a special case the scheduler has to detect, only an ordinary boot.
+
+**One dispatcher, three trigger kinds** (`packs-and-routing.md` names the exact declaration shape):
+
+| Kind | Arrives by | Dispatcher behavior |
+| --- | --- | --- |
+| `push` | A feed event | Notified by a listener; does not poll |
+| `time` | A stored deadline passing | A tick compares the deadline to the injected `Clock` |
+| `query` | Nothing pushes; must be asked | A tick polls the declared feed on the watch's interval |
+
+Every tick — of any kind — is **idempotent, keyed by (watchId, cursor)**. A tick reads its feed for entries after the row's current `cursor`; any resulting `CaseEvent`/activity-event writes and the cursor's advance commit in one transaction, the same append-and-advance-atomically discipline every other command in this document already follows. A crash before that commit leaves the cursor unmoved, so the next tick safely reprocesses the same window through the existing `idempotency_keys` machinery; a crash after it leaves the cursor already advanced, so the next tick correctly finds nothing new. "The service restarted mid-tick" and "the service ticked twice and found nothing" are indistinguishable from outside — which is what makes a double tick after a restart harmless rather than merely unlikely.
+
+A predicate evaluating true is a deterministic, core-owned fact (`packs-and-routing.md`'s `WatchDeclaration.predicate`) and produces `watch.fired`. Whether the change is *material* is a separate, model-owned triage step (docs/decisions/0015 Decision 5), bounded by a tightened `BudgetGuard`, that runs only after a trigger has genuinely fired — never on every tick, and never as a substitute for the deterministic predicate.
+
 ## Persistence
 
 SQLite is the canonical local and Railway store. The implementation uses `better-sqlite3`, Drizzle migrations, foreign keys, WAL mode, and a bounded busy timeout. It runs as one writable Railway application replica for the hackathon.
@@ -491,8 +525,13 @@ runs                 execution status, focus, bounds, trace/session IDs
 idempotency_keys     command result deduplication
 runtime_events       sanitized hooks, spans, logs, diffs, and errors
 run_plans            one row per RunPlan version, keyed (plan_id, version)
+watches              specified, not yet implemented (ADR 0015): per-case watch registration, feed cursor, lastCheckedAt/lastFiredAt, status
+pending_interrupts   specified, not yet implemented (ADR 0015): unresolved background HumanInTheLoop confirmations
+read_markers         specified, not yet implemented (ADR 0015): one row per case, lastSeenActivitySequence
 schema_migrations    applied migration ledger
 ```
+
+`watches`, `pending_interrupts`, and `read_markers` are named here as the tables docs/decisions/0015-standing-watch-and-background-triggers.md commits to; none exist in the current schema. They are ordinary migrated tables, not a new persistence technology — see "Standing Watch scheduler" above for what each row means and why ticks against them are idempotent.
 
 `run_plans` keeps every version rather than overwriting the current one: the plan's claim is historical ("a new concern revised work already under way, and here is what was reused"), and a table holding only the latest plan could state that but never show it. Re-saving an existing `(plan_id, version)` is rejected. The store's one mutation, `updateItemStatuses`, can reach nothing but an item's `status`/`updatedAt`, so what a version intended cannot be rewritten.
 

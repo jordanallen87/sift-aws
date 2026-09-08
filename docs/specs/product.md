@@ -203,6 +203,116 @@ The consumer projection of obligations. Each unresolved obligation is shown as a
 
 A case-defined `custom.*` attribute (see `pack-authoring.md`) is a hero product capability here, not an edge case. It renders beside pack-native fields in List, Compare, and Board with a subtle "added for this comparison" indicator, never as a raw ID. Opening a custom field explains why it exists, who added it, what sources support it, and what remains unknown. The model may populate a custom field's value across options, but every populated value preserves provenance, origin, and confidence, and an unsupported subjective value remains explicitly unknown rather than a fabricated inference (change-set §22–§26).
 
+## Standing Watch
+
+**Specified, not yet implemented.** Full runtime rationale in docs/decisions/0015-standing-watch-and-background-triggers.md. This section is the UI half of that decision, held to the same rigor ADR 0004 and ADR 0009 already hold the rest of this workspace to: concrete states, exact copy rules, and empty/loading/error behavior for each surface — because autonomy a person cannot observe is indistinguishable from a fake. Every surface below is specified 390px-first; a wider layout only ever gets more room, never different content or a different rule.
+
+Only a case running the `bid-comparison` pack can show any of the surfaces below in this build (docs/decisions/0015, "Pack scope") — `car-purchase` and `home-energy-guardian` cases declare no `watches[]`, so every rule below that says "absent when the case has no watches" already covers them without a pack-specific UI branch.
+
+### Freshness
+
+The one-line answer to "how current is this recommendation, and is anything watching it." Renders inside the answer hero (`RecommendationHero`), directly beneath the recommendation headline, only when the case has at least one watch — a case with none renders no freshness line at all, the same "do not render an empty conceptual region" rule the rest of this document already applies (see "Empty regions" above), because a case nothing is watching has nothing true to say about its own currency.
+
+Three states:
+
+- **Current** — `"Current as of {relative time} · watching {n} thing{s}."` The relative time is measured from the **stalest** (least recently checked) active watch on the case, not the freshest. A recommendation is only as current as the least-recently-confirmed input feeding it: if one watch checked 30 seconds ago and another two minutes ago, the honest claim is "as of two minutes ago," because that is the last moment every watched input was confirmed unchanged. Reporting the freshest watch's time here would silently launder the stale one's uncertainty into a claim the product cannot back.
+- **Checking** — while a watch-initiated run is actively executing for this case (a queued or active run carrying `origin: 'watch'`, a new value on the existing `CommandOrigin` vocabulary, `packages/contracts/src/http.ts`'s `COMMAND_ORIGINS` — today that array holds only `'webmcp'`, with an absent origin meaning "a person, through the UI"; this is the same field extended with a new value, not a new mechanism), the line reads `"Checking now · watching {n} thing{s}."` with no relative time — stating a stale "as of" timestamp while a fresh check is already in flight would be misleading in the other direction.
+- **Stale** — when the scheduler has not completed a tick for this case within the interval its own fastest declared watch expects (the scheduler process was behind, restarting, or otherwise not keeping up), the line reads `"Last checked {relative time}, longer than usual · watching {n} thing{s}."` in a subdued attention treatment — not an error state, not red, not alarming. A scheduler running behind is an honest operational fact, not a product failure, and must not be styled as one.
+
+Loading and error: the freshness line has no independent loading skeleton. It renders once real watch state is available and renders nothing until then, and it renders nothing (rather than a broken or guessed value) if watch state specifically fails to load while the rest of the case loads normally — the same "an error must not blank the workspace" rule under "Required visible states" below, applied to exactly this one region rather than the page.
+
+At 390px the line sits on its own row beneath the headline, wraps rather than truncates on a long `n`-things count, and is itself a tap target that opens "The watch list" below (see that section) — "watching 3 things" is a promise a person must be able to verify with one tap, not a number they have to take on faith.
+
+### "Since you were away" digest
+
+A compact card mounted between the answer hero and the primary workspace view (`product.md`'s "Workspace layout," between existing regions 2 and 3), testid `since-you-were-away-digest`. It exists to answer "what happened while I wasn't looking," driven by the read marker (`architecture.md`'s `read_markers` table, ADR 0015's Prerequisites).
+
+**Appears only when both are true:** the case has at least one watch, and the case's `read_markers.lastSeenActivitySequence` is behind at least one watch-originated public event (`watch.fired`, `watch.triaged`, `watch.suppressed`, an `intervention.confirmation_required` from a watch-initiated run, or a `recommendation.invalidated`/`recommendation.ready` a watch run produced) since that marker. Otherwise the card does not render — not a "nothing happened" empty state, an absent region, matching every other empty-region rule in this document.
+
+**At most three lines.** Ordered by how much a person's decision is implicated, most first: (1) a pending interrupt or a changed recommendation, (2) a reopened obligation or new evidence, (3) a suppressed-but-material check summary. Within a tier, newest first. When more qualifying events exist than fit in three lines, the third line is replaced with a rollup — `"+{n} more"` — that is itself a control opening "The watch list" below, never a dead label that silently drops events. A digest that truncates without saying so is exactly the kind of silent gap the rest of this specification refuses elsewhere (evidence, coverage, scoring); it is refused here too.
+
+**Dismissal** advances the read marker to the case's current activity sequence — it marks everything as seen; it does not delete, hide, or otherwise alter the underlying events, which remain fully visible in the activity stream and Runtime Inspector. A `"Dismiss"` control (testid `since-you-were-away-dismiss`) is keyboard-reachable and at least 44×44 CSS px (`testing.md`'s touch-target rule). Reopening a case afterward with no further watch activity shows no digest at all, because the marker has already caught up — this is the intended steady state, not a bug.
+
+At 390px the card is a single column; each of its (at most three) lines wraps on its own rather than clipping mid-word.
+
+### Interrupt policy
+
+Reached from the app bar's existing **"Add or adjust"** menu (`workspace-app-bar-create-menu`), as a new item alongside "Adjust priorities" (`workspace-app-bar-priorities`) — `workspace-app-bar-interrupt-policy`. Present only on a case with at least one watch; absent, not disabled, on one with none, for the same reason the freshness line is absent — there is nothing honest to say a policy about.
+
+Three levels, exactly:
+
+| Level | Label | Meaning |
+| --- | --- | --- |
+| `decision_only` | "Only if the decision changes" | **Default.** Interrupt only when the deterministic core's before/after comparison finds the favored option, readiness, or a hard constraint actually changed (docs/decisions/0015 Decision 5). |
+| `any_change` | "On any change" | Interrupt whenever a watch's triage finds a change material, even if the decision itself did not move. |
+| `never` | "Never — I'll check" | No interruption from any watch on this case; every material change becomes a quiet entry in the digest and the watch list instead. |
+
+The menu item itself states the case's current level inline (e.g. `"Interrupt policy · Only if the decision changes"`), so a person can see their current setting without opening anything. Opening it presents the three levels as a radio group with the current selection marked, and one sentence under each stating its consequence in the same plain terms as the table above — mirroring how `CriteriaEditor` already states a protected criterion's consequence rather than only offering a control that would fail if tried.
+
+Setting this is a **person-only, durable, event-sourced decision** — it commits through `append()`, never `updateSelection()`, because it changes a real fact about how the person wants to be treated, not a presentation setting. There is no model write path to it at all, not even a propose-and-confirm one: extending "the model may never trigger an interruption" (docs/decisions/0015 Decision 5) to its logical edge, the model also never gets to suggest loosening or tightening how interruptible a person is. This one setting applies to every watch on the case uniformly in this build; a per-watch override is out of scope (ADR 0015, "Alternatives considered").
+
+### The watch list
+
+A closed-by-default disclosure in "Secondary decision navigation" (`product.md`'s "Workspace layout," region 4), a sibling of the existing "Still checking" and "Manage options" disclosures — **"What Sift is watching"**, testid `watch-list-disclosure`. This is the surface that makes vigilance verifiable rather than merely claimed: tapping "watching {n} things" in the freshness line opens this disclosure directly.
+
+Each watch renders, in the pack's declared order:
+
+- its human-readable `label` (never the raw `id`, the same developer/consumer boundary this document applies everywhere else);
+- a plain-language statement of what would make it fire, drawn from the pack's declared `description` (never the raw `predicate`, which is developer-view jargon — see `debugging-and-observability.md`);
+- when it was last checked, as a relative time honoring the same fixture-time labelling rule as the freshness line;
+- its most recent outcome — see "`watch.suppressed` must be visible" below for the exact wording rule.
+
+Absent entirely (not present, not shown empty) on a case with no watches — the disclosure itself does not exist rather than existing to say "nothing is being watched," which would be a region whose only possible state is its own absence, the exact pattern "Current focus" already refuses.
+
+### `watch.suppressed` must be visible, without becoming noise
+
+A quiet agent that can never show its quiet work looks identical to an agent that did nothing. The rule this feature exists to prove — "it noticed and chose not to bother you" — needs a real, visible line, and it needs to never grow unbounded, because an appendable log of every suppressed check ever would itself become the noise the interrupt policy exists to prevent.
+
+The resolution: **one line per watch, always overwritten by that watch's most recent outcome**, shown in the watch list (above) and, when it is the most decision-relevant thing that happened since the person was last here, as the digest's lowest-priority line. Never a running history of every suppressed event.
+
+Two outcome copy strings, and the distinction between them is a rule, not a style choice:
+
+- `"Checked {relative time} — nothing that changes your decision."` — the watch's predicate **fired**, triage ran, and the deterministic core found nothing crossing the person's interrupt policy. Real work happened and was judged immaterial.
+- `"Checked {relative time} — no change."` — the watch ticked and its predicate never fired at all. No triage ran because there was nothing to triage.
+
+Using the second string for the first case (or vice versa) is a defect against this specification: the person is entitled to know whether the agent actually looked at something and decided it did not matter, versus found nothing to look at in the first place — that distinction is the entire content of the "quiet, not absent" claim.
+
+### Case list
+
+**Prerequisite, specified, not yet implemented** (docs/decisions/0015, "Prerequisites"; `architecture.md`'s `GET /api/cases` and `GET /api/events`). A new top-level view, distinct from the existing demo launcher, listing every case rather than one — the surface "3 watched, 1 needs you" requires and that the product currently has no way to show at all, since today's product opens directly into one active case with no list of others.
+
+**Row state machine**, per case:
+
+| State | Meaning | Visual treatment |
+| --- | --- | --- |
+| `no_watches` | The case declares no watches (every `car-purchase`/`home-energy-guardian` case, and a `bid-comparison` case before its first recommendation) | Plain row: title, pack, status only |
+| `watching_quiet` | At least one active watch, nothing pending | Row carries a quiet "watching" indicator |
+| `watching_needs_you` | At least one `pending_interrupts` row is unresolved for this case | Row carries a visibly distinct badge/dot — the one state a person is meant to notice without opening anything |
+
+A case transitions between these states only from real data (`watches`/`pending_interrupts` rows), never from a client-side guess.
+
+**What the global stream must carry.** `GET /api/events` (`architecture.md`) does not need to replay full event payloads to drive this list — it is a summary surface, and opening a case still uses the existing per-case `GET /api/cases/:caseId/events` stream for detail. Per case, it needs only enough to move one row between the three states above without a full-page poll: the case id, a monotonic per-case revision marker (the case's own `eventSequence` or its `activity_events` max sequence is sufficient — no new counter is required), the case's current pending-interrupt count, and its most recent activity timestamp.
+
+At 390px this is a single-column stack of full-width, tappable row cards — never a dense table — the same "canonical UI is a 390–480px pane" rule the rest of this specification holds everywhere else.
+
+### Honesty copy rules for Standing Watch
+
+The general rule is stated in docs/decisions/0015-standing-watch-and-background-triggers.md ("Honesty boundary"): copy must state what is being checked and where the data came from, and must never imply a live external source that does not exist. Applied to each surface specified above:
+
+| Surface | Compliant | Non-compliant | Why |
+| --- | --- | --- | --- |
+| Freshness | "Current as of 2 minutes ago (fixture clock) · watching 3 things." | "Current as of 2 minutes ago · watching 3 things." (fixture mode, no qualifier) | An unqualified relative timestamp in fixture mode reads as wall-clock time to a person with no way to know the clock is injected. |
+| Digest | "Cedar's revised bid arrived (fixture feed) — the ranking flipped back." | "New email from Cedar & Sons." | The compliant line names the fixture feed and the fact that changed; the non-compliant line invents a live inbox connection the product does not have. |
+| Watch list | "Checks the bids inbox fixture for a newer document than this case has seen." | "Monitoring your inbox." | Same rule as the ADR's general table, restated for the description a person actually reads. |
+| Case list | "3 cases · 1 needs you" | "3 cases syncing live" | "Syncing" implies a live external connection driving every row; what is actually true is a bounded scheduler ticking over fixture feeds. |
+| Interrupt policy | "Interrupt me only if the decision changes" | "Get notified instantly when anything changes" | "Instantly" claims a responsiveness the periodic, fixture-driven scheduler does not have and should never imply. |
+
+**No timestamp anywhere in this feature's UI omits its fixture-time qualifier when the deployment is running in fixture mode.** This is checked the same way `product.md`'s other release-relevant copy already must be — as a literal text assertion, not only a visual baseline (`testing.md`'s existing rule that pixel diffing alone is not an acceptable substitute for a text assertion on copy that changed on purpose, applied here to copy that must never silently regress to an unqualified timestamp).
+
+### New visual baselines this feature requires
+
+Every surface above is new, visible product surface and needs its own named Playwright baseline at `390x844`, `430x900`, and `480x900` (and the `1440x1000` secondary project) once implemented, per `testing.md`'s existing visual-verification contract: the freshness line in each of its three states, the digest card (both its normal and its "+n more" rollup state), the watch list disclosure both closed and open, the interrupt policy sheet, and the case list in all three row states. None of these exist as baselines today because none of the underlying surfaces exist yet.
+
 ## Required visible states
 
 Every region must have explicit UI for:

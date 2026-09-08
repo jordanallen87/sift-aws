@@ -109,9 +109,24 @@ type ScenarioAssertion =
   | { kind: 'recommendation'; favoredOptionId: string }
   | { kind: 'human_action'; action: string }
   | { kind: 'forbidden_event_absent'; eventType: string }
+  | { kind: 'watch_fired'; watchId: string }
+  | { kind: 'watch_triaged'; watchId: string; material: boolean }
+  | { kind: 'watch_suppressed'; watchId: string }
 ```
 
+The last three kinds are **specified, not yet implemented** — docs/decisions/0015-standing-watch-and-background-triggers.md, which also specifies the scheduler that would emit the events these assert on. They exist in this union now so a scenario written against them and an implementation of the scheduler can be developed against the same declared contract rather than a second one invented at implementation time. `watch_fired`/`watch_triaged` name the watch a bounded predicate/triage step ran for; `watch_suppressed` is the assertion the minimum Standing Watch slice cannot ship without, since "it noticed and chose not to bother you" is the one demo beat with no other test kind capable of proving it — a run that produces no visible change looks identical to a run that never happened unless something explicitly asserts the suppression occurred.
+
 The runner writes the final snapshot, event log, normalized agent trajectory, and assertion report to `artifacts/verification/scenarios/<scenarioId>/`.
+
+### Standing Watch scheduler determinism
+
+**Specified, not yet implemented.** Full rationale in docs/decisions/0015-standing-watch-and-background-triggers.md ("Determinism and testing"). A scheduler cannot be tested with a real sleep, and this suite does not gain one:
+
+- **An injectable `Clock`.** The scheduler takes the same `{ now(): string }` port every deterministic module in `packages/core` already takes, imported from `packages/core/src/ports.ts` — the file a prior integration pass already established as canonical, not a fourth local declaration. `packages/core` currently carries three structurally-identical `Clock` interfaces (`attributes.ts`, `evidence.ts`, `policy.ts`), left in place by a recorded prior decision rather than collapsed; the scheduler's own obligation is only to adopt the existing canonical port for its own new code, never to add a fourth copy or to take on collapsing the other three as part of this feature's scope.
+- **Unit and scenario tests advance a fake clock and call the dispatcher's tick function directly.** No wall-clock time passes during a test run. A test asserting "the 30-day price hold lapses" sets the fake clock's `now()` past the stored deadline and calls the tick once.
+- **Idempotent-tick regression coverage.** Because ticks are idempotent, keyed by `(watchId, cursor)` (`architecture.md` "Standing Watch scheduler"), the direct regression test for "a restart mid-tick replays correctly" is calling the dispatcher twice for the same watch state and asserting the second call is a no-op — no process restart needs to be simulated to prove this property.
+- **A dev-only "advance fixture time" control for browser tests.** `pnpm test:e2e`/`pnpm test:journey` drive a real running server process from the browser side, where a unit test's technique of swapping a fake `Clock` into a function call does not apply. The control is gated the same way `SIFT_DEBUG_ENABLED` gates the Runtime Inspector — never present in a build where advancing fixture time could be mistaken for advancing real time — and advances the server's injected clock plus triggers one dispatcher pass, so a Playwright test can drive "the price hold lapses" or "the revised bid arrives" deterministically instead of waiting or faking a longer test timeout. Its own UI surface, and the rule that any timestamp advanced this way must render labelled as fixture time, are specified in `product.md`'s "Honesty copy rules for Standing Watch."
+- **New scenario coverage** exercises a fake clock advancing through a fixture timeline and asserts, in order: `watch_fired` → bounded run → recommendation change → **no** proposal auto-approval (the existing `forbidden_event_absent` kind already covers the last of these; nothing new is needed there). Mutation coverage (`stryker.config.mjs`'s `mutate` globs) must name the interrupt-policy decision function explicitly once it exists outside `packages/core`/`packages/packs`, the same way `bill-feed-gate.ts`/`energy-calculator.ts`/`scope-differ.ts`/`bid-calculator.ts` are already named individually — it is a decision rule governing human attention, and the existing globs will not find it on their own.
 
 ### Decision Pack conformance tests
 

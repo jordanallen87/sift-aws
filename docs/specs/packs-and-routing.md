@@ -48,6 +48,7 @@ interface DecisionPackManifest {
   policies: PolicyDefinition[]
   presentation: PresentationDefinition
   evaluation: PackEvaluationDefinition
+  watches?: WatchDeclaration[]
 }
 
 interface CompiledDecisionPack extends DecisionPackManifest {
@@ -124,6 +125,38 @@ Evidence levels are:
 - `E3`: verified by a domain-specific deterministic check or explicit human attestation.
 
 A non-stale `error` or `degraded` evidence result blocks completion for that obligation. Failed and skipped results remain visible but do not raise evidence level.
+
+## Watch declarations (Standing Watch)
+
+**Specified, not yet implemented.** Full rationale in docs/decisions/0015-standing-watch-and-background-triggers.md. `watches` is optional and defaults to absent; a pack that declares none compiles, hashes, and behaves exactly as it does today — canonicalization drops `undefined` keys before hashing (`packages/packs/src/canonicalize.ts`), the same rule that already lets `decisionGuide` and `discovery` be adopted without disturbing an already-pinned case's `compiledHash`. Of the two hero packs and `bid-comparison`, only `bid-comparison` is intended to declare any (ADR 0015, "Pack scope"); `car-purchase` and `home-energy-guardian` are untouched by this feature.
+
+```ts
+interface WatchDeclaration {
+  id: string
+  label: string
+  description: string
+  kind: 'push' | 'time' | 'query'
+  feed: string
+  predicate: string
+  pollIntervalMs?: number
+  triage: 'model' | 'deterministic'
+  reopens: string[]
+  specialistId?: string
+  budget: { toolCalls: number; modelCalls: number }
+  defaultInterruptPolicy: 'decision_only' | 'any_change' | 'never'
+}
+```
+
+- **`kind`** selects the trigger primitive the scheduler dispatcher uses for this watch — `push` (a listener on `feed`), `time` (a tick comparing a stored deadline to the injected `Clock`), or `query` (a tick that polls `feed` on `pollIntervalMs`). `pollIntervalMs` is required when `kind === 'query'` and meaningless otherwise; the compiler rejects a `query` watch that omits it and rejects a non-`query` watch that supplies it, the same "a field only makes sense for one variant" discipline `ObligationTemplate.dependsOnCriteria` already documents for a different field.
+- **`feed`** names a fixture feed id in every build this specification covers — the same contract a real external source would later satisfy, never a live connection today. See "Honesty boundary" below and docs/decisions/0015's own section of the same name.
+- **`predicate`** is a deterministic, core-owned description of what counts as "this watch fired" for this trigger kind (e.g. "a document in `feed` has a newer revision than the one this case last recorded," "the stored deadline is before `clock.now()`"). The predicate decides whether a trigger fired at all; it never decides whether a fired trigger is worth acting on — that is `triage`.
+- **`triage`** is `'model'` for the ordinary case (a small triage agent judges materiality, bounded by `budget`, exactly as docs/decisions/0015 Decision 5 describes) or `'deterministic'` for a watch whose materiality is itself a computable fact requiring no judgment at all (e.g. "a hard constraint attribute changed value" needs no model to decide it matters). A `'deterministic'` watch still emits `watch.triaged`, with its verdict computed rather than model-produced, so the event vocabulary a consumer reads does not have to branch on how a watch happened to be built.
+- **`reopens`** lists obligation ids this watch's bounded work may reopen when triage finds it material — never obligation ids outside the pack's own declared set, checked at compile time the same way `ObligationTemplate.dependsOn` references are. When a watch reopens an obligation, `attemptsUsed` is preserved, not reset — the same rule `ObligationTemplate.dependsOnCriteria` already states for a criteria-driven reopen, and for the identical reason: an attempt budget must not be loopable by repeated background triggers any more than by repeated person-initiated reweights.
+- **`specialistId`**, when present, must name a specialist the pack already declares (`SpecialistDefinition`); a watch introduces no new capability, only a new reason to invoke an existing one.
+- **`budget`** is the tightened `BudgetGuard` configuration for this watch's background work — deliberately separate from, and typically smaller than, a foreground run's default bounds (`strands-runtime.md` "Engine loop"), since nobody is watching a background run in real time to decide whether to let it keep going.
+- **`defaultInterruptPolicy`** is this watch's contribution to the interrupt decision (docs/decisions/0015 Decision 5) when the case itself carries no override. The case-level override, when present, applies to every watch on the case uniformly — a per-watch override is explicitly out of scope for this decision (see ADR 0015's "Alternatives considered" and "Revisit conditions").
+
+Manifest compilation extends its existing rejection list (`packs-and-routing.md` "Manifest contract") to reject: a `watches[]` entry whose `id` collides with another watch on the same pack; a `reopens` id absent from the pack's own `obligations`; a `specialistId` absent from the pack's own `specialists`; a `query`-kind watch missing `pollIntervalMs` or a non-`query` watch supplying one; and a `feed` value that is not a registered fixture feed id in this build.
 
 ## Router input and output
 

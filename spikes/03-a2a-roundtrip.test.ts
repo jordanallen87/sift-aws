@@ -25,7 +25,7 @@ import { ScriptedModelProvider } from './helpers/scripted-model.js';
 let server: A2AExpressServer | undefined;
 let abortController: AbortController | undefined;
 
-afterEach(async () => {
+afterEach(() => {
   abortController?.abort();
   server = undefined;
   abortController = undefined;

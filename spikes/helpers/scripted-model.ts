@@ -82,6 +82,12 @@ export class ScriptedModelProvider extends Model<BaseModelConfig> {
     return this.config;
   }
 
+  // `async` is required by the override signature, not by the body: a plain `*stream()`
+  // returns `Iterable`, and only `async *` satisfies the base class's
+  // `AsyncIterable<ModelStreamEvent>` return type. This scripted provider resolves every
+  // turn synchronously from an in-memory array, so it has nothing to await -- a real
+  // provider awaiting a network call would.
+  // eslint-disable-next-line @typescript-eslint/require-await -- see comment above.
   override async *stream(
     messages: Message[],
     options?: StreamOptions,

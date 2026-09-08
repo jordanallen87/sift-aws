@@ -53,7 +53,6 @@ class FakeFeedDeltaProvider implements SteeringContextProvider {
   readonly name = 'feedDelta';
   private delta: string | undefined;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   observeAgent(_agent: LocalAgent): void {
     // No hooks needed -- this provider's data arrives from an external feed,
     // not from watching this agent's own tool/model calls.
@@ -97,7 +96,10 @@ describe('spike: LLMSteeringHandler + custom SteeringContextProvider', () => {
           toolCalls: [
             {
               name: 'strands_structured_output',
-              input: { type: 'guide', reason: `Feed update: ${FEED_DELTA_TEXT}. Re-check before proceeding.` },
+              input: {
+                type: 'guide',
+                reason: `Feed update: ${FEED_DELTA_TEXT}. Re-check before proceeding.`,
+              },
             },
           ],
         },
@@ -128,7 +130,9 @@ describe('spike: LLMSteeringHandler + custom SteeringContextProvider', () => {
       interventions: [steeringHandler],
     });
 
-    const result = await parentAgent.invoke('Check whether permits are priced into the Cedar & Sons bid.');
+    const result = await parentAgent.invoke(
+      'Check whether permits are priced into the Cedar & Sons bid.',
+    );
 
     // The steering handler's inner agent was invoked exactly once, driven by
     // OUR scripted steering model -- not a live model.

@@ -34,7 +34,11 @@ describe('spike: MemoryManager + TestMemoryStore', () => {
   });
 
   it('injection middleware folds retrieved memory into the model input on a fresh user turn, with the scripted model', async () => {
-    const store = new TestMemoryStore({ name: 'spike-notes-injection', writable: true, persist: false });
+    const store = new TestMemoryStore({
+      name: 'spike-notes-injection',
+      writable: true,
+      persist: false,
+    });
     const manager = new MemoryManager({
       stores: [store],
       searchToolConfig: false,
@@ -74,7 +78,9 @@ describe('spike: MemoryManager + TestMemoryStore', () => {
     // `types/messages.d.ts`'s `TextBlock` class), not `'text'` -- confirmed
     // empirically the same way spike 2 found `'toolResultBlock'`.
     const injectedTextReachedModel = sentMessages.some((message) =>
-      message.content.some((block) => block.type === 'textBlock' && block.text.includes('hybrid SUV')),
+      message.content.some(
+        (block) => block.type === 'textBlock' && block.text.includes('hybrid SUV'),
+      ),
     );
     expect(injectedTextReachedModel).toBe(true);
 

@@ -37,7 +37,18 @@ afterEach(async () => {
 });
 
 /** Real fixture tool: `propose_award`. Its callback flips a flag we can assert on -- if the assertion below ever sees this flag flipped for the "before approval" or "after denial" checks, the intervention did not do its job. */
-function buildProposeAwardTool(executed: { count: number; lastInput?: unknown }) {
+/**
+ * What the spike records about the guarded tool actually running. Declared as a
+ * named type because the assertions read `lastInput` (proving the *resumed* agent
+ * passed the original tool input through, not just that something ran), and an
+ * inferred `{ count: 0 }` literal has no such property.
+ */
+interface ExecutionLog {
+  count: number;
+  lastInput?: unknown;
+}
+
+function buildProposeAwardTool(executed: ExecutionLog) {
   return tool({
     name: 'propose_award',
     description: 'Creates the consequential proposal to award a bid to a subcontractor.',
@@ -53,7 +64,7 @@ function buildProposeAwardTool(executed: { count: number; lastInput?: unknown })
 function buildAgent(
   sessionManager: SessionManager,
   model: ScriptedModelProvider,
-  executed: { count: number; lastInput?: unknown },
+  executed: ExecutionLog,
 ): Agent {
   return new Agent({
     id: 'award-agent',
@@ -67,7 +78,7 @@ function buildAgent(
 
 describe('spike: HITL interrupt/resume across a real process restart', () => {
   it('pauses with stopReason "interrupt" and does not execute the tool', async () => {
-    const executed = { count: 0 };
+    const executed: ExecutionLog = { count: 0 };
     const model = new ScriptedModelProvider({
       turns: [
         {
@@ -96,7 +107,7 @@ describe('spike: HITL interrupt/resume across a real process restart', () => {
   });
 
   it('approval path: resumes a FRESH Agent from persisted session state and executes the tool', async () => {
-    const executed = { count: 0 };
+    const executed: ExecutionLog = { count: 0 };
     const model = new ScriptedModelProvider({
       turns: [
         {
@@ -149,7 +160,9 @@ describe('spike: HITL interrupt/resume across a real process restart', () => {
     // once more for the natural-language follow-up -- hence turn index 1
     // ("Award proposed...") is what the resumed agent's own model call
     // consumes.
-    const freshModel = new ScriptedModelProvider({ turns: [{ text: 'Award proposed for bid-cedar-sons.' }] });
+    const freshModel = new ScriptedModelProvider({
+      turns: [{ text: 'Award proposed for bid-cedar-sons.' }],
+    });
     const agentB = buildAgent(sessionManagerB, freshModel, executed);
     const restored = await sessionManagerB.restoreSnapshot({ target: agentB });
     expect(restored).toBe(true);
@@ -168,14 +181,17 @@ describe('spike: HITL interrupt/resume across a real process restart', () => {
   });
 
   it('denial path: resumes a fresh Agent from persisted session state and the tool does NOT execute', async () => {
-    const executed = { count: 0 };
+    const executed: ExecutionLog = { count: 0 };
     const model = new ScriptedModelProvider({
       turns: [
         {
           toolCalls: [
             {
               name: 'propose_award',
-              input: { bidId: 'bid-other-co', rationale: 'Lower total but missing warranty terms.' },
+              input: {
+                bidId: 'bid-other-co',
+                rationale: 'Lower total but missing warranty terms.',
+              },
             },
           ],
         },

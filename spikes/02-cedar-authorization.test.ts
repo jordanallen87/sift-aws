@@ -16,7 +16,7 @@
  * that never generates a schema needs both packages resolvable.
  */
 import { describe, expect, it } from 'vitest';
-import { Agent, tool } from '@strands-agents/sdk';
+import { Agent, TextBlock, ToolResultBlock, tool } from '@strands-agents/sdk';
 import { CedarAuthorization } from '@strands-agents/sdk/vended-interventions/cedar';
 import { z } from 'zod';
 import { ScriptedModelProvider } from './helpers/scripted-model.js';
@@ -49,7 +49,9 @@ function buildLicenseLookupTool(executed: { count: number }) {
 }
 
 /** Reads the calling agent's id from `invocationState.callerAgentId`, mirroring a multi-tenant setup where the principal is not known until invoke time. Returns `undefined` (fail-closed deny, per `CedarAuthorizationConfig.principalResolver`'s doc comment) for an unrecognized caller. */
-function resolvePrincipal(invocationState: Record<string, unknown>): { type: string; id: string } | undefined {
+function resolvePrincipal(
+  invocationState: Record<string, unknown>,
+): { type: string; id: string } | undefined {
   const callerAgentId = invocationState['callerAgentId'];
   if (typeof callerAgentId !== 'string') return undefined;
   return { type: 'Agent', id: callerAgentId };
@@ -64,7 +66,10 @@ describe('spike: Cedar authorization with a dynamic principalResolver', () => {
         { text: 'License LIC-9001 is active.' },
       ],
     });
-    const cedar = new CedarAuthorization({ policies: POLICIES, principalResolver: resolvePrincipal });
+    const cedar = new CedarAuthorization({
+      policies: POLICIES,
+      principalResolver: resolvePrincipal,
+    });
     const agent = new Agent({
       id: 'credential-checker',
       model,
@@ -92,7 +97,10 @@ describe('spike: Cedar authorization with a dynamic principalResolver', () => {
         { text: 'I am not authorized to look up licenses; escalating to credential-checker.' },
       ],
     });
-    const cedar = new CedarAuthorization({ policies: POLICIES, principalResolver: resolvePrincipal });
+    const cedar = new CedarAuthorization({
+      policies: POLICIES,
+      principalResolver: resolvePrincipal,
+    });
     const agent = new Agent({
       id: 'price-analyst',
       model,
@@ -119,15 +127,21 @@ describe('spike: Cedar authorization with a dynamic principalResolver', () => {
     // `types/messages.d.ts`'s `ToolResultBlock` class and by inspecting
     // `agent.messages` at runtime, which does NOT match that JSON shape).
     const toolResultMessage = agent.messages.find((message) =>
-      message.content.some((block) => block.type === 'toolResultBlock'),
+      message.content.some((block) => block instanceof ToolResultBlock),
     );
     expect(toolResultMessage).toBeDefined();
     const toolResultBlock = toolResultMessage?.content.find(
-      (block): block is { type: 'toolResultBlock'; status: string; content: { text?: string }[] } =>
-        block.type === 'toolResultBlock',
+      (block): block is ToolResultBlock => block instanceof ToolResultBlock,
     );
     expect(toolResultBlock?.status).toBe('error');
-    expect(toolResultBlock?.content?.[0]?.text).toMatch(/denied/i);
+    // `ToolResultBlock.content` is `ToolResultContent[]` -- a union of TextBlock |
+    // JsonBlock | ImageBlock | VideoBlock | DocumentBlock -- so `.text` exists only
+    // after narrowing to TextBlock. Indexing [0] and reaching for `.text` would be
+    // reading a property the union does not have.
+    const deniedText = toolResultBlock?.content.find(
+      (item): item is TextBlock => item instanceof TextBlock,
+    );
+    expect(deniedText?.text).toMatch(/denied/i);
   });
 
   it('fails closed when principalResolver cannot resolve a principal (unrecognized caller)', async () => {
@@ -138,7 +152,10 @@ describe('spike: Cedar authorization with a dynamic principalResolver', () => {
         { text: 'Unable to authorize this request.' },
       ],
     });
-    const cedar = new CedarAuthorization({ policies: POLICIES, principalResolver: resolvePrincipal });
+    const cedar = new CedarAuthorization({
+      policies: POLICIES,
+      principalResolver: resolvePrincipal,
+    });
     const agent = new Agent({
       id: 'unknown-agent',
       model,

@@ -2,6 +2,16 @@
 
 Target: **2:50**, hard failure at **3:00** (OpenAI's stated limit; `scripts/test-submission.ts:496` fails the release at 180s or over). Public audio required. Published to YouTube.
 
+> **Capture toolchain — do not improvise one.** A proven narrated-video
+> pipeline already exists (ElevenLabs narration, ffmpeg segments, crossfades,
+> captions) in the `praetor` reference repository, along with a separate,
+> portable stills/clips kit. Read
+> [`docs/hackathons/demo-tooling/README.md`](../../hackathons/demo-tooling/README.md)
+> **before recording anything** — it carries the exact commands and six traps
+> confirmed in that source, including a hardcoded 240-second cap that is wrong
+> for this video and a transition-duration default mismatch that silently
+> drifts the captions.
+
 The spine is the six required beats in `docs/specs/demos-and-submission.md` § "WebMCP video — under three minutes." They are all still covered; screen time has moved between them, and required beat 5 is split across two shots. Every quoted on-screen string, control label, and `data-testid` below is copied from the current source, with the file and line recorded in the verification table at the end of this file. Nothing here is remembered or paraphrased.
 
 ## Who is on camera

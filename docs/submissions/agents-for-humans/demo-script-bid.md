@@ -4,6 +4,16 @@ Target: **no longer than 5 minutes.** Beats below sum to exactly 300 seconds; la
 
 **Track: Professional Agents.**
 
+> **Capture toolchain — do not improvise one.** A proven narrated-video
+> pipeline already exists (ElevenLabs narration, ffmpeg segments, crossfades,
+> captions) in the `praetor` reference repository, along with a separate,
+> portable stills/clips kit. Read
+> [`docs/hackathons/demo-tooling/README.md`](../../hackathons/demo-tooling/README.md)
+> **before recording anything** — it carries the exact commands and six traps
+> confirmed in that source, including a hardcoded 240-second cap that is wrong
+> for this video and a transition-duration default mismatch that silently
+> drifts the captions.
+
 ## Provenance of every claim in this script
 
 Written 2026-09-07 and re-measured 2026-09-10 against a product that was actually driven, not against source alone. Every score, count and dollar figure below was read off a live run on the second date, after the case grew from three bids to twelve. Specifically:

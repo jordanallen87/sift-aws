@@ -151,6 +151,24 @@ The submissions use separate edits. The complete scripts and live official requi
 6. Show AgentCore/CloudWatch correlation when available, Runtime Inspector evidence, and the release report.
 7. Close with Sift as an agent designed to know when it has not earned the right to answer.
 
+## Capture and render toolchain
+
+Neither video is shot or assembled by hand, and no session should build a
+pipeline for it. The proven narrated-video pipeline and the portable
+stills/clips kit both live in the `praetor` read-only reference repository,
+and the operational reference for them — exact commands, prerequisites, and
+the confirmed traps — is
+[`docs/hackathons/demo-tooling/README.md`](../hackathons/demo-tooling/README.md).
+
+Two constraints that bind regardless of which lane is used:
+
+- `docs/reuse-source-map.md` makes `praetor` read-only reference and forbids
+  importing it through a filesystem path. Those scripts are run in place or
+  copied and adapted; they never become a Sift dependency.
+- The caps this specification sets (WebMCP under 180s, Agents for Humans at or
+  under 300s) are the ones that apply. The reference `compose.mjs` hardcodes a
+  240-second cap from a different contest and must be changed.
+
 ## Submission deliverables
 
 The repository must contain:

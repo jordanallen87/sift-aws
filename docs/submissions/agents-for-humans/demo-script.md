@@ -1,5 +1,15 @@
 # Agents for Humans demo video — shot-by-shot recording script
 
+> **Capture toolchain — do not improvise one.** A proven narrated-video
+> pipeline already exists (ElevenLabs narration, ffmpeg segments, crossfades,
+> captions) in the `praetor` reference repository, along with a separate,
+> portable stills/clips kit. Read
+> [`docs/hackathons/demo-tooling/README.md`](../../hackathons/demo-tooling/README.md)
+> **before recording anything** — it carries the exact commands and six traps
+> confirmed in that source, including a hardcoded 240-second cap that is wrong
+> for this video and a transition-duration default mismatch that silently
+> drifts the captions.
+
 Target: **no longer than 5 minutes**, public audio, published video. This script hits, in order, the seven required beats in `docs/specs/demos-and-submission.md` ("Agents for Humans video — no longer than five minutes"). Every quoted UI label and event string below was cross-checked against the actual component source and, where noted "(live-verified …)", against the real deployed product on 2026-08-27 using Playwright against `https://sift-hackathon-production.up.railway.app`, and against `apps/agent/src/runtime/home-energy-swarm.test.ts`. Where the live product genuinely cannot do something the spec describes, this script says so plainly and routes around it honestly instead of scripting a moment that won't happen on camera.
 
 > **Before you record: start the service with `SIFT_DEMO_PACING_MS=250`.** Without it there is nothing to watch. A scripted model turn returns instantly, so a complete six-specialist investigation finishes in **298ms** and emits its entire activity stream in about a second — the Investigation team panel snaps to "all done" and the Runtime Inspector's Timeline is already full before you can toggle to it. Measured with pacing at 250: the same run takes **5.8 seconds** and emits 317 events, which reads as live, gives beat 2 something to narrate over, and lets you open the dev view **mid-run** and watch the log tail in. Nothing else changes — identical events, counts and ordering, paced or not. The delay is added to a model call that would really have latency with a live Bedrock model; the fixture is what removed it. See `.env.example`.

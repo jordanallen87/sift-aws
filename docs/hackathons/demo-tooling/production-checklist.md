@@ -62,5 +62,8 @@ authorized.
   becomes implemented.
 - [ ] Update both demo manifests and their runbooks as the renderer's schema
   becomes concrete.
-- [ ] Update `docs/specs/demos-and-submission.md` with the production flow and
-  capture prerequisites.
+- [x] Update `docs/specs/demos-and-submission.md` with the production flow and
+  capture prerequisites. — done 2026-09-10: a "Capture and render toolchain"
+  section there points at `../hackathons/demo-tooling/README.md`, which now
+  carries the verified commands, prerequisites and traps for both praetor
+  toolchains.

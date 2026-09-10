@@ -26,12 +26,14 @@ function expectOk<T>(result: { status: string }): asserts result is { status: 'o
 }
 
 // The three demo plug numbers from docs/bid-comparison/plan.md, keyed by the
-// exact scope item id each one prices: permits/inspections $1,200,
-// shower-valve rough-in $2,100, debris haul-away $400. Sum: $3,700.
+// exact scope item id each one prices -- Northgate's own real priced
+// amount for that item, scaled to this pack's commercial-scale fixtures:
+// permits/inspections $18,000, shower-valve rough-in $31,500, debris
+// haul-away $6,000. Sum: $55,500.
 const CEDAR_PLUG_NUMBERS = {
-  'permits-inspections': 1200,
-  'shower-valve-rough-in': 2100,
-  'debris-haul-away': 400,
+  'permits-inspections': 18000,
+  'shower-valve-rough-in': 31500,
+  'debris-haul-away': 6000,
 };
 
 describe('BID_CALCULATOR_TOOL_ID', () => {
@@ -88,13 +90,13 @@ describe('derivePaymentRisk', () => {
 });
 
 describe('calculateBidEconomics -- Northgate (no absent items)', () => {
-  it('adjustedTotal equals the quoted $18,400.00 total exactly, since nothing is absent to plug', () => {
+  it('adjustedTotal equals the quoted $276,000.00 total exactly, since nothing is absent to plug', () => {
     const result = calculateBidEconomics({ bidId: 'bid-northgate' });
     expectOk<BidCalculatorResult>(result);
-    expect(result.data.quotedTotal).toEqual({ amount: 18400, currency: 'USD' });
+    expect(result.data.quotedTotal).toEqual({ amount: 276000, currency: 'USD' });
     expect(result.data.adjustedTotal.status).toBe('known');
     expect((result.data.adjustedTotal as KnownAdjustedTotal).value).toEqual({
-      amount: 18400,
+      amount: 276000,
       currency: 'USD',
     });
     expect(result.data.scopeCompleteness).toBe(1);
@@ -127,13 +129,13 @@ describe('calculateBidEconomics -- Cedar & Sons (the flip)', () => {
     );
   });
 
-  it('quotes $14,900.00 as its stated total', () => {
+  it('quotes $223,500.00 as its stated total', () => {
     const result = calculateBidEconomics({ bidId: 'bid-cedar' });
     expectOk<BidCalculatorResult>(result);
-    expect(result.data.quotedTotal).toEqual({ amount: 14900, currency: 'USD' });
+    expect(result.data.quotedTotal).toEqual({ amount: 223500, currency: 'USD' });
   });
 
-  it('yields an explicit UNKNOWN adjusted total -- never a silently-optimistic $14,900 -- when no plug numbers are supplied for its 3 absent items', () => {
+  it('yields an explicit UNKNOWN adjusted total -- never a silently-optimistic $223,500 -- when no plug numbers are supplied for its 3 absent items', () => {
     const result = calculateBidEconomics({ bidId: 'bid-cedar' });
     expectOk<BidCalculatorResult>(result);
     expect(result.data.adjustedTotal.status).toBe('unknown');
@@ -179,16 +181,16 @@ describe('calculateBidEconomics -- Cedar & Sons (the flip)', () => {
     });
     expectOk<BidCalculatorResult>(result);
     expect(result.data.adjustedTotal.status).toBe('known');
-    // 14900 + 1200 + 2100 + 0 = 18200
+    // 223500 + 18000 + 31500 + 0 = 273000
     expect((result.data.adjustedTotal as KnownAdjustedTotal).value).toEqual({
-      amount: 18200,
+      amount: 273000,
       currency: 'USD',
     });
   });
 
   it(
-    'THE DEMO FLIP: with the real plug numbers ($1,200 / $2,100 / $400 = $3,700), ' +
-      "Cedar's adjusted total is $18,600.00 -- MORE than Northgate's $18,400.00 quoted total",
+    'THE DEMO FLIP: with the real plug numbers ($18,000 / $31,500 / $6,000 = $55,500), ' +
+      "Cedar's adjusted total is $279,000.00 -- MORE than Northgate's $276,000.00 quoted total",
     () => {
       const cedar = calculateBidEconomics({ bidId: 'bid-cedar', plugNumbers: CEDAR_PLUG_NUMBERS });
       const northgate = calculateBidEconomics({ bidId: 'bid-northgate' });
@@ -197,20 +199,20 @@ describe('calculateBidEconomics -- Cedar & Sons (the flip)', () => {
 
       expect(cedar.data.adjustedTotal.status).toBe('known');
       const cedarAdjusted = (cedar.data.adjustedTotal as KnownAdjustedTotal).value;
-      expect(cedarAdjusted).toEqual({ amount: 18600, currency: 'USD' });
+      expect(cedarAdjusted).toEqual({ amount: 279000, currency: 'USD' });
 
       expect(northgate.data.adjustedTotal.status).toBe('known');
       const northgateAdjusted = (northgate.data.adjustedTotal as KnownAdjustedTotal).value;
-      expect(northgateAdjusted).toEqual({ amount: 18400, currency: 'USD' });
+      expect(northgateAdjusted).toEqual({ amount: 276000, currency: 'USD' });
 
-      // Before adjustment, Cedar's raw quote ($14,900) looks cheaper than
-      // Northgate's ($18,400).
+      // Before adjustment, Cedar's raw quote ($223,500) looks cheaper than
+      // Northgate's ($276,000).
       expect(cedar.data.quotedTotal.amount).toBeLessThan(northgate.data.quotedTotal.amount);
 
       // The whole point of this pack: after adjustment, the ranking flips.
       expect(cedarAdjusted.amount).toBeGreaterThan(northgateAdjusted.amount);
-      expect(cedarAdjusted.amount).toBe(18600);
-      expect(northgateAdjusted.amount).toBe(18400);
+      expect(cedarAdjusted.amount).toBe(279000);
+      expect(northgateAdjusted.amount).toBe(276000);
     },
   );
 
@@ -243,7 +245,7 @@ describe('calculateBidEconomics -- evidence summaries carry the real figures', (
     );
     expect(adjustedTotalItem?.level).toBe('E3');
     expect(adjustedTotalItem?.verdict).toBe('degraded');
-    expect(adjustedTotalItem?.summary).toContain('$14,900.00');
+    expect(adjustedTotalItem?.summary).toContain('$223,500.00');
     expect(adjustedTotalItem?.summary).toContain('unknown');
 
     const scopeItem = result.data.evidence.find((item) =>
@@ -272,7 +274,7 @@ describe('calculateBidEconomics -- evidence summaries carry the real figures', (
     expect(warrantyItem?.summary).not.toContain('states a 0-month');
   });
 
-  it("Cedar's evidence with the real plug numbers cites the adjusted $18,600.00 figure and a passing verdict", () => {
+  it("Cedar's evidence with the real plug numbers cites the adjusted $279,000.00 figure and a passing verdict", () => {
     const result = calculateBidEconomics({ bidId: 'bid-cedar', plugNumbers: CEDAR_PLUG_NUMBERS });
     expectOk<BidCalculatorResult>(result);
     const adjustedTotalItem = result.data.evidence.find((item) =>
@@ -280,8 +282,8 @@ describe('calculateBidEconomics -- evidence summaries carry the real figures', (
     );
     expect(adjustedTotalItem?.level).toBe('E3');
     expect(adjustedTotalItem?.verdict).toBe('pass');
-    expect(adjustedTotalItem?.summary).toContain('$14,900.00');
-    expect(adjustedTotalItem?.summary).toContain('$18,600.00');
+    expect(adjustedTotalItem?.summary).toContain('$223,500.00');
+    expect(adjustedTotalItem?.summary).toContain('$279,000.00');
   });
 
   it("Northgate's evidence states a passing 24-month warranty and no adjustment needed", () => {
@@ -291,7 +293,7 @@ describe('calculateBidEconomics -- evidence summaries carry the real figures', (
       item.sourceId.endsWith('-adjusted-total'),
     );
     expect(adjustedTotalItem?.verdict).toBe('pass');
-    expect(adjustedTotalItem?.summary).toContain('$18,400.00');
+    expect(adjustedTotalItem?.summary).toContain('$276,000.00');
     expect(adjustedTotalItem?.summary).toContain('no plug-number adjustment needed');
 
     const warrantyItem = result.data.evidence.find((item) => item.sourceId.endsWith('-warranty'));

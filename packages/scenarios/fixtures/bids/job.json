@@ -1,31 +1,31 @@
 {
-  "_provenance": "Fictional demo data. The job, contractors, bid amounts, and every identifier below are invented for the Sift 'bid-comparison' hackathon scenario. No real homeowner, contractor, address, or licence is represented.",
+  "_provenance": "Fictional demo data. The job, contractors, bid amounts, and every identifier below are invented for the Sift 'bid-comparison' hackathon scenario. No real school, district, contractor, address, or licence is represented.",
   "caseId": "case-demo-bid-comparison",
-  "jobId": "job-demo-bathroom-remodel-01",
-  "title": "Master bathroom remodel -- plumbing scope",
+  "jobId": "job-demo-school-plumbing-01",
+  "title": "Lincoln Elementary School -- restroom & locker-room plumbing renovation package",
   "trade": "plumbing",
-  "projectAddressNote": "Fictional single-family home, Elm Ridge subdivision (invented place name; no real address).",
-  "summary": "Full gut of the existing master bathroom (tub, shower, toilet, vanity) and re-plumb for a new fixture layout: freestanding tub, separate curbless shower, relocated toilet, and a two-sink vanity. Homeowner is soliciting fixed-price bids from three licensed plumbing subcontractors for the plumbing scope only; tile, cabinetry, and electrical are bid separately and are out of scope here.",
+  "projectAddressNote": "Fictional public K-8 school, Lincoln Elementary, Cascade Unified School District, and a fictional general contractor, Meridian Builders (all invented; no real school, district, contractor, or address is represented).",
+  "summary": "Meridian Builders, a nine-person general contractor, holds the prime contract for the district's summer renovation of Lincoln Elementary's student and staff restrooms and the gymnasium locker rooms: full demo of existing fixtures and piping, re-rough of supply and DWV piping to a revised ADA-compliant fixture layout, and fixture-set installation throughout. Meridian is soliciting fixed-price bids from licensed plumbing subcontractors for the plumbing trade package only; general demolition/abatement, tile, and electrical are bid separately and are out of scope here. Released through the regional plan room as the public project requires, the package drew twelve bids by the posted deadline -- ordinary for a trade package of this size, where invitations reach every subcontractor on the plan room's distribution list rather than a hand-picked handful. Meridian has no estimating department: the same person choosing this subcontractor is also running the job.",
   "requiredScopeLineItems": [
     {
       "scopeItemId": "demo-existing",
-      "label": "Demo of existing tub, tile surround, and fixtures"
+      "label": "Demo of existing restroom and locker-room fixtures, piping, and abandoned risers"
     },
     {
       "scopeItemId": "rough-in-supply",
-      "label": "Rough-in supply piping to new fixture locations"
+      "label": "Rough-in supply piping to all restroom and locker-room fixture locations"
     },
     {
       "scopeItemId": "rough-in-drain",
-      "label": "Rough-in drain, waste, and vent (DWV) piping to new fixture locations"
+      "label": "Rough-in drain, waste, and vent (DWV) piping to all restroom and locker-room fixture locations"
     },
     {
       "scopeItemId": "shower-valve-rough-in",
-      "label": "Shower valve rough-in and blocking for the curbless shower"
+      "label": "Shower valve rough-in and blocking for the gymnasium locker-room showers"
     },
     {
       "scopeItemId": "fixture-set-install",
-      "label": "Set and connect new fixtures (freestanding tub, shower, toilet, two-sink vanity)"
+      "label": "Set and connect all restroom and locker-room fixtures (toilets, urinals, lavatories, and showers)"
     },
     {
       "scopeItemId": "permits-inspections",
@@ -40,6 +40,19 @@
       "label": "Final pressure test, leak check, and fixture function test"
     }
   ],
-  "biddersInvited": ["bid-northgate", "bid-cedar", "bid-tworivers"],
-  "note": "A complete bid prices every item in requiredScopeLineItems. A bid that omits an item is not scoping it out explicitly -- it is simply silent on it, which is the evidence question this case exists to surface."
+  "biddersInvited": [
+    "bid-northgate",
+    "bid-cedar",
+    "bid-tworivers",
+    "bid-summit",
+    "bid-ironclad",
+    "bid-parkside",
+    "bid-westbrook",
+    "bid-anchor",
+    "bid-crestview",
+    "bid-fieldstone",
+    "bid-brightwater",
+    "bid-oldmill"
+  ],
+  "note": "A complete bid prices every item in requiredScopeLineItems. A bid that omits an item is not scoping it out explicitly -- it is simply silent on it, which is the evidence question this case exists to surface. At twelve bids, sorting on the bottom-line quoted total alone is exactly the shortcut this case exists to catch: the cheapest quoted total in this set belongs to a bid whose credentials do not verify, and the next-cheapest belongs to a bid silent on part of the required scope."
 }

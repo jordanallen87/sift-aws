@@ -665,8 +665,13 @@ function buildSystemPrompt(
  * judgment call for `energy.response_options`. Every figure below is the
  * real output of `packages/scenarios/src/tools/{bid-calculator,
  * license-lookup}.ts` against the checked-in `packages/scenarios/fixtures/
- * bids/*.json` fixtures (verified directly while authoring this file; see
- * the dated docs/build-log.md entry for this task).
+ * bids/*.json` fixtures (verified directly while authoring this file). Four
+ * of the twelve bids are named individually -- the three this pack's
+ * demo narrative always named, plus Fieldstone Plumbing Co., the lowest
+ * scope-normalized adjusted total of all twelve, added when this fixture set
+ * scaled from three bids to twelve (2026-09-08); the other eight are summarized,
+ * not enumerated, matching `scripted-beats/bid-comparison.ts`'s own prose
+ * discipline at this scale.
  */
 function buildDecisionSynthesizerSystemPrompt(request: ExecutionRequest): string {
   const criteriaText = request.caseSummary.criteria
@@ -681,7 +686,7 @@ function buildDecisionSynthesizerSystemPrompt(request: ExecutionRequest): string
     `Active obligation: "${request.obligation.id}" -- ${request.obligation.question}`,
     `Current criteria: ${criteriaText || '(none)'}.`,
     extensionsText.length > 0 ? `Confirmed case-specific concerns: ${extensionsText}.` : '',
-    'Known bid facts: Northgate Plumbing (bid-northgate) -- quoted $18,400.00, adjusted $18,400.00 (prices all 8 required scope items, 100% scope completeness), 25% deposit (normal payment risk), 3-week start / 9 working days, 24-month warranty, license PL-4417-NG fully valid (source-license-pl-4417-ng). Cedar & Sons (bid-cedar) -- quoted $14,900.00, but its scope-normalized adjusted total is $18,600.00 once its 3 absent required items (permits-inspections $1,200.00, shower-valve-rough-in $2,100.00, debris-haul-away $400.00) are priced in using another bidder’s own line-item amounts as the plug estimate (source-bid-calculator-bid-cedar-adjusted-total); 62.5% scope completeness, 45% deposit (elevated payment risk), 1-week start / 7 working days, warranty term not stated in writing, license PL-2290-CS fully valid (source-license-pl-2290-cs). Two Rivers Mechanical (bid-tworivers) -- quoted $19,250.00, adjusted $19,250.00 (prices all 8 required scope items, 100% scope completeness), 20% deposit (normal payment risk), 5-week start / 8 working days, 36-month warranty, but its certificate of insurance does not name its license holder (source-license-pl-8801-tr-named-insured) -- its credentials do not verify as valid.',
+    'Known bid facts: Northgate Plumbing (bid-northgate) -- quoted $276,000.00, adjusted $276,000.00 (prices all 8 required scope items, 100% scope completeness), 25% deposit (normal payment risk), 3-week start / 45 working days, 24-month warranty, license PL-4417-NG fully valid (source-license-pl-4417-ng). Cedar & Sons (bid-cedar) -- quoted $223,500.00, but its scope-normalized adjusted total is $279,000.00 once its 3 absent required items (permits-inspections $18,000.00, shower-valve-rough-in $31,500.00, debris-haul-away $6,000.00) are priced in using another bidder’s own line-item amounts as the plug estimate (source-bid-calculator-bid-cedar-adjusted-total); 62.5% scope completeness, 45% deposit (elevated payment risk), 1-week start / 35 working days, warranty term not stated in writing, license PL-2290-CS fully valid (source-license-pl-2290-cs). Two Rivers Mechanical (bid-tworivers) -- quoted $288,750.00, adjusted $288,750.00 (prices all 8 required scope items, 100% scope completeness), 20% deposit (normal payment risk), 5-week start / 40 working days, 36-month warranty, but its certificate of insurance does not name its license holder (source-license-pl-8801-tr-named-insured) -- its credentials do not verify as valid. Fieldstone Plumbing Co. (bid-fieldstone) -- quoted $268,000.00, adjusted $268,000.00 -- the lowest scope-normalized adjusted total of all twelve bids, and the only one below Northgate Plumbing’s -- but its license class carries no plumbing trade endorsement for this scope (source-license-pl-7734-fs) -- its credentials do not verify as valid either. The other eight bids (Summit Mechanical Co., Ironclad Plumbing & Mechanical, Parkside Plumbing Group, Westbrook Mechanical Contractors, Anchor Point Plumbing, Crestview Mechanical Services, Brightwater Mechanical, Old Mill Plumbing & Heating) all carry fully valid credentials, and none has a scope-normalized adjusted total below Northgate Plumbing’s.',
     'Rank bids on their scope-normalized adjusted totals, never on raw quoted totals -- a bid that is silent on required scope is not actually cheaper once the missing items are priced in. A bid whose credentials do not verify as valid cannot be recommended for award. Cite a source id for every factual claim. Call propose_award only when the recommendation names one bid to award -- it requires human confirmation before it proceeds and never signs or executes a contract. When you are done, call the structured output tool with agentId omitted (ending the run) and a message giving your final recommendation.',
   ]
     .filter((line) => line.length > 0)
@@ -714,13 +719,18 @@ const SOURCE_ID_PATTERN = /\bsource-[a-z0-9-]+\b/i;
  *    scope basis is not normalized; the corrected attempt ranks on adjusted
  *    totals and cites the plug numbers"). Cedar & Sons' bid is silent on
  *    three required scope items, so a recommendation may not rank bids by
- *    their raw quoted totals ($14,900.00 for Cedar & Sons) -- it must show
- *    its work against the scope-normalized *adjusted* total ($18,600.00,
+ *    their raw quoted totals ($223,500.00 for Cedar & Sons) -- it must show
+ *    its work against the scope-normalized *adjusted* total ($279,000.00,
  *    once the missing items are priced in), which is the whole reason this
  *    pack exists. A draft that never mentions an adjusted total, or never
  *    reaches Cedar & Sons' own adjusted figure, has not actually normalized
  *    scope and is rejected with a reason that names the defect precisely,
- *    not a copy of the source-citation rule.
+ *    not a copy of the source-citation rule. `citesCedarAdjustedFigure`'s
+ *    regex is pinned to this exact dollar figure -- when Cedar & Sons'
+ *    fixture amounts change (as they did in this fixture set's 2026-09-08
+ *    three-to-twelve-bid scaling, $18,600.00 -> $279,000.00), this regex
+ *    MUST change with them, or the corrected draft this validator is meant
+ *    to accept will fail forever.
  */
 export const DEFAULT_SYNTHESIZER_VALIDATOR: Validator = (response) => {
   const handoff = extractHandoffToolUse(response);
@@ -738,12 +748,12 @@ export const DEFAULT_SYNTHESIZER_VALIDATOR: Validator = (response) => {
     };
   }
   const citesAdjustedTotal = /adjusted total|scope-normalized/i.test(text);
-  const citesCedarAdjustedFigure = /\$?18,?600/.test(text);
+  const citesCedarAdjustedFigure = /\$?279,?000/.test(text);
   if (!citesAdjustedTotal || !citesCedarAdjustedFigure) {
     return {
       passed: false,
       feedback:
-        "The recommendation must rank bids on their scope-normalized adjusted totals, not raw quoted totals: Cedar & Sons' bid is silent on three required scope items (permits and inspections, shower-valve rough-in, debris haul-away), so its adjusted total -- $18,600.00 once those items are priced in -- is what belongs in the comparison, not its $14,900.00 quoted total.",
+        "The recommendation must rank bids on their scope-normalized adjusted totals, not raw quoted totals: Cedar & Sons' bid is silent on three required scope items (permits and inspections, shower-valve rough-in, debris haul-away), so its adjusted total -- $279,000.00 once those items are priced in -- is what belongs in the comparison, not its $223,500.00 quoted total.",
     };
   }
   return { passed: true };
@@ -751,7 +761,7 @@ export const DEFAULT_SYNTHESIZER_VALIDATOR: Validator = (response) => {
 
 const SWARM_ROLE_FALLBACK: Record<BidComparisonSwarmNodeId, string> = {
   'scope-analyst':
-    'Put all three bids on one scope basis by diffing what each bid includes and excludes.',
+    'Put all bids on one scope basis by diffing what each bid includes and excludes.',
   'price-analyst': "Verify each bid's arithmetic and compute the scope-normalized adjusted total.",
   'credential-checker':
     "Verify a bid's license and insurance credentials against the license registry.",

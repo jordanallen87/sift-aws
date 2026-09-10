@@ -162,9 +162,11 @@ You can edit criteria and candidates and review the resulting recommendation as 
 
 ### Compare these bids (the AWS/Strands hero)
 
-Click **"Compare these bids"**. Three plumbing bids for one bathroom remodel: Northgate at
-$18,400, Cedar & Sons at $14,900, Two Rivers at $19,250. One is $3,500 cheaper. The question the
-pack exists to answer is whether that is a better deal or simply less work priced.
+Click **"Compare these bids"**. Twelve plumbing bids for a school's restroom and locker-room
+renovation — a realistic public-bid-tab count, not a hand-picked handful: Northgate at $276,000,
+Cedar & Sons at $223,500, Two Rivers at $288,750, and nine other bids filling out a real bid tab.
+Cedar is $52,500 cheaper than Northgate. The question the pack exists to answer is whether that is
+a better deal or simply less work priced.
 
 This runs a real bounded Strands Swarm across six specialists — scope analyst, price analyst,
 credential checker, schedule analyst, source challenger, decision synthesizer. **All four Strands
@@ -175,8 +177,8 @@ control-flow beats fire in a single first run**, which is what makes it the hero
   runs. The activity stream says _"Action blocked"_ — and deliberately does **not** report a tool
   failure, because a refusal is not an error.
 - **An agent is redirected mid-run.** `scope-analyst` compares the same pair of bids twice with no
-  new angle, `RetrySteering` sends it to the third bid, and the specialist row reads
-  _"Redirected once"_.
+  new angle, `RetrySteering` sends it to widen the comparison to all twelve, and the specialist row
+  reads _"Redirected once"_.
 - **The obvious answer is rejected.** The first synthesis ranks the bids on their raw quoted totals.
   The real `GoalLoop` validator throws it out — not because it is badly written, but because the
   bids are not on a common scope basis, so ranking them would be false.
@@ -184,18 +186,23 @@ control-flow beats fire in a single first run**, which is what makes it the hero
   `ConsequenceGuard`. The proposal sits pending with no approving actor until a person acts. Sift
   recommends; you award.
 
-Then the arithmetic anyone can follow: Cedar's $14,900 is silent on permits and inspections
-($1,200), the shower-valve rough-in ($2,100), and debris haul-away ($400). Scope-normalized, it is
-**$18,600 — more than the $18,400 bid it appeared to beat.**
+Then the arithmetic anyone can follow: Cedar's $223,500 is silent on permits and inspections
+($18,000), the shower-valve rough-in ($31,500), and debris haul-away ($6,000). Scope-normalized, it
+is **$279,000 — more than the $276,000 bid it appeared to beat.** (Two of the other nine bids have
+their own smaller, single-item version of the same gap; neither comes close to changing the
+answer.)
 
 Two things are worth doing yourself. First, note that Sift names a winner and **still refuses to
-close two questions**: Cedar's scope comparison came back incomplete and Two Rivers' insurance
-certificate names a different company than its licence holder. Evidence here is fail-closed, so a
-degraded answer does not get to count as settled. Second, open **Add or adjust → Adjust
+close three questions**: Cedar's scope comparison came back incomplete, Two Rivers' insurance
+certificate names a different company than its licence holder, and Fieldstone Plumbing Co. — the
+lowest scope-normalized total of all twelve and the only bid that comes in under Northgate once
+every bid is on the same basis, so the one a person comparing the corrected numbers would pick —
+holds a license class with no plumbing trade endorsement for this scope. Evidence here is fail-closed, so
+a degraded answer does not get to count as settled. Second, open **Add or adjust → Adjust
 priorities**, raise warranty term and payment risk, and re-run. Two Rivers now scores highest of
-the three — 81%, the largest number on the page — and still does not win, because credentials are a
-hard constraint rather than a preference. It is not hidden either: it stays ranked at #3 of 3 with
-its score showing and the words _"Flagged, not removed — still ranked, and still yours to decide."_
+all twelve, raw score, and still does not win, because credentials are a hard constraint rather
+than a preference. It is not hidden either: it stays ranked near the bottom of the board with its
+score showing and the words _"Flagged, not removed — still ranked, and still yours to decide."_
 
 ### Home Energy Guardian (a Strands Swarm that opens its own case)
 

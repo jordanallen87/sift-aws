@@ -2,50 +2,50 @@
   "_provenance": "Fictional demo data. Contractor, licence number, and bid amounts are invented for the Sift 'bid-comparison' hackathon scenario. No real contractor or licence is represented.",
   "caseId": "case-demo-bid-comparison",
   "bidId": "bid-northgate",
-  "jobId": "job-demo-bathroom-remodel-01",
+  "jobId": "job-demo-school-plumbing-01",
   "contractorName": "Northgate Plumbing",
   "licenseNumber": "PL-4417-NG",
-  "total": { "amount": 18400, "currency": "USD" },
+  "total": { "amount": 276000, "currency": "USD" },
   "lineItems": [
     {
       "scopeItemId": "demo-existing",
-      "label": "Demo of existing tub, tile surround, and fixtures",
-      "amount": { "amount": 1500, "currency": "USD" }
+      "label": "Demo of existing restroom and locker-room fixtures, piping, and abandoned risers",
+      "amount": { "amount": 22500, "currency": "USD" }
     },
     {
       "scopeItemId": "rough-in-supply",
-      "label": "Rough-in supply piping to new fixture locations",
-      "amount": { "amount": 3200, "currency": "USD" }
+      "label": "Rough-in supply piping to all restroom and locker-room fixture locations",
+      "amount": { "amount": 48000, "currency": "USD" }
     },
     {
       "scopeItemId": "rough-in-drain",
-      "label": "Rough-in drain, waste, and vent (DWV) piping to new fixture locations",
-      "amount": { "amount": 3000, "currency": "USD" }
+      "label": "Rough-in drain, waste, and vent (DWV) piping to all restroom and locker-room fixture locations",
+      "amount": { "amount": 45000, "currency": "USD" }
     },
     {
       "scopeItemId": "shower-valve-rough-in",
-      "label": "Shower valve rough-in and blocking for the curbless shower",
-      "amount": { "amount": 2100, "currency": "USD" }
+      "label": "Shower valve rough-in and blocking for the gymnasium locker-room showers",
+      "amount": { "amount": 31500, "currency": "USD" }
     },
     {
       "scopeItemId": "fixture-set-install",
-      "label": "Set and connect new fixtures (freestanding tub, shower, toilet, two-sink vanity)",
-      "amount": { "amount": 6200, "currency": "USD" }
+      "label": "Set and connect all restroom and locker-room fixtures (toilets, urinals, lavatories, and showers)",
+      "amount": { "amount": 93000, "currency": "USD" }
     },
     {
       "scopeItemId": "permits-inspections",
       "label": "Plumbing permit filing and inspection scheduling",
-      "amount": { "amount": 1200, "currency": "USD" }
+      "amount": { "amount": 18000, "currency": "USD" }
     },
     {
       "scopeItemId": "debris-haul-away",
       "label": "Haul-away and disposal of demolition debris",
-      "amount": { "amount": 400, "currency": "USD" }
+      "amount": { "amount": 6000, "currency": "USD" }
     },
     {
       "scopeItemId": "final-test",
       "label": "Final pressure test, leak check, and fixture function test",
-      "amount": { "amount": 800, "currency": "USD" }
+      "amount": { "amount": 12000, "currency": "USD" }
     }
   ],
   "depositPercent": 25,
@@ -56,13 +56,13 @@
     "note": "24-month workmanship warranty stated in the written bid document."
   },
   "startInWeeks": 3,
-  "durationWorkingDays": 9,
+  "durationWorkingDays": 45,
   "allowances": [
     {
       "id": "allowance-fixture-set",
       "scopeItemId": "fixture-set-install",
       "label": "Fixture allowance included in fixture-set-install price",
-      "amount": { "amount": 2500, "currency": "USD" },
+      "amount": { "amount": 37500, "currency": "USD" },
       "note": "Owner-selected fixtures priced above this allowance are billed to the owner at cost, itemized on the final invoice."
     }
   ]

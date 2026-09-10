@@ -154,7 +154,9 @@ describe('compareBidScope', () => {
     expect(item?.verdict).toBe('degraded');
     expect(item?.sourceId).toBe('source-scope-diff-bid-cedar');
     expect(item?.summary).toContain('Plumbing permit filing and inspection scheduling');
-    expect(item?.summary).toContain('Shower valve rough-in and blocking for the curbless shower');
+    expect(item?.summary).toContain(
+      'Shower valve rough-in and blocking for the gymnasium locker-room showers',
+    );
     expect(item?.summary).toContain('Haul-away and disposal of demolition debris');
     expect(item?.summary).toContain('3 of 8');
     // The three missing labels joined by "; ", in job order, and nothing
@@ -164,13 +166,15 @@ describe('compareBidScope', () => {
     // three independent `toContain` checks above but would break this
     // exact contiguous substring).
     expect(item?.summary).toContain(
-      'Shower valve rough-in and blocking for the curbless shower; ' +
+      'Shower valve rough-in and blocking for the gymnasium locker-room showers; ' +
         'Plumbing permit filing and inspection scheduling; ' +
         'Haul-away and disposal of demolition debris',
     );
     // None of Cedar's 5 actually-priced item labels leak into the "missing" list.
-    expect(item?.summary).not.toContain('Demo of existing tub, tile surround, and fixtures');
-    expect(item?.summary).not.toContain('Set and connect new fixtures');
+    expect(item?.summary).not.toContain(
+      'Demo of existing restroom and locker-room fixtures, piping, and abandoned risers',
+    );
+    expect(item?.summary).not.toContain('Set and connect all restroom and locker-room fixtures');
   });
 
   it("passes for Northgate's evidence with no absences", () => {

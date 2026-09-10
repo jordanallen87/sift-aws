@@ -19,11 +19,11 @@
  * shapes the same document for display).
  *
  * `BID_FIXTURE_NAMES`/`BidFixtureName`/`isBidFixtureName` are this pack's
- * one definition of "which three bid ids exist" -- `scope-differ.ts` and
+ * one definition of "which bid ids exist" -- `scope-differ.ts` and
  * `bid-calculator.ts` both import and reuse them rather than re-declaring
- * the same three-id list a second (or third) time. A bid's own `bidId`
+ * the same twelve-id list a second (or third) time. A bid's own `bidId`
  * field is always identical to its fixture name (`job.biddersInvited` lists
- * these same three strings), so no separate short-alias id is invented.
+ * these same twelve strings), so no separate short-alias id is invented.
  */
 import {
   loadFixture,
@@ -48,8 +48,30 @@ export interface MoneyAmount {
   currency: string;
 }
 
-/** The three bid fixtures this pack registers -- see the file docstring. */
-export const BID_FIXTURE_NAMES = ['bid-northgate', 'bid-cedar', 'bid-tworivers'] as const;
+/**
+ * The twelve bid fixtures this pack registers -- see the file docstring.
+ * Scaled from three to twelve (2026-09-08) to match how many bids a real
+ * commercial/public trade-package solicitation routinely draws through a
+ * plan room, not a hand-picked handful: `bid-northgate`/`bid-cedar`/
+ * `bid-tworivers` remain the three the scripted narrative names individually
+ * (the recommendation, the scope-normalization beat, and the round-2 hard-
+ * constraint beat, respectively); the other nine are also-ran bids that
+ * fill out a realistic bid tab without disturbing any of those three beats.
+ */
+export const BID_FIXTURE_NAMES = [
+  'bid-northgate',
+  'bid-cedar',
+  'bid-tworivers',
+  'bid-summit',
+  'bid-ironclad',
+  'bid-parkside',
+  'bid-westbrook',
+  'bid-anchor',
+  'bid-crestview',
+  'bid-fieldstone',
+  'bid-brightwater',
+  'bid-oldmill',
+] as const;
 export type BidFixtureName = (typeof BID_FIXTURE_NAMES)[number];
 
 export function isBidFixtureName(value: string): value is BidFixtureName {

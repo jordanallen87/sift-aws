@@ -2,35 +2,35 @@
   "_provenance": "Fictional demo data. Contractor, licence number, and bid amounts are invented for the Sift 'bid-comparison' hackathon scenario. No real contractor or licence is represented.",
   "caseId": "case-demo-bid-comparison",
   "bidId": "bid-cedar",
-  "jobId": "job-demo-bathroom-remodel-01",
+  "jobId": "job-demo-school-plumbing-01",
   "contractorName": "Cedar & Sons",
   "licenseNumber": "PL-2290-CS",
-  "total": { "amount": 14900, "currency": "USD" },
+  "total": { "amount": 223500, "currency": "USD" },
   "lineItems": [
     {
       "scopeItemId": "demo-existing",
-      "label": "Demo of existing tub, tile surround, and fixtures",
-      "amount": { "amount": 1100, "currency": "USD" }
+      "label": "Demo of existing restroom and locker-room fixtures, piping, and abandoned risers",
+      "amount": { "amount": 16500, "currency": "USD" }
     },
     {
       "scopeItemId": "rough-in-supply",
-      "label": "Rough-in supply piping to new fixture locations",
-      "amount": { "amount": 2900, "currency": "USD" }
+      "label": "Rough-in supply piping to all restroom and locker-room fixture locations",
+      "amount": { "amount": 43500, "currency": "USD" }
     },
     {
       "scopeItemId": "rough-in-drain",
-      "label": "Rough-in drain, waste, and vent (DWV) piping to new fixture locations",
-      "amount": { "amount": 2700, "currency": "USD" }
+      "label": "Rough-in drain, waste, and vent (DWV) piping to all restroom and locker-room fixture locations",
+      "amount": { "amount": 40500, "currency": "USD" }
     },
     {
       "scopeItemId": "fixture-set-install",
-      "label": "Set and connect new fixtures (freestanding tub, shower, toilet, two-sink vanity)",
-      "amount": { "amount": 7500, "currency": "USD" }
+      "label": "Set and connect all restroom and locker-room fixtures (toilets, urinals, lavatories, and showers)",
+      "amount": { "amount": 112500, "currency": "USD" }
     },
     {
       "scopeItemId": "final-test",
       "label": "Final pressure test, leak check, and fixture function test",
-      "amount": { "amount": 700, "currency": "USD" }
+      "amount": { "amount": 10500, "currency": "USD" }
     }
   ],
   "depositPercent": 45,
@@ -41,13 +41,13 @@
     "note": "Bid document mentions a workmanship warranty but states no term length in writing."
   },
   "startInWeeks": 1,
-  "durationWorkingDays": 7,
+  "durationWorkingDays": 35,
   "allowances": [
     {
       "id": "allowance-fixture-set",
       "scopeItemId": "fixture-set-install",
       "label": "Fixture allowance included in fixture-set-install price",
-      "amount": { "amount": 1800, "currency": "USD" },
+      "amount": { "amount": 27000, "currency": "USD" },
       "note": "Owner-selected fixtures priced above this allowance are billed to the owner at cost."
     }
   ]

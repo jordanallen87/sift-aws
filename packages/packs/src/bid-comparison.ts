@@ -1,8 +1,9 @@
 /**
  * The real `bid-comparison@1.0.0` Decision Pack manifest ("Bid Comparison"),
- * implementing `docs/bid-comparison/plan.md` verbatim: a four-person
- * remodeling contractor comparing three subcontractor bids for the plumbing
- * scope of a master bathroom remodel. This pack is not yet described in
+ * implementing `docs/bid-comparison/plan.md` verbatim: a nine-person general
+ * contractor comparing twelve subcontractor bids for the plumbing scope of a
+ * school restroom and locker-room renovation package. This pack is not yet
+ * described in
  * `docs/specs/packs-and-routing.md` (that spec predates this plan); every
  * field below is grounded either in a direct quote from
  * `docs/bid-comparison/plan.md` or an explicit judgment call documented at
@@ -421,7 +422,7 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
     {
       id: 'bid.scope_normalization',
       label: 'Scope normalization',
-      question: 'Are all three bids compared on the same scope basis?',
+      question: 'Are all the bids in this case compared on the same scope basis?',
       category: 'scope_normalization',
       required: true,
       priority: 100,
@@ -589,7 +590,7 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
     {
       id: 'scope-analyst',
       description:
-        'Puts all three bids on one scope basis by diffing what each bid includes and excludes.',
+        'Puts all the bids in this case on one scope basis by diffing what each bid includes and excludes.',
       allowedTools: ['bid-reader', 'scope-differ'],
       allowedSkills: ['scope-normalization'],
     },

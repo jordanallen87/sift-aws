@@ -371,7 +371,7 @@ exports[`full manifest fidelity > matches its full manifest snapshot 1`] = `
         "scope-analyst",
       ],
       "priority": 100,
-      "question": "Are all three bids compared on the same scope basis?",
+      "question": "Are all the bids in this case compared on the same scope basis?",
       "required": true,
       "requiredEvidenceLevel": "E2",
     },
@@ -566,7 +566,7 @@ exports[`full manifest fidelity > matches its full manifest snapshot 1`] = `
         "bid-reader",
         "scope-differ",
       ],
-      "description": "Puts all three bids on one scope basis by diffing what each bid includes and excludes.",
+      "description": "Puts all the bids in this case on one scope basis by diffing what each bid includes and excludes.",
       "id": "scope-analyst",
     },
     {

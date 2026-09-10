@@ -493,7 +493,7 @@ describe('executeBidComparisonSwarm: real Swarm topology (round1 -- happy path +
     expect(grantedToolStatuses.every((status) => status === 'success')).toBe(true);
   });
 
-  it('Guide: the shipped round1 trajectory has scope-analyst run scope-differ twice on the same bid pair with no new angle, so RetrySteering guides it before it widens to all three bids', async () => {
+  it('Guide: the shipped round1 trajectory has scope-analyst run scope-differ twice on the same bid pair with no new angle, so RetrySteering guides it before it widens to the full twelve-bid comparison', async () => {
     const { deps } = buildDeps();
     const { events } = await drain(executeBidComparisonSwarm(deps));
 
@@ -580,7 +580,7 @@ describe('executeBidComparisonSwarm: criteria reweight exercises the hard-constr
     // scored bid, its qualitative lead, and the actual mismatched entity
     // names.
     expect(result.decisionSynthesizerText).toContain('Two Rivers Mechanical');
-    expect(result.decisionSynthesizerText).toContain('scores highest of the three bids');
+    expect(result.decisionSynthesizerText).toContain('scores highest of the twelve bids');
     // Regression guard. This string once claimed "0.58 vs. Cedar & Sons'
     // 0.31" while the card beside it rendered Cedar at 24%, because the
     // prose was authored from `scoreBids` rather than from production
@@ -687,7 +687,7 @@ describe('DEFAULT_SYNTHESIZER_VALIDATOR: direct unit coverage', () => {
     const outcome = (await DEFAULT_SYNTHESIZER_VALIDATOR(
       messageWithToolUse({
         message:
-          'Cedar & Sons offers the lowest total at $14,900.00 (source-bid-cedar). Recommend awarding to Cedar & Sons.',
+          'Cedar & Sons offers the lowest total at $223,500.00 (source-bid-cedar). Recommend awarding to Cedar & Sons.',
       }),
       FAKE_AGENT,
     )) as { passed: boolean; feedback?: string };
@@ -695,7 +695,7 @@ describe('DEFAULT_SYNTHESIZER_VALIDATOR: direct unit coverage', () => {
     expect(outcome.feedback).toContain('scope-normalized adjusted totals');
   });
 
-  it('fails when the message mentions "adjusted total" but never reaches the $18,600 figure', async () => {
+  it('fails when the message mentions "adjusted total" but never reaches the $279,000 figure', async () => {
     const outcome = (await DEFAULT_SYNTHESIZER_VALIDATOR(
       messageWithToolUse({
         message:
@@ -710,7 +710,7 @@ describe('DEFAULT_SYNTHESIZER_VALIDATOR: direct unit coverage', () => {
     const outcome = await DEFAULT_SYNTHESIZER_VALIDATOR(
       messageWithToolUse({
         message:
-          "Cedar & Sons' scope-normalized adjusted total is $18,600.00, per source-bid-calculator-bid-cedar-adjusted-total -- higher than Northgate's $18,400.00. Recommend awarding to Northgate Plumbing.",
+          "Cedar & Sons' scope-normalized adjusted total is $279,000.00, per source-bid-calculator-bid-cedar-adjusted-total -- higher than Northgate's $276,000.00. Recommend awarding to Northgate Plumbing.",
       }),
       FAKE_AGENT,
     );
@@ -755,18 +755,18 @@ describe('buildBidComparisonFixtureTools: real Strands tool.invoke() forwards in
     expect(result.data.adjustedTotal.status).toBe('unknown');
   });
 
-  it("bid-calculator: supplying the real plug numbers reports Cedar & Sons' adjusted total as $18,600", async () => {
+  it("bid-calculator: supplying the real plug numbers reports Cedar & Sons' adjusted total as $279,000", async () => {
     const result = (await toolNamed('bid-calculator').invoke({
       bidId: 'bid-cedar',
       plugNumbers: {
-        'permits-inspections': 1200,
-        'shower-valve-rough-in': 2100,
-        'debris-haul-away': 400,
+        'permits-inspections': 18000,
+        'shower-valve-rough-in': 31500,
+        'debris-haul-away': 6000,
       },
     })) as { data: { adjustedTotal: { status: string; value?: { amount: number } } } };
     expect(result.data.adjustedTotal).toEqual({
       status: 'known',
-      value: { amount: 18600, currency: 'USD' },
+      value: { amount: 279000, currency: 'USD' },
     });
   });
 
@@ -837,7 +837,7 @@ describe('executeBidComparisonSwarm: defensive guards', () => {
                 name: 'strands_structured_output',
                 input: {
                   message:
-                    "Cedar & Sons' scope-normalized adjusted total is $18,600.00, per source-bid-calculator-bid-cedar-adjusted-total. Recommend awarding to Northgate Plumbing.",
+                    "Cedar & Sons' scope-normalized adjusted total is $279,000.00, per source-bid-calculator-bid-cedar-adjusted-total. Recommend awarding to Northgate Plumbing.",
                 },
               },
             ],

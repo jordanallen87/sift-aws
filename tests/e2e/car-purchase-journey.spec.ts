@@ -199,11 +199,25 @@ test.describe('Choose our next car -- full demo journey', () => {
     await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
     await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
+    // A second identity string, for the reason `bid-comparison-journey.spec.ts`'s
+    // own `seeded-case.png` call documents in full: when that pack's case grew
+    // from three options to twelve, `maxDiffPixelRatio: 0.01` absorbed the
+    // entire change at five of six viewports and the gate stayed green
+    // against baselines depicting the old count. The pixel threshold is not
+    // the thing to fix -- what was missing is a machine-checked statement of
+    // what the baseline DEPICTS. Derived, never typed, so it moves with the
+    // fixture set.
     await expectNamedScreenshot(
       page,
       page.getByTestId('case-workspace'),
       'seeded-case.png',
-      { testId: 'recommendation-hero-headline', text: "Nothing's been looked into yet." },
+      [
+        { testId: 'recommendation-hero-headline', text: "Nothing's been looked into yet." },
+        {
+          testId: 'workspace-app-bar-option-count',
+          text: `${String(CAR_PURCHASE_CANDIDATE_IDS.length)} options`,
+        },
+      ],
       { mask: masks, maxDiffPixelRatio: 0.01 },
     );
 

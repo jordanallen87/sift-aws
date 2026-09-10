@@ -77,7 +77,7 @@ Mitigation: keep the energy pack in the repo and give it the versatility beat. T
 
 **2. Anomaly arithmetic is deterministic and impressive.** `calculateEnergyAnalysis` does weather normalization and rate-change attribution — real math the model never touches, and a good answer to "is the model just guessing?" The bid pack's arithmetic is simpler: sum line items, add plug numbers, compare adjusted totals.
 
-Mitigation: simpler is not weaker here, it is *auditable on camera*. A viewer can follow "$18,400 plus a $2,100 plug for the permits nobody priced equals $20,500" in a way nobody follows cooling-degree-day normalization. Trade sophistication for legibility deliberately, and say so.
+Mitigation: simpler is not weaker here, it is *auditable on camera*. A viewer can follow "$223,500 plus a $18,000 plug for the permits nobody priced equals $241,500" in a way nobody follows cooling-degree-day normalization. Trade sophistication for legibility deliberately, and say so.
 
 ---
 
@@ -94,7 +94,7 @@ Effectively the whole engine. This is a retarget, not a rebuild:
 ## What is genuinely new
 
 - The pack manifest (criteria, obligations, specialists, skills, attribute definitions)
-- Fixtures: three bids for one job, plus a license/insurance registry
+- Fixtures: twelve bids for one job, plus a license/insurance registry
 - A `scope-differ` tool — compares line items across bids and reports what is priced in some and absent in others. **The one novel tool**, and the reason the demo works.
 - Scripted beats for the Swarm trajectory
 - Unit tests, scenario trajectory assertions, an e2e journey with baselines at six viewports

@@ -6,10 +6,10 @@ Target: **no longer than 5 minutes.** Beats below sum to exactly 300 seconds; la
 
 ## Provenance of every claim in this script
 
-Written 2026-09-07 against a product that was actually driven, not against source alone. Specifically:
+Written 2026-09-07 and re-measured 2026-09-10 against a product that was actually driven, not against source alone. Every score, count and dollar figure below was read off a live run on the second date, after the case grew from three bids to twelve. Specifically:
 
-- A **real local run** on 2026-09-07: case seeded, `run-1a3bd16d-…`, **394 runtime events**, **88 public activity events**, 4 skill activations, 6 swarm nodes, 5 handoffs, 25 context injections — with all four Strands beats in a single round-1 run.
-- The **e2e journey** (`tests/e2e/bid-comparison-journey.spec.ts`), which asserts each beat below at six viewports and holds 36 inspected baseline images.
+- A **real local run** on 2026-09-10, re-measured after the case scaled to twelve bids: case seeded with 12 options, `run-a7348a98-…`, **433 runtime events**, 4 skill activations, 6 swarm nodes, 5 handoffs, 28 context injections, and one `goal.validation_failed` followed by one `goal.validated` — all four Strands beats in a single round-1 run. Across both rounds the case carries **117 public activity events**.
+- The **e2e journey** (`tests/e2e/bid-comparison-journey.spec.ts`), which asserts each beat below at six viewports and holds 42 baseline images.
 - The **scenario trajectory** (`tests/scenarios/bid-comparison.scenario.ts`).
 
 Every quoted UI string below was read off a rendered baseline image or the component source, not remembered.
@@ -24,7 +24,7 @@ Every quoted UI string below was read off a rendered baseline image or the compo
 
 ## The one thing this demo is about
 
-Three bids for the same job. One is $3,500 cheaper. **Is it a better deal, or is it pricing less work?**
+Twelve bids for the same job. The low one is $52,500 under the eventual winner. **Is it a better deal, or is it pricing less work?**
 
 Everything else in the video serves that sentence.
 
@@ -34,10 +34,10 @@ Everything else in the video serves that sentence.
 
 ### Beat 1 — the problem, in a situation everyone has been in (0:00–0:30, 30s)
 
-**On screen:** the launcher. Click the tile reading **"Compare these bids"** — subtitle **"Put subcontractor bids on the same footing before you award one."** The case opens: header **"Bid Comparison"**, a **"LIVE"** pill, and **"3 options"**.
+**On screen:** the launcher. Click the tile reading **"Compare these bids"** — subtitle **"Put subcontractor bids on the same footing before you award one."** The case opens: header **"Bid Comparison"**, a **"LIVE"** pill, and **"12 options"**.
 
 **Narration:**
-> "A four-person remodeling contractor has three plumbing bids for the same bathroom. Northgate, eighteen thousand four hundred. Cedar and Sons, fourteen nine — three and a half thousand cheaper. Two Rivers, nineteen two fifty. If you have ever gotten three quotes for anything, you already know the problem: they don't cover the same work, and nobody hands you a version where they do."
+> "Meridian Builders is a nine-person general contractor. They put the plumbing package for a school renovation out through the regional plan room, and twelve bids came back. Cedar and Sons is the low one — two twenty-three five, fifty-two thousand under Northgate. Nobody at Meridian is a full-time estimator; the person picking this sub is also running the job. Twelve bids is where you stop reading and sort by the bottom number."
 
 ---
 
@@ -62,7 +62,7 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 **On screen:** in the activity stream, the recommendation draft is **rejected**, then re-attempted. This is a real `GoalLoop` with `maxAttempts: 2` and a callable validator.
 
 **Narration:**
-> "Here's the part I actually care about. The first answer it drafted was the obvious one — take the cheap bid. The validator threw it out. Not because it was badly written. Because these three bids aren't on the same scope basis yet, so ranking them at all would have been a lie. Every bid-levelling tool on the market will happily rank an unfair comparison. This one refuses."
+> "Here's the part I actually care about. The first answer it drafted was the obvious one — take the cheap bid. The validator threw it out. Not because it was badly written. Because these twelve bids aren't on the same scope basis yet, so ranking them at all would have been a lie. Every bid-levelling tool on the market will happily rank an unfair comparison. This one refuses."
 
 **Do not skip or rush this beat.** It is the single most distinctive thing in the submission.
 
@@ -73,7 +73,7 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 **On screen:** the recommendation hero — **"Sift recommends Northgate Plumbing."** with **"Your decision."** beneath it. Read the rationale on screen; it is on the page in full.
 
 **Narration, following the on-screen text:**
-> "Cedar's fourteen-nine is silent on three things the others price. Permits and inspections, twelve hundred. Shower-valve rough-in, twenty-one hundred. Debris haul-away, four hundred. Add them and Cedar is eighteen thousand six hundred — against Northgate's eighteen four. The cheapest bid was the most expensive one. That's the whole job, and you can check the arithmetic yourself."
+> "Cedar's two-twenty-three-five is silent on three things the others price. Permits and inspections, eighteen thousand. Shower-valve rough-in, thirty-one five. Debris haul-away, six thousand. Add them: Cedar is two seventy-nine, against Northgate's two seventy-six. The bid that looked fifty-two thousand cheaper is three thousand more expensive — arithmetic you can check yourself. And the one bid genuinely under Northgate once corrected, Fieldstone at two sixty-eight, doesn't win either. It tells you why."
 
 **Note:** the rationale deliberately contains **no score numerals**. Scores belong to the deterministic core, which renders them beside each bid; prose restating them can only agree or contradict. It once said "0.31" while the card said 24% — see `docs/build-log.md`, 2026-09-07.
 
@@ -81,10 +81,10 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 
 ### Beat 5 — it still won't call two questions closed (2:45–3:15, 30s)
 
-**On screen:** the amber band, **"2 findings need your attention."**, with a **"Review findings"** button. Open it.
+**On screen:** the amber band with a findings count and a **"Review findings"** button. Open it. (Round 1 leaves two obligations open; the count on the band rises to three once you reweight in beat 6.)
 
 **Narration:**
-> "It recommended a winner and it still won't mark two of these questions answered. Cedar's scope comparison came back incomplete, and Two Rivers' insurance certificate names a different company than its licence holder. Evidence here is fail-closed — a question with a degraded answer doesn't get to count as settled just because everything else passed."
+> "It recommended a winner and it still won't mark two of these questions answered. Cedar's scope comparison came back incomplete, and two of the twelve fail credential verification on two different grounds — a certificate naming the wrong company, and a licence class with no plumbing endorsement. Evidence here is fail-closed: a degraded answer doesn't get to count as settled just because everything else passed."
 
 **This will look on camera like the run didn't finish. It is the opposite, and you must say so.** Two obligations genuinely end `open`: `bid.scope_normalization` and `bid.credential_verification`.
 
@@ -95,9 +95,18 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 **On screen:** app bar **"Add"** ("Add or adjust") → **"Adjust priorities"**. Raise **warranty term** and **payment risk**, lower **scope-normalized adjusted total**. Save, then **"Ask Sift to look into this"** again.
 
 **Narration:**
-> "Say you care less about price and more about warranty and a sane deposit. Change the weights — the ranking is arithmetic the model never touches. And now Two Rivers scores highest of the three. Eighty-one percent, the biggest number on the page. It still doesn't win. Its insurance names TRM Holdings, not Two Rivers Mechanical — and credentials are a hard constraint, not a preference. Look what the product does with it: it doesn't hide it. Third of three, score still showing, and it says 'flagged, not removed — still ranked, and still yours to decide.'"
+> "Say you care less about price and more about warranty and a sane deposit. Change the weights — the ranking is arithmetic the model never touches. And now Two Rivers scores highest of all twelve. Ninety-one percent, the biggest number on the board; the winner is on seventy-two. It still doesn't win. Its insurance names TRM Holdings, not Two Rivers Mechanical — and credentials are a hard constraint, not a preference. Look what the product does with it: it doesn't hide it. Eleventh of twelve, ninety-one percent still showing, and it says 'flagged, not removed — still ranked, and still yours to decide.'"
 
-**Verified live:** northgate 0.5825, cedar 0.2353, tworivers 0.8125 with `violated: ['bid.credentials_valid']`; Two Rivers renders at **"#3 of 3"** showing **"81%"**. The reweight reopens **only** the award recommendation.
+**Verified live** (2026-09-10, `scoreCaseState` over the real case state fetched over the wire, cross-checked against the rendered `option-rank-*` DOM):
+
+| | round 1 | round 2 (this reweight) |
+| --- | --- | --- |
+| Northgate Plumbing | 0.8041 — **#1 of 12**, "80%" | 0.7248 — **#1 of 12**, "72%" |
+| Two Rivers Mechanical | 0.7603 — #11 of 12, "76%" | **0.9132 — #11 of 12, "91%"**, `violated: ['bid.credentials_valid']` |
+| Fieldstone Plumbing Co. | 0.7532 — #12 of 12, "75%" | 0.3666 — #12 of 12, "37%", `violated: ['bid.credentials_valid']` |
+| Cedar & Sons | 0.4941 — #5 of 12 | 0.2356 — #10 of 12, "24%" |
+
+Both flagged bids hold the 2nd and 3rd highest raw totals of the twelve in round 1 and still sort to the bottom — the rule doing visible work, not a coincidence of the weighting. The reweight reopens **only** `bid.award_recommendation`; `bid.scope_normalization` and `bid.credential_verification` were already open, and the other two stay satisfied.
 
 **Do the reweight exactly as written.** The fixture's round-2 narration is scripted prose keyed to this weighting. Drag the sliders somewhere else and the words on screen will be describing a different run — the deterministic ranking stays correct, the prose won't match.
 
@@ -117,7 +126,7 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 **On screen:** press **"Inspect run"** to open the dev view. It tails live at 400ms.
 
 **Narration:**
-> "And underneath, everything you just watched is real Strands. Three hundred ninety-four runtime events in that first run alone. Six swarm nodes, five handoffs, twenty-five context injections. Every span carries the SDK's own instrumentation scope — which a class you named after Strands cannot produce."
+> "And underneath, everything you just watched is real Strands. Four hundred thirty-three runtime events in that first run alone. Six swarm nodes, five handoffs, twenty-eight context injections. A hundred and five spans, every one of them carrying the SDK's own instrumentation scope — which a class you named after Strands cannot produce."
 
 **Backing:** `docs/submissions/agents-for-humans/claim-evidence-matrix.md` maps each capability to its file, its test, and its event count.
 
@@ -145,6 +154,8 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 | | | **300s** |
 
 If you run long, take it from beat 8, not from beats 3 or 6.
+
+**Word budget.** At a normal 150 words per minute, every narration block above fits its window with room for the on-screen action: beats 1-9 measure 72 / 60 / 68 / 71 / 65 / 103 / 52 / 52 / 21 words, i.e. roughly 29 / 24 / 27 / 28 / 26 / 41 / 21 / 21 / 8 seconds. Beat 6 is the only one with no slack. Anyone editing a narration line should re-count it — this script went over budget once already when the case grew from three bids to twelve and every figure in it had to be restated.
 
 ## What this script does not claim
 

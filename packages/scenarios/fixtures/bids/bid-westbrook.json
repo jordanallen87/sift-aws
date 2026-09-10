@@ -1,68 +1,90 @@
 {
   "_provenance": "Fictional demo data. Contractor, licence number, and bid amounts are invented for the Sift 'bid-comparison' hackathon scenario. No real contractor or licence is represented.",
   "caseId": "case-demo-bid-comparison",
-  "bidId": "bid-tworivers",
+  "bidId": "bid-westbrook",
   "jobId": "job-demo-school-plumbing-01",
-  "contractorName": "Two Rivers Mechanical",
-  "licenseNumber": "PL-8801-TR",
-  "total": { "amount": 288750, "currency": "USD" },
+  "contractorName": "Westbrook Mechanical Contractors",
+  "licenseNumber": "PL-6690-WB",
+  "total": {
+    "amount": 284000,
+    "currency": "USD"
+  },
   "lineItems": [
     {
       "scopeItemId": "demo-existing",
       "label": "Demo of existing restroom and locker-room fixtures, piping, and abandoned risers",
-      "amount": { "amount": 24000, "currency": "USD" }
+      "amount": {
+        "amount": 23700,
+        "currency": "USD"
+      }
     },
     {
       "scopeItemId": "rough-in-supply",
       "label": "Rough-in supply piping to all restroom and locker-room fixture locations",
-      "amount": { "amount": 51000, "currency": "USD" }
+      "amount": {
+        "amount": 50500,
+        "currency": "USD"
+      }
     },
     {
       "scopeItemId": "rough-in-drain",
       "label": "Rough-in drain, waste, and vent (DWV) piping to all restroom and locker-room fixture locations",
-      "amount": { "amount": 48000, "currency": "USD" }
+      "amount": {
+        "amount": 47300,
+        "currency": "USD"
+      }
     },
     {
       "scopeItemId": "shower-valve-rough-in",
       "label": "Shower valve rough-in and blocking for the gymnasium locker-room showers",
-      "amount": { "amount": 34500, "currency": "USD" }
+      "amount": {
+        "amount": 33100,
+        "currency": "USD"
+      }
     },
     {
       "scopeItemId": "fixture-set-install",
       "label": "Set and connect all restroom and locker-room fixtures (toilets, urinals, lavatories, and showers)",
-      "amount": { "amount": 94500, "currency": "USD" }
+      "amount": {
+        "amount": 97800,
+        "currency": "USD"
+      }
     },
     {
       "scopeItemId": "permits-inspections",
       "label": "Plumbing permit filing and inspection scheduling",
-      "amount": { "amount": 19500, "currency": "USD" }
-    },
-    {
-      "scopeItemId": "debris-haul-away",
-      "label": "Haul-away and disposal of demolition debris",
-      "amount": { "amount": 6750, "currency": "USD" }
+      "amount": {
+        "amount": 18900,
+        "currency": "USD"
+      }
     },
     {
       "scopeItemId": "final-test",
       "label": "Final pressure test, leak check, and fixture function test",
-      "amount": { "amount": 10500, "currency": "USD" }
+      "amount": {
+        "amount": 12700,
+        "currency": "USD"
+      }
     }
   ],
-  "depositPercent": 20,
+  "depositPercent": 32,
   "warranty": {
     "present": true,
-    "termMonths": 36,
+    "termMonths": 12,
     "statedInWriting": true,
-    "note": "36-month workmanship warranty stated in the written bid document."
+    "note": "12-month workmanship warranty stated in the written bid document."
   },
-  "startInWeeks": 5,
-  "durationWorkingDays": 40,
+  "startInWeeks": 4,
+  "durationWorkingDays": 44,
   "allowances": [
     {
       "id": "allowance-fixture-set",
       "scopeItemId": "fixture-set-install",
       "label": "Fixture allowance included in fixture-set-install price",
-      "amount": { "amount": 33000, "currency": "USD" },
+      "amount": {
+        "amount": 29300,
+        "currency": "USD"
+      },
       "note": "Owner-selected fixtures priced above this allowance are billed to the owner at cost."
     }
   ]

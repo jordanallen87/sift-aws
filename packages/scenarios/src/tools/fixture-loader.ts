@@ -892,6 +892,15 @@ const FIXTURE_SCHEMAS = {
   'bid-northgate': BidSchema,
   'bid-cedar': BidSchema,
   'bid-tworivers': BidSchema,
+  'bid-summit': BidSchema,
+  'bid-ironclad': BidSchema,
+  'bid-parkside': BidSchema,
+  'bid-westbrook': BidSchema,
+  'bid-anchor': BidSchema,
+  'bid-crestview': BidSchema,
+  'bid-fieldstone': BidSchema,
+  'bid-brightwater': BidSchema,
+  'bid-oldmill': BidSchema,
   'license-registry': LicenseRegistrySchema,
 } as const;
 
@@ -916,6 +925,15 @@ const FIXTURE_PACK_DIR: Record<FixtureName, string> = {
   'bid-northgate': BIDS_FIXTURES_DIR,
   'bid-cedar': BIDS_FIXTURES_DIR,
   'bid-tworivers': BIDS_FIXTURES_DIR,
+  'bid-summit': BIDS_FIXTURES_DIR,
+  'bid-ironclad': BIDS_FIXTURES_DIR,
+  'bid-parkside': BIDS_FIXTURES_DIR,
+  'bid-westbrook': BIDS_FIXTURES_DIR,
+  'bid-anchor': BIDS_FIXTURES_DIR,
+  'bid-crestview': BIDS_FIXTURES_DIR,
+  'bid-fieldstone': BIDS_FIXTURES_DIR,
+  'bid-brightwater': BIDS_FIXTURES_DIR,
+  'bid-oldmill': BIDS_FIXTURES_DIR,
   'license-registry': BIDS_FIXTURES_DIR,
 };
 

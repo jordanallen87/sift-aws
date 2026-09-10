@@ -195,10 +195,23 @@ describe('buildCarPurchaseSeedEvents', () => {
 });
 
 describe('buildBidComparisonEntities', () => {
-  it('builds one EntityRecord per bid, kind "bid", labelled by contractor name', () => {
+  it('builds one EntityRecord per bid, kind "bid", labelled by contractor name -- all twelve bidders, not just the three the narrative names', () => {
     const entities = buildBidComparisonEntities(FIXED_CLOCK);
     expect(entities.map((entity) => entity.id).sort()).toEqual(
-      ['bid-cedar', 'bid-northgate', 'bid-tworivers'].sort(),
+      [
+        'bid-cedar',
+        'bid-northgate',
+        'bid-tworivers',
+        'bid-summit',
+        'bid-ironclad',
+        'bid-parkside',
+        'bid-westbrook',
+        'bid-anchor',
+        'bid-crestview',
+        'bid-fieldstone',
+        'bid-brightwater',
+        'bid-oldmill',
+      ].sort(),
     );
     for (const entity of entities) {
       expect(entity.kind).toBe('bid');
@@ -239,14 +252,14 @@ describe('buildBidComparisonEntities', () => {
     const cedar = entities.find((entity) => entity.id === 'bid-cedar');
     expect(cedar?.attributes['bid.quoted_total']?.value).toEqual({
       type: 'money',
-      amount: 14900,
+      amount: 223500,
       currency: 'USD',
     });
     // Higher than Northgate's own adjusted total -- the central finding this
     // pack exists to surface.
     expect(cedar?.attributes['bid.adjusted_total']?.value).toEqual({
       type: 'money',
-      amount: 18600,
+      amount: 279000,
       currency: 'USD',
     });
     expect(cedar?.attributes['bid.scope_completeness']?.value).toEqual({
@@ -275,6 +288,41 @@ describe('buildBidComparisonEntities', () => {
       type: 'boolean',
       value: true,
     });
+  });
+
+  it("marks Fieldstone Plumbing Co.'s credentials invalid on a real, distinct ground from Two Rivers' -- a licence class with no plumbing trade endorsement, not a named-insured mismatch", () => {
+    const entities = buildBidComparisonEntities(FIXED_CLOCK);
+    const fieldstone = entities.find((entity) => entity.id === 'bid-fieldstone');
+    expect(fieldstone?.attributes['bid.insurance_named_insured_match']?.value).toEqual({
+      type: 'boolean',
+      value: true,
+    });
+    expect(fieldstone?.attributes['bid.credentials_valid']?.value).toEqual({
+      type: 'boolean',
+      value: false,
+    });
+  });
+
+  it('gives none of the nine also-ran bids a scope-normalized adjusted total below Northgate Plumbing among credential-valid bids', () => {
+    const entities = buildBidComparisonEntities(FIXED_CLOCK);
+    const northgate = entities.find((entity) => entity.id === 'bid-northgate');
+    const northgateAdjusted = (
+      northgate?.attributes['bid.adjusted_total']?.value as { amount: number } | undefined
+    )?.amount;
+    expect(northgateAdjusted).toBe(276000);
+    for (const entity of entities) {
+      if (entity.id === 'bid-northgate') continue;
+      const credentialsValid = (
+        entity.attributes['bid.credentials_valid']?.value as { value: boolean } | undefined
+      )?.value;
+      const adjustedTotal = entity.attributes['bid.adjusted_total'];
+      if (credentialsValid !== true || adjustedTotal?.status !== 'asserted') continue;
+      const amount = (adjustedTotal.value as { amount: number }).amount;
+      expect(
+        amount,
+        `bid "${entity.id}" must not undercut Northgate's adjusted total`,
+      ).toBeGreaterThan(northgateAdjusted!);
+    }
   });
 });
 

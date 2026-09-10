@@ -12,7 +12,7 @@
  * -- most closely, with one genuine, confirmed difference from that pack
  * noted below.
  *
- * Covers: launch -> 3 seeded bid entities / 6 criteria / 5 obligations ->
+ * Covers: launch -> 12 seeded bid entities / 6 criteria / 5 obligations ->
  * a human answering a real explicit-unknown attribute through the visible
  * `OptionEditor` before any investigation runs -> round-1 investigation
  * streamed live over SSE, with a required `Deny` (price-analyst reaching for
@@ -164,7 +164,10 @@ import { WORKSPACE_VIEW_MODES, type CaseState } from '../../packages/contracts/s
 const WORKSPACE_VIEW_TAB_TEST_IDS = WORKSPACE_VIEW_MODES.map(
   (viewMode) => `workspace-view-tab-${viewMode}`,
 );
-import { ROUND2_CRITERIA_WEIGHTS } from '../../apps/agent/src/runtime/scripted-beats/bid-comparison.js';
+import {
+  BID_FACTS,
+  ROUND2_CRITERIA_WEIGHTS,
+} from '../../apps/agent/src/runtime/scripted-beats/bid-comparison.js';
 
 /**
  * A reproduction of `scripted-beats/bid-comparison.ts`'s own real `scoreBids`
@@ -172,40 +175,20 @@ import { ROUND2_CRITERIA_WEIGHTS } from '../../apps/agent/src/runtime/scripted-b
  * Plumbing wins again" is asserted as a real, independently-derived scored
  * outcome of THIS spec's own weights, not merely copied from the product's
  * prose (which -- see this file's header comment -- names different,
- * scripted numbers). Every input figure is the same real, checked-in fixture
- * fact `scripted-beats/bid-comparison.ts`'s own `BID_FACTS` documents (never
- * invented here): adjusted totals $18,400/$18,600/$19,250, scope
- * completeness 100%/62.5%/100%, deposits 25%/45%/20%, and Two Rivers'
- * permanent `bid.credentials_valid` failure (its certificate of insurance
- * does not name its license holder) -- `packages/core/src/scoring.ts`'s own
- * documented hard-constraint rule ("flags, never eliminates ... ranked below
- * compliant ones") is reproduced here exactly, matching that module's own
+ * scripted numbers).
+ *
+ * The *inputs* are the pack's own real exported `BID_FACTS` (all twelve
+ * bids), imported rather than re-typed: an earlier version hand-copied
+ * three bids' figures here, and that copy is exactly what went stale when
+ * the case grew to twelve bidders. The *arithmetic* is still reproduced
+ * here rather than delegated to `scoreBids`, which is where this function's
+ * independence actually lives -- `packages/core/src/scoring.ts`'s own
+ * documented hard-constraint rule ("flags, never eliminates ... ranked
+ * below compliant ones") is reproduced exactly, matching that module's own
  * `compareOptionScores`.
  */
 function verifyNorthgateWinsUnderReweight(): void {
-  const facts = [
-    {
-      bidId: 'bid-northgate',
-      adjustedTotal: 18400,
-      scopeCompleteness: 1,
-      depositPercent: 25,
-      credentialsValid: true,
-    },
-    {
-      bidId: 'bid-cedar',
-      adjustedTotal: 18600,
-      scopeCompleteness: 0.625,
-      depositPercent: 45,
-      credentialsValid: true,
-    },
-    {
-      bidId: 'bid-tworivers',
-      adjustedTotal: 19250,
-      scopeCompleteness: 1,
-      depositPercent: 20,
-      credentialsValid: false,
-    },
-  ] as const;
+  const facts = BID_FACTS;
   // This spec's own reweight, below: adjustedTotal 10 / scopeCompleteness 30
   // / paymentRisk 40 (scheduleFit/warranty untouched at their round-1
   // defaults, 10 each -- omitted from this scoring reproduction exactly as
@@ -286,7 +269,7 @@ test.describe('Bid Comparison -- full demo journey', () => {
     // product truths") -- matches both sibling journeys' identical check.
     await expect(page.getByTestId('webmcp-status-unsupported')).toBeVisible();
 
-    // --- 3 seeded bid entities / 6 criteria / 5 obligations ---
+    // --- 12 seeded bid entities / 6 criteria / 5 obligations ---
     await expect(page.getByTestId('workspace-app-bar-option-count')).toHaveText(
       `${BID_COMPARISON_ENTITY_IDS.length} options`,
     );
@@ -336,11 +319,34 @@ test.describe('Bid Comparison -- full demo journey', () => {
     await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
     await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
+    // Two identity strings, not one, and the second is here for a reason
+    // this spec learned the hard way. When this case grew from three bids
+    // to twelve, `maxDiffPixelRatio: 0.01` genuinely absorbed the whole
+    // change at five of the six viewports: the app bar read "3 options"
+    // in a baseline captured against a case that had twelve, and
+    // `--update-snapshots` (mode `changed`) declined to rewrite those five
+    // files because each diff sat under the ratio. A `--update-snapshots=all`
+    // then rewrote 36 of the 42 files in this directory, which is what that
+    // supposedly-passing gate had actually been hiding.
+    //
+    // The pixel threshold is not the thing to fix -- it is what keeps
+    // antialiasing noise from failing an honest run. What was missing is a
+    // machine-checked statement of what this baseline DEPICTS, which is
+    // exactly what `expectNamedScreenshot`'s identity checks are for. The
+    // option count is derived, never typed, so it moves with the fixture
+    // set and a future bid added or dropped can never again ride in under
+    // the ratio.
     await expectNamedScreenshot(
       page,
       page.getByTestId('case-workspace'),
       'seeded-case.png',
-      { testId: 'recommendation-hero-headline', text: "Nothing's been looked into yet." },
+      [
+        { testId: 'recommendation-hero-headline', text: "Nothing's been looked into yet." },
+        {
+          testId: 'workspace-app-bar-option-count',
+          text: `${String(BID_COMPARISON_ENTITY_IDS.length)} options`,
+        },
+      ],
       { mask: masks, maxDiffPixelRatio: 0.01 },
     );
 
@@ -368,7 +374,7 @@ test.describe('Bid Comparison -- full demo journey', () => {
       }
     }
 
-    // Switching to List proves all 3 seeded bids genuinely render, and is
+    // Switching to List proves all 12 seeded bids genuinely render, and is
     // where `OptionCardSignals` (the "N unknown" chip 6a below answers)
     // actually lives.
     await sift.selectWorkspaceView('list');
@@ -709,7 +715,7 @@ test.describe('Bid Comparison -- full demo journey', () => {
    * comment above. The test above proves the reopening mechanics under an
    * arbitrary real weighting; THIS test proves the pack's single most
    * distinctive move under the exact weighting it was written for: Two
-   * Rivers Mechanical becomes the highest RAW scorer of all three bids --
+   * Rivers Mechanical becomes the highest RAW scorer of all twelve bids --
    * it genuinely leads on both upweighted criteria -- and still does not
    * win, because its certificate of insurance names "TRM Holdings LLC," not
    * its license holder "Two Rivers Mechanical Inc," and `bid.credentials_valid`
@@ -835,31 +841,53 @@ test.describe('Bid Comparison -- full demo journey', () => {
     expect(cedarScore?.total).not.toBeNull();
     expect(twoRiversScore?.total).not.toBeNull();
 
-    // Item 1: genuinely the highest raw score of the three -- not merely
-    // asserted from the narrative's own claimed number.
+    // Item 1: genuinely the highest raw score of all twelve -- not merely
+    // asserted from the narrative's own claimed number, and not merely
+    // higher than the two other bids the prose happens to name.
+    const highestRawTotal = Math.max(
+      ...scoreboard.options.map((option) => option.total ?? Number.NEGATIVE_INFINITY),
+    );
+    expect(twoRiversScore!.total!).toBe(highestRawTotal);
     expect(twoRiversScore!.total!).toBeGreaterThan(northgateScore!.total!);
     expect(twoRiversScore!.total!).toBeGreaterThan(cedarScore!.total!);
 
-    // Item 5, part one: Two Rivers is the ONLY one of the three that fails
-    // the hard constraint -- a real, current fact about this run, not an
-    // assumption carried over from round 1.
+    // Item 5, part one: exactly two of the twelve fail the hard constraint,
+    // on two genuinely distinct grounds -- Two Rivers' named-insured
+    // mismatch and Fieldstone's license class not covering the scope. A
+    // real, current fact about this run, not an assumption carried over
+    // from round 1.
     expect(twoRiversScore!.violatedConstraintIds).toContain(
       BID_COMPARISON_CRITERION_IDS.credentialsValid,
     );
     expect(northgateScore!.violatedConstraintIds).toHaveLength(0);
     expect(cedarScore!.violatedConstraintIds).toHaveLength(0);
+    const violatingOptionIds = scoreboard.options
+      .filter((option) => option.violatedConstraintIds.length > 0)
+      .map((option) => option.optionId);
+    expect([...violatingOptionIds].sort()).toEqual(['bid-fieldstone', 'bid-tworivers']);
 
     // Item 5, part two: `compareOptionScores`'s real, documented ordering --
     // constraint violators sort after every compliant option regardless of
-    // score, never removed from the list entirely. Board length 3 is itself
+    // score, never removed from the list entirely. Board length is itself
     // part of the "not dropped" claim: `scoreCase` returns one row per
-    // scorable option, so a 2-length board here would BE silent elimination.
-    expect(scoreboard.options).toHaveLength(3);
-    expect(scoreboard.options.map((option) => option.optionId)).toEqual([
-      'bid-northgate',
-      'bid-cedar',
-      'bid-tworivers',
-    ]);
+    // scorable option, so an 11-length board here would BE silent
+    // elimination of the bid that scored highest.
+    expect(scoreboard.options).toHaveLength(BID_COMPARISON_ENTITY_IDS.length);
+    const rankedOptionIds = scoreboard.options.map((option) => option.optionId);
+    expect([...rankedOptionIds].sort()).toEqual([...BID_COMPARISON_ENTITY_IDS].sort());
+    expect(rankedOptionIds[0]).toBe('bid-northgate');
+    // The rule itself, asserted as a rule rather than as one frozen
+    // twelve-id ordering: every flagged bid sorts below every compliant
+    // one, whatever their raw scores.
+    const lastCompliantIndex = Math.max(
+      ...rankedOptionIds
+        .map((optionId, index) => (violatingOptionIds.includes(optionId) ? -1 : index))
+        .filter((index) => index >= 0),
+    );
+    const firstFlaggedIndex = Math.min(
+      ...violatingOptionIds.map((optionId) => rankedOptionIds.indexOf(optionId)),
+    );
+    expect(firstFlaggedIndex).toBeGreaterThan(lastCompliantIndex);
 
     // The same claim, live, on the real rendered board -- not only in the
     // computation behind it. Position, score, and the "flagged, not
@@ -880,8 +908,19 @@ test.describe('Bid Comparison -- full demo journey', () => {
     // other primary action -- this is the regression guard for that fix.
     await assertRightPaneIntegrity(page, WORKSPACE_VIEW_TAB_TEST_IDS);
 
-    await expect(page.getByTestId('option-rank-position-bid-northgate')).toContainText('#1 of 3');
-    await expect(page.getByTestId('option-rank-position-bid-tworivers')).toContainText('#3 of 3');
+    // Rendered positions are read off the SAME live ranking asserted above,
+    // never hand-typed: `#1 of 12` for Northgate is a claim about this run,
+    // and Two Rivers' own position is wherever the hard-constraint rule
+    // actually put it among twelve -- below every compliant bid, still on
+    // the board.
+    const renderedRankOf = (optionId: string): string =>
+      `#${String(rankedOptionIds.indexOf(optionId) + 1)} of ${String(rankedOptionIds.length)}`;
+    await expect(page.getByTestId('option-rank-position-bid-northgate')).toContainText(
+      renderedRankOf('bid-northgate'),
+    );
+    await expect(page.getByTestId('option-rank-position-bid-tworivers')).toContainText(
+      renderedRankOf('bid-tworivers'),
+    );
     // The exact rendered percentage is derived from the SAME live score this
     // test already fetched above -- `formatScore`'s own rounding -- rather
     // than a second, hand-typed number that could quietly stop matching it.
@@ -912,6 +951,13 @@ test.describe('Bid Comparison -- full demo journey', () => {
     await expect(constraintFlag).toContainText(
       'Flagged, not removed — still ranked, and still yours to decide.',
     );
+    // Fieldstone Plumbing Co. -- the lowest scope-normalized adjusted total
+    // of all twelve, and the only bid under Northgate's once every bid is on
+    // the same basis -- carries the same flag on a genuinely different ground
+    // (its license class does not cover this scope). Two flagged bids, both
+    // still on the board, is the shape a real bid tab has; one would let
+    // "flags, never eliminates" be true by accident.
+    await expect(page.getByTestId('option-rank-constraint-flags-bid-fieldstone')).toBeVisible();
     // No compliant bid carries this flag.
     await expect(page.getByTestId('option-rank-constraint-flags-bid-northgate')).toHaveCount(0);
     await expect(page.getByTestId('option-rank-constraint-flags-bid-cedar')).toHaveCount(0);

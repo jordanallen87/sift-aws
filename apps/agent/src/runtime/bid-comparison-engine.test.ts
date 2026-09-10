@@ -214,11 +214,24 @@ describe('bid-comparison-engine (live, real Swarm, real SQLite)', () => {
     let snapshot = startResult.value.snapshot!;
     const caseId = snapshot.id;
     expect(determineBidComparisonRound(snapshot)).toBe('round1');
-    // The demo-seeding gap this task closed: the three bid entities exist
+    // The demo-seeding gap this task closed: all twelve bid entities exist
     // before any investigation runs, so the eventual recommendation's
     // favoredOptionId resolves to a real, renderable EntityRecord.
     expect(snapshot.entities.map((entity) => entity.id).sort()).toEqual(
-      ['bid-cedar', 'bid-northgate', 'bid-tworivers'].sort(),
+      [
+        'bid-cedar',
+        'bid-northgate',
+        'bid-tworivers',
+        'bid-summit',
+        'bid-ironclad',
+        'bid-parkside',
+        'bid-westbrook',
+        'bid-anchor',
+        'bid-crestview',
+        'bid-fieldstone',
+        'bid-brightwater',
+        'bid-oldmill',
+      ].sort(),
     );
 
     // --- POST .../run: the real, only trigger for round1 (auto-selects bid.scope_normalization, the only open, dependsOn-free obligation) ---

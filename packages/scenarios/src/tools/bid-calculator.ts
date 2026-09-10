@@ -4,12 +4,16 @@
  * tools `bid-reader`/`bid-calculator`, obligation `bid.price_verification`).
  *
  * The deterministic arithmetic behind the bid-comparison demo's central
- * finding: Cedar & Sons' $14,900 quote looks $3,500 cheaper than
- * Northgate's $18,400 only because it is silent on three required scope
+ * finding: Cedar & Sons' $223,500 quote looks $52,500 cheaper than
+ * Northgate's $276,000 only because it is silent on three required scope
  * items (permits/inspections, the shower-valve rough-in, debris haul-away).
- * Once plug numbers for those three items ($1,200 / $2,100 / $400) are
- * supplied, Cedar's *adjusted* total is $18,600 -- now the higher bid. The
- * ranking flips on arithmetic anyone can follow on camera.
+ * Once plug numbers for those three items ($18,000 / $31,500 / $6,000) are
+ * supplied, Cedar's *adjusted* total is $279,000 -- now the higher bid. The
+ * ranking flips on arithmetic anyone can follow on camera. (This pack's
+ * fixture set scaled from three bids to twelve on 2026-09-08; two more bids
+ * in the larger set -- Westbrook Mechanical Contractors and Brightwater
+ * Mechanical -- have their own single-item version of the same gap, priced
+ * by this exact function the same way.)
  *
  * Reuses `scope-differ.ts`'s `diffBidScope` for "which required items does
  * this bid leave absent" rather than re-deriving that set difference a

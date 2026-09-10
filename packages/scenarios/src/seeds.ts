@@ -729,9 +729,14 @@ export function buildCarPurchaseSeedEvents(
  * required scope items `scope-differ`/`bid-calculator` find absent
  * (`bid-calculator.ts`'s own honesty rule: an absent item with no supplied
  * plug number leaves `adjustedTotal` an explicit unknown, never a silent
- * `$0` or the quoted total standing in for it). `bid-cedar` is the only bid
- * in this fixture set missing required scope items -- permits and
- * inspections, the shower-valve rough-in, and debris haul-away. Every
+ * `$0` or the quoted total standing in for it). Three of the twelve bids in
+ * this fixture set are missing required scope items: `bid-cedar` (permits
+ * and inspections, the shower-valve rough-in, and debris haul-away --
+ * the scripted narrative's own scope-normalization beat),
+ * `bid-westbrook` (debris haul-away alone), and `bid-brightwater` (permits
+ * and inspections alone) -- the latter two are minor, single-item gaps
+ * among the nine also-ran bids added to scale this case to a realistic
+ * twelve-bidder public bid tab, never disturbing the recommendation. Every
  * dollar figure here is Northgate Plumbing's own real priced line-item
  * amount for that exact scope item (`bid-northgate.json`) -- the same real,
  * non-invented plug numbers the scripted `price-analyst` beat itself
@@ -741,9 +746,15 @@ export function buildCarPurchaseSeedEvents(
  */
 const BID_COMPARISON_PLUG_NUMBERS: Readonly<Record<string, Record<string, number>>> = {
   'bid-cedar': {
-    'permits-inspections': 1200,
-    'shower-valve-rough-in': 2100,
-    'debris-haul-away': 400,
+    'permits-inspections': 18000,
+    'shower-valve-rough-in': 31500,
+    'debris-haul-away': 6000,
+  },
+  'bid-westbrook': {
+    'debris-haul-away': 6000,
+  },
+  'bid-brightwater': {
+    'permits-inspections': 18000,
   },
 };
 

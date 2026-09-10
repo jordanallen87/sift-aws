@@ -235,7 +235,7 @@ describe('Bid Comparison scenario: real causal trajectory', () => {
 
     const trajectory = emptyScenarioTrajectory();
 
-    // --- 1. Seed: the real demo-launcher path, three bid entities ---
+    // --- 1. Seed: the real demo-launcher path, twelve bid entities ---
     const startResult = commandService.startDemo(idGenerator.next('cmd'), {
       demoId: 'bid-comparison',
     });
@@ -248,7 +248,20 @@ describe('Bid Comparison scenario: real causal trajectory', () => {
     trajectory.caseEvents.push(...caseStore.subscribe(caseId, 0).replay);
 
     expect(snapshot.entities.map((entity) => entity.id).sort()).toEqual(
-      ['bid-cedar', 'bid-northgate', 'bid-tworivers'].sort(),
+      [
+        'bid-cedar',
+        'bid-northgate',
+        'bid-tworivers',
+        'bid-summit',
+        'bid-ironclad',
+        'bid-parkside',
+        'bid-westbrook',
+        'bid-anchor',
+        'bid-crestview',
+        'bid-fieldstone',
+        'bid-brightwater',
+        'bid-oldmill',
+      ].sort(),
     );
 
     // --- 2. ChatGPT calls sift_request_investigation with no obligationId;
@@ -391,10 +404,10 @@ describe('Bid Comparison scenario: real causal trajectory', () => {
     expect(reviewedEvents).toHaveLength(0);
 
     // --- 8. The recommendation is bid-northgate, and its rationale cites
-    // Cedar's adjusted total of $18,600 exceeding Northgate's $18,400. ---
+    // Cedar's adjusted total of $279,000 exceeding Northgate's $276,000. ---
     expect(snapshot.recommendation?.favoredOptionId).toBe('bid-northgate');
-    expect(snapshot.recommendation?.rationale).toContain('18,600');
-    expect(snapshot.recommendation?.rationale).toContain('18,400');
+    expect(snapshot.recommendation?.rationale).toContain('279,000');
+    expect(snapshot.recommendation?.rationale).toContain('276,000');
     expect(snapshot.recommendation?.rationale).toContain('Cedar');
     expect(snapshot.recommendation?.rationale).toContain('Northgate');
 

@@ -42,6 +42,132 @@
         "policyNumberFictional": "GL-INS-0003-TR"
       },
       "note": "Licence active and class covers this scope, but the certificate of insurance names \"TRM Holdings LLC\", not the licence holder \"Two Rivers Mechanical Inc\" -- a discrepancy that needs a human answer before this bid's credentials can be marked verified."
+    },
+    {
+      "licenseNumber": "PL-3312-SM",
+      "licenseHolderName": "Summit Mechanical Co.",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Summit Mechanical Co.",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0004-SM"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-5567-IC",
+      "licenseHolderName": "Ironclad Plumbing & Mechanical",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Ironclad Plumbing & Mechanical",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0005-IC"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-2245-PK",
+      "licenseHolderName": "Parkside Plumbing Group",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Parkside Plumbing Group",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0006-PK"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-6690-WB",
+      "licenseHolderName": "Westbrook Mechanical Contractors",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Westbrook Mechanical Contractors",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0007-WB"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-1183-AP",
+      "licenseHolderName": "Anchor Point Plumbing",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Anchor Point Plumbing",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0008-AP"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-4429-CV",
+      "licenseHolderName": "Crestview Mechanical Services",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Crestview Mechanical Services",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0009-CV"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-7734-FS",
+      "licenseHolderName": "Fieldstone Plumbing Co.",
+      "status": "active",
+      "classCoversScope": false,
+      "class": "Class B General Building Contractor (fictional state classification) -- no plumbing trade endorsement on file",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Fieldstone Plumbing Co.",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0010-FS"
+      },
+      "note": "Licence active and the certificate of insurance names the licence holder exactly, but the licence's own class is a general building licence with no plumbing trade endorsement -- it does not cover this scope of work."
+    },
+    {
+      "licenseNumber": "PL-9021-BW",
+      "licenseHolderName": "Brightwater Mechanical",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Brightwater Mechanical",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0011-BW"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
+    },
+    {
+      "licenseNumber": "PL-3356-OM",
+      "licenseHolderName": "Old Mill Plumbing & Heating",
+      "status": "active",
+      "classCoversScope": true,
+      "class": "Class C-36 Plumbing Contractor (fictional state classification)",
+      "insurance": {
+        "status": "active",
+        "namedInsured": "Old Mill Plumbing & Heating",
+        "matchesLicenseHolder": true,
+        "policyNumberFictional": "GL-INS-0012-OM"
+      },
+      "note": "Licence active, class covers this scope, and the certificate of insurance names the licence holder exactly."
     }
   ]
 }

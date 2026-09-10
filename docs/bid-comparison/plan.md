@@ -4,25 +4,27 @@ Decided 2026-09-06. This pack becomes the **AWS hero**. `home-energy-guardian` a
 
 ## The scenario
 
-A four-person remodeling contractor is choosing between three subcontractor bids for the **plumbing scope of a master bathroom remodel**.
+Meridian Builders, a nine-person general contractor with no estimating department, is choosing between twelve subcontractor bids for the **plumbing scope of a restroom and locker-room renovation package**, released as a public bid through a regional plan room — the realistic bidder count for a commercial/public trade package of this size (real public bid tabs are public record; invitations reach every subcontractor on the plan room's distribution list, not a hand-picked handful). Scaled from an original three-bid, single-family-home version of this same scenario (2026-09-08) specifically because three bids is a chore a person will compare by hand, while twelve with mismatched scopes and credentials is exactly the case where a person gives up and sorts by the bottom-line number instead — the failure mode this pack exists to catch, demonstrated at the point on the curve where it actually matters.
 
-| Bid | Contractor | Quoted total |
-| --- | --- | --- |
-| A | Northgate Plumbing | **$18,400** |
-| B | Cedar & Sons | **$14,900** |
-| C | Two Rivers Mechanical | **$19,250** |
+| Bid | Contractor | Quoted total | Notable |
+| --- | --- | --- | --- |
+| A | Northgate Plumbing | **$276,000** | The recommendation |
+| B | Cedar & Sons | **$223,500** | Missing 3 of 8 scope items — the scope-normalization beat |
+| C | Two Rivers Mechanical | **$288,750** | Highest raw score under round 2's reweight — the hard-constraint beat |
+| D | Fieldstone Plumbing Co. | **$268,000** | Lowest scope-normalized adjusted total of all twelve, and the only bid under A once scope is corrected — license class does not cover this scope |
+| — | Summit, Ironclad, Parkside, Westbrook, Anchor, Crestview, Brightwater, Old Mill | $278,000–$315,000 | Also-ran bids with realistic variety in deposit, warranty, schedule; two (Westbrook, Brightwater) each have their own single-item scope gap |
 
-Bid B is $3,500 under bid A. It is cheaper because it is silent on three things the others price:
+Bid B is $52,500 under bid A's quoted total. It is cheaper because it is silent on three things the others price:
 
-| Missing from bid B | Plug number |
+| Missing from bid B | Plug number (Northgate's own priced amount) |
 | --- | --- |
-| Permits and inspections | $1,200 |
-| Shower-valve rough-in | $2,100 |
-| Debris haul-away | $400 |
+| Permits and inspections | $18,000 |
+| Shower-valve rough-in | $31,500 |
+| Debris haul-away | $6,000 |
 
-**Adjusted: B = 14,900 + 3,700 = $18,600 — now more expensive than A's $18,400.** The ranking flips, and it flips on arithmetic anyone can follow on camera.
+**Adjusted: B = 223,500 + 55,500 = $279,000 — now more expensive than A's $276,000.** The ranking flips, and it flips on arithmetic anyone can follow on camera.
 
-Secondary evidence, so the board is not decided on one axis: B wants a 45% deposit (research says over 33% is a red flag, over 50% is alarming); B's warranty has no stated term; C's license is active but its insurance certificate names a different entity than the license holder.
+Secondary evidence, so the board is not decided on one axis: B wants a 45% deposit (research says over 33% is a red flag, over 50% is alarming); B's warranty has no stated term; C's license is active but its insurance certificate names a different entity than the license holder; D's license itself is active and its insurance is correctly named, but its license class carries no plumbing trade endorsement for this scope of work — a third, genuinely distinct way a bid's credentials can fail.
 
 ## Criteria
 
@@ -61,7 +63,7 @@ The reweight beat: move weight off `adjusted_total` toward `scope_completeness` 
 
 **New**
 
-- `packages/scenarios/fixtures/bids/{job,bid-northgate,bid-cedar,bid-tworivers,license-registry}.json`
+- `packages/scenarios/fixtures/bids/{job,bid-northgate,bid-cedar,bid-tworivers,bid-summit,bid-ironclad,bid-parkside,bid-westbrook,bid-anchor,bid-crestview,bid-fieldstone,bid-brightwater,bid-oldmill,license-registry}.json` (scaled from three bid fixtures to twelve, 2026-09-08)
 - `packages/packs/src/bid-comparison.ts` + `.test.ts`
 - `packages/scenarios/src/tools/{bid-reader,scope-differ,bid-calculator,license-lookup}.ts` + tests
 - `apps/agent/src/runtime/bid-comparison-swarm.ts` + `.test.ts`

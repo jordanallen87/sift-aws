@@ -24,12 +24,18 @@
  * packs-and-routing.md's evidence-level table), the same per-source rule as
  * `tariff-lookup.ts`.
  *
- * The real fixture's three entries are all `status: 'active'` with active
+ * The real fixture's twelve entries are all `status: 'active'` with active
  * insurance, so the "licence not active" / "insurance not active" branches
  * below have no reachable case against the checked-in registry; they are
  * exercised via `fixtureBaseDir` (see `CalculateEnergyAnalysisInput` in
  * `energy-calculator.ts` for the established rationale for this test seam)
- * rather than left as untested dead code.
+ * rather than left as untested dead code. One entry (Fieldstone Plumbing
+ * Co., `PL-7734-FS`) DOES have `classCoversScope: false` -- a real,
+ * reachable case for that branch against the checked-in registry, not a
+ * status-inactive one: its licence is active and its insurance is active
+ * and correctly named, but its own licence class carries no plumbing trade
+ * endorsement, so it fails `credentials_valid` on a different, genuinely
+ * distinct ground than Two Rivers Mechanical's named-insured mismatch.
  */
 import {
   loadFixture,

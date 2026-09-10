@@ -34,6 +34,15 @@ describe('FIXTURE_NAMES', () => {
         'bid-northgate',
         'bid-cedar',
         'bid-tworivers',
+        'bid-summit',
+        'bid-ironclad',
+        'bid-parkside',
+        'bid-westbrook',
+        'bid-anchor',
+        'bid-crestview',
+        'bid-fieldstone',
+        'bid-brightwater',
+        'bid-oldmill',
         'license-registry',
       ].sort(),
     );
@@ -470,7 +479,7 @@ describe('parseFixtureJson (pure validation, no disk I/O) -- bids fixtures', () 
     const raw = JSON.stringify({
       _provenance: 'fictional',
       caseId: 'case-demo-bid-comparison',
-      jobId: 'job-demo-bathroom-remodel-01',
+      jobId: 'job-demo-school-plumbing-01',
       title: 'x',
       trade: 'plumbing',
       projectAddressNote: 'x',
@@ -487,7 +496,7 @@ describe('parseFixtureJson (pure validation, no disk I/O) -- bids fixtures', () 
       _provenance: 'fictional',
       caseId: 'case-demo-bid-comparison',
       bidId: 'bid-northgate',
-      jobId: 'job-demo-bathroom-remodel-01',
+      jobId: 'job-demo-school-plumbing-01',
       contractorName: 'x',
       licenseNumber: 'PL-0000-XX',
       total: { amount: overrides.total, currency: 'USD' },
@@ -522,7 +531,7 @@ describe('parseFixtureJson (pure validation, no disk I/O) -- bids fixtures', () 
       _provenance: 'fictional',
       caseId: 'case-demo-bid-comparison',
       bidId: 'bid-cedar',
-      jobId: 'job-demo-bathroom-remodel-01',
+      jobId: 'job-demo-school-plumbing-01',
       contractorName: 'x',
       licenseNumber: 'PL-0000-XX',
       total: { amount: 100, currency: 'USD' },
@@ -679,7 +688,7 @@ describe('loadFixture (disk I/O + caching)', () => {
 
   it('loads and validates the real, checked-in bids fixtures from disk, from their own bids directory', () => {
     const job = loadFixture('job');
-    expect(job.jobId).toBe('job-demo-bathroom-remodel-01');
+    expect(job.jobId).toBe('job-demo-school-plumbing-01');
     expect(job.requiredScopeLineItems.map((item) => item.scopeItemId).sort()).toEqual(
       [
         'demo-existing',
@@ -695,7 +704,7 @@ describe('loadFixture (disk I/O + caching)', () => {
 
     const northgate = loadFixture('bid-northgate');
     expect(northgate.contractorName).toBe('Northgate Plumbing');
-    expect(northgate.total.amount).toBe(18400);
+    expect(northgate.total.amount).toBe(276000);
     // Every required scope item is priced -- Northgate is the "complete
     // bid" reference the case's price-verification obligation compares
     // Cedar's silence against.
@@ -705,7 +714,7 @@ describe('loadFixture (disk I/O + caching)', () => {
 
     const cedar = loadFixture('bid-cedar');
     expect(cedar.contractorName).toBe('Cedar & Sons');
-    expect(cedar.total.amount).toBe(14900);
+    expect(cedar.total.amount).toBe(223500);
     // Cedar is silent on exactly these three items -- absent, not marked
     // excluded -- which is the entire evidence question this case exists
     // to surface (docs/bid-comparison/plan.md).
@@ -718,24 +727,57 @@ describe('loadFixture (disk I/O + caching)', () => {
 
     const tworivers = loadFixture('bid-tworivers');
     expect(tworivers.contractorName).toBe('Two Rivers Mechanical');
-    expect(tworivers.total.amount).toBe(19250);
+    expect(tworivers.total.amount).toBe(288750);
     expect(tworivers.lineItems.map((item) => item.scopeItemId).sort()).toEqual(
       job.requiredScopeLineItems.map((item) => item.scopeItemId).sort(),
     );
 
-    // Every bid's line items sum exactly to its own stated total. The
-    // schema's superRefine already enforces this at load time (so a
-    // mismatch would have thrown before this line ever ran), but this
-    // assertion additionally proves it against the real, checked-in fixture
-    // content on disk rather than only against inline test fixtures.
-    for (const bid of [northgate, cedar, tworivers]) {
+    // Every bid's line items sum exactly to its own stated total, including
+    // the nine also-ran bids that scale this case to a realistic
+    // twelve-bidder public bid tab. The schema's superRefine already
+    // enforces this at load time (so a mismatch would have thrown before
+    // this line ever ran), but this assertion additionally proves it
+    // against the real, checked-in fixture content on disk rather than only
+    // against inline test fixtures.
+    const others = [
+      'bid-summit',
+      'bid-ironclad',
+      'bid-parkside',
+      'bid-westbrook',
+      'bid-anchor',
+      'bid-crestview',
+      'bid-fieldstone',
+      'bid-brightwater',
+      'bid-oldmill',
+    ] as const;
+    for (const bidId of others) {
+      const bid = loadFixture(bidId);
+      expect(bid.jobId).toBe(job.jobId);
+    }
+    for (const bid of [northgate, cedar, tworivers, ...others.map((id) => loadFixture(id))]) {
       const lineItemSum = bid.lineItems.reduce((sum, item) => sum + item.amount.amount, 0);
       expect(lineItemSum).toBe(bid.total.amount);
     }
+    expect(job.biddersInvited.sort()).toEqual(
+      ['bid-northgate', 'bid-cedar', 'bid-tworivers', ...others].sort(),
+    );
 
     const registry = loadFixture('license-registry');
     expect(registry.entries.map((entry) => entry.licenseNumber).sort()).toEqual(
-      ['PL-4417-NG', 'PL-2290-CS', 'PL-8801-TR'].sort(),
+      [
+        'PL-4417-NG',
+        'PL-2290-CS',
+        'PL-8801-TR',
+        'PL-3312-SM',
+        'PL-5567-IC',
+        'PL-2245-PK',
+        'PL-6690-WB',
+        'PL-1183-AP',
+        'PL-4429-CV',
+        'PL-7734-FS',
+        'PL-9021-BW',
+        'PL-3356-OM',
+      ].sort(),
     );
     const northgateEntry = registry.entries.find((entry) => entry.licenseNumber === 'PL-4417-NG');
     const cedarEntry = registry.entries.find((entry) => entry.licenseNumber === 'PL-2290-CS');

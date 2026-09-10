@@ -150,7 +150,7 @@ There is no UI for it. `grep -rli plug apps/web/src` finds nothing relevant. The
 thesis is "an absent scope item with no plug number stays an explicit unknown," and the person
 cannot interact with that moment: the scripted trajectory supplies the numbers. A sheet listing
 Cedar's three absent items with "Enter a number / Mark unknown" per row, and the adjusted total
-recomputing live from $14,900 → unknown → $18,600 as they type, is the single most legible beat we
+recomputing live from $223,500 → unknown → $279,000 as they type, is the single most legible beat we
 could add. Deterministic, no model call, already-modelled state.
 
 **Rubric:** Impact ↑, Design ↑, Presentation ↑↑.

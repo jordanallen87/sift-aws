@@ -11,8 +11,20 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BID_COMPARISON_MANIFEST } from '@sift/packs';
+import type { ExecutionResult } from '@sift/contracts';
+import { BID_FIXTURE_NAMES, readBid } from '@sift/scenarios';
 import {
   BID_FACTS,
+  CHALLENGE_CONTEXT,
+  CREDENTIAL_CONTEXT,
+  DECISION_TEXT_ROUND1,
+  DECISION_TEXT_ROUND1_DRAFT,
+  DECISION_TEXT_ROUND2,
+  PRICE_CONTEXT,
+  PROPOSED_AWARD_ROUND1,
+  PROPOSED_AWARD_ROUND2,
+  SCHEDULE_CONTEXT,
+  SCOPE_CONTEXT,
   ROUND1_CRITERIA_WEIGHTS,
   ROUND2_CRITERIA_WEIGHTS,
   ROUND1_RECOMMENDED_BID_ID,
@@ -26,7 +38,7 @@ describe('scoreBids: hard-constraint semantics (packages/core/src/scoring.ts rul
     expect(BID_FACTS.find((bid) => bid.bidId === 'bid-tworivers')?.credentialsValid).toBe(false);
     for (const weights of [ROUND1_CRITERIA_WEIGHTS, ROUND2_CRITERIA_WEIGHTS]) {
       const ranked = scoreBids(weights);
-      expect(ranked).toHaveLength(3);
+      expect(ranked).toHaveLength(12);
       expect(ranked.map((entry) => entry.bidId)).toContain('bid-tworivers');
       expect(ranked.find((entry) => entry.bidId === 'bid-tworivers')?.constraintViolated).toBe(
         true,
@@ -48,12 +60,22 @@ describe('scoreBids: hard-constraint semantics (packages/core/src/scoring.ts rul
     const ranked = scoreBids(allInOnTwoRivers);
     const tworivers = ranked.find((entry) => entry.bidId === 'bid-tworivers');
     expect(tworivers?.score).toBe(1);
-    // A perfect raw score and it still sorts last -- rule 4, not a scoring
-    // coincidence: "Constraint violations dominate everything ... ranked
-    // last, never removed, then score."
-    expect(ranked[ranked.length - 1]?.bidId).toBe('bid-tworivers');
     expect(ranked[0]?.bidId).not.toBe('bid-tworivers');
     expect(ranked[1]?.bidId).not.toBe('bid-tworivers');
+    // A perfect raw score and it still sorts below EVERY compliant bid --
+    // rule 4, not a scoring coincidence: "Constraint violations dominate
+    // everything ... ranked last [among compliant options], never removed,
+    // then score." With two constraint violators in this twelve-bid set
+    // (Two Rivers and Fieldstone Plumbing Co.), "last" is no longer
+    // guaranteed to mean the single last index -- Fieldstone can (and here
+    // does) sort even lower than Two Rivers among the violators themselves
+    // -- so the precise, always-true claim is that no compliant bid's index
+    // exceeds Two Rivers' own.
+    const tworiversIndex = ranked.findIndex((entry) => entry.bidId === 'bid-tworivers');
+    const lastCompliantIndex = Math.max(
+      ...ranked.map((entry, index) => (entry.constraintViolated ? -1 : index)),
+    );
+    expect(lastCompliantIndex).toBeLessThan(tworiversIndex);
   });
 
   it('bid-tworivers cannot rank first under any of a wide sweep of weightings, because a hard-constraint violation is not a matter of degree', () => {
@@ -74,11 +96,11 @@ describe('scoreBids: hard-constraint semantics (packages/core/src/scoring.ts rul
 });
 
 describe('scoreBids: round2 hard-constraint beat (Two Rivers Mechanical scores highest, is still refused)', () => {
-  it('gives Two Rivers Mechanical the top RAW score of all three bids under ROUND2_CRITERIA_WEIGHTS, flagged as a constraint violator, while Northgate Plumbing -- the highest-scoring COMPLIANT bid -- is what the sorted board (and the recommended award) actually leads with; both facts come from the scorer, not an assertion', () => {
+  it('gives Two Rivers Mechanical the top RAW score of all twelve bids under ROUND2_CRITERIA_WEIGHTS, flagged as a constraint violator, while Northgate Plumbing -- the highest-scoring COMPLIANT bid -- is what the sorted board (and the recommended award) actually leads with; both facts come from the scorer, not an assertion', () => {
     const ranked = scoreBids(ROUND2_CRITERIA_WEIGHTS);
 
     // Fact 1: by raw score alone (ignoring the sort's constraint-first
-    // tiebreak), bid-tworivers is the highest scorer of the three.
+    // tiebreak), bid-tworivers is the highest scorer of all twelve.
     const byRawScore = [...ranked].sort((a, b) => b.score - a.score);
     expect(byRawScore[0]?.bidId).toBe('bid-tworivers');
     expect(byRawScore[0]?.constraintViolated).toBe(true);
@@ -91,39 +113,53 @@ describe('scoreBids: round2 hard-constraint beat (Two Rivers Mechanical scores h
 
     // The exact scored totals `scoreBids` computes. This is the fixture's
     // own design-check reproduction, NOT production scoring: `scoreCaseState`
-    // has a coverage concept this helper lacks and genuinely computes 0.2353
-    // for Cedar & Sons, whose coverage is incomplete. The two agree on the
-    // other two bids and on the ordering, which is all this helper exists to
-    // establish. No user-visible string may quote either set -- see the note
-    // above `DECISION_TEXT_ROUND2`.
-    expect(ranked.find((entry) => entry.bidId === 'bid-tworivers')?.score).toBe(0.81);
-    expect(ranked.find((entry) => entry.bidId === 'bid-northgate')?.score).toBe(0.58);
+    // has a coverage concept this helper lacks and disagrees with it on any
+    // bid whose coverage is incomplete (Cedar & Sons, Westbrook Mechanical
+    // Contractors, Brightwater Mechanical). The two agree on every
+    // scope-complete bid and on the overall ordering, which is all this
+    // helper exists to establish. No user-visible string may quote either
+    // set -- see the note above `DECISION_TEXT_ROUND2`.
+    expect(ranked.find((entry) => entry.bidId === 'bid-tworivers')?.score).toBe(0.91);
+    expect(ranked.find((entry) => entry.bidId === 'bid-northgate')?.score).toBe(0.72);
     expect(ranked.find((entry) => entry.bidId === 'bid-cedar')?.score).toBe(0.31);
   });
 
-  it('reweighting toward bid.warranty + bid.payment_risk gives Two Rivers Mechanical the lead over both compliant bids on raw score, unlike round 1 where it trails Cedar & Sons too', () => {
+  it('reweighting toward bid.warranty + bid.payment_risk gives Two Rivers Mechanical the lead over every compliant bid on raw score -- a lead it does not yet have under round 1, where Northgate Plumbing genuinely outscores it too, not merely outranks it', () => {
     const round1 = scoreBids(ROUND1_CRITERIA_WEIGHTS);
     const round2 = scoreBids(ROUND2_CRITERIA_WEIGHTS);
 
     const tworiversRound1 = round1.find((entry) => entry.bidId === 'bid-tworivers')?.score ?? -1;
-    const cedarRound1 = round1.find((entry) => entry.bidId === 'bid-cedar')?.score ?? -1;
-    expect(tworiversRound1).toBeLessThan(cedarRound1);
+    const northgateRound1 = round1.find((entry) => entry.bidId === 'bid-northgate')?.score ?? -1;
+    // Round1's cost-heavy weighting keeps the protected hard constraint from
+    // ever having to do visible work at the very top of the board: Northgate
+    // is the genuine top RAW scorer here, Two Rivers included, so round2 is
+    // where the constraint first has something to actually overrule.
+    expect(tworiversRound1).toBeLessThan(northgateRound1);
 
     const tworiversRound2 = round2.find((entry) => entry.bidId === 'bid-tworivers')?.score ?? -1;
     const northgateRound2 = round2.find((entry) => entry.bidId === 'bid-northgate')?.score ?? -1;
     const cedarRound2 = round2.find((entry) => entry.bidId === 'bid-cedar')?.score ?? -1;
     expect(tworiversRound2).toBeGreaterThan(northgateRound2);
     expect(tworiversRound2).toBeGreaterThan(cedarRound2);
+    // The reweight genuinely moves Two Rivers' own score up, not just its
+    // rank relative to others.
+    expect(tworiversRound2).toBeGreaterThan(tworiversRound1);
   });
 });
 
 describe('scoreBids: the schedule-urgency direction, tried and rejected on narrative grounds', () => {
-  it("scores Cedar & Sons first under a schedule-heavy weighting (schedule fit 60), despite its higher adjusted total and worse scope completeness and payment risk -- documented here as the one lever that CAN move the award off Northgate Plumbing, and NOT what round2 ships (see this file's module header)", () => {
+  it("scores Cedar & Sons first under a schedule-heavy weighting (schedule fit 75), despite its higher adjusted total and worse scope completeness and payment risk -- documented here as the one lever that CAN move the award off Northgate Plumbing, and NOT what round2 ships (see this file's module header)", () => {
+    // At this fixture set's twelve-bid scale, a merely schedule-leaning
+    // weighting is not enough on its own to overtake Northgate Plumbing's
+    // own now-genuinely-strong showing across the wider field (a lower
+    // schedule-fit weight than this once sufficed at three bids); this
+    // weighting is more schedule-dominant than the original three-bid
+    // version to still make the same documented point.
     const scheduleHeavy: BidComparisonCriteriaWeights = {
-      adjustedTotal: 10,
-      scopeCompleteness: 15,
-      paymentRisk: 10,
-      scheduleFit: 60,
+      adjustedTotal: 5,
+      scopeCompleteness: 10,
+      paymentRisk: 5,
+      scheduleFit: 75,
       warranty: 5,
     };
     const ranked = scoreBids(scheduleHeavy);
@@ -156,7 +192,7 @@ describe('scoreBids: round 1 arithmetic and shared normalization rules', () => {
     expect(ranked[0]?.score).toBeGreaterThan(ranked[1]?.score ?? 0);
   });
 
-  it('treats an explicit-unknown warranty term (Cedar & Sons) as neutral -- 0.5, strictly between the worst (0) and best (1) KNOWN warranty scores in the three-bid pool -- never as a 0-month warranty', () => {
+  it('treats an explicit-unknown warranty term (Cedar & Sons) as neutral -- 0.5, strictly between the worst (0) and best (1) KNOWN warranty scores in the twelve-bid pool -- never as a 0-month warranty', () => {
     const cedar = BID_FACTS.find((bid) => bid.bidId === 'bid-cedar');
     expect(cedar?.warrantyMonths).toBeNull();
     const allWarrantyWeight: BidComparisonCriteriaWeights = {
@@ -168,16 +204,24 @@ describe('scoreBids: round 1 arithmetic and shared normalization rules', () => {
     };
     const ranked = scoreBids(allWarrantyWeight);
     const cedarScore = ranked.find((entry) => entry.bidId === 'bid-cedar')?.score;
-    // Normalized against the FULL three-bid pool (bid-tworivers included,
-    // per packages/core/src/scoring.ts's own buildScale), Northgate's
-    // 24-month term is the WORSE of the two known terms (bid-tworivers'
-    // 36-month term is the better one) -- so isolated to warranty alone,
-    // Northgate scores 0 and bid-tworivers scores 1. Cedar & Sons' neutral
-    // 0.5 sits strictly between both real, known figures.
-    const northgateScore = ranked.find((entry) => entry.bidId === 'bid-northgate')?.score;
+    // Normalized against the FULL twelve-bid pool (bid-tworivers included,
+    // per packages/core/src/scoring.ts's own buildScale), bid-tworivers'
+    // 36-month term is the best known term (score 1) and several also-ran
+    // bids share the worst known term, 12 months (score 0) -- Ironclad
+    // Plumbing & Mechanical is one of them. Northgate Plumbing's own
+    // 24-month term is neither extreme: at twelve bids, several other bids
+    // (Parkside Plumbing Group, Crestview Mechanical Services, Old Mill
+    // Plumbing & Heating) also carry a 24-month term, so Northgate's own
+    // isolated warranty score is the SAME neutral 0.5 Cedar & Sons' explicit
+    // unknown produces -- proving the neutral treatment sits strictly
+    // between the pool's true worst and best known figures, not merely
+    // between whatever two bids happen to be named in the demo narrative.
+    const ironcladScore = ranked.find((entry) => entry.bidId === 'bid-ironclad')?.score;
     const tworiversScore = ranked.find((entry) => entry.bidId === 'bid-tworivers')?.score;
-    expect(northgateScore).toBe(0);
+    const northgateScore = ranked.find((entry) => entry.bidId === 'bid-northgate')?.score;
+    expect(ironcladScore).toBe(0);
     expect(tworiversScore).toBe(1);
+    expect(northgateScore).toBe(0.5);
     expect(cedarScore).toBe(0.5);
   });
 });
@@ -224,5 +268,94 @@ describe('the pack default weighting and round 1 narration agree', () => {
   it('ranks the bid round 2 actually recommends first under its own reweighted criteria', () => {
     const ranked = scoreBids(ROUND2_CRITERIA_WEIGHTS);
     expect(ranked[0]?.bidId).toBe(ROUND2_RECOMMENDED_BID_ID);
+  });
+});
+
+/**
+ * The gate that was missing when the prose below shipped false.
+ *
+ * `DECISION_TEXT_ROUND1` once told the person reading the recommendation
+ * that Fieldstone Plumbing Co.'s $268,000.00 was "the single lowest quoted
+ * total of all twelve," and that of the other nine bids "none has an
+ * adjusted total below Northgate's." Both are false against the fixtures
+ * checked into this repository -- Cedar & Sons quotes $223,500.00, and
+ * Fieldstone's $268,000.00 IS below Northgate's $276,000.00 -- and the first
+ * was contradicted by `DECISION_TEXT_ROUND1_DRAFT`, the constant declared
+ * immediately above it, which says so plainly. Every gate in the repo was
+ * green: the arithmetic tests never read the prose, and the prose tests
+ * never checked the arithmetic.
+ *
+ * So this suite reads both. It pins the facts these sentences rest on, and
+ * then it reads the shipped strings back for the retired claims, because a
+ * fact test alone would not have caught a sentence asserting the opposite of
+ * a fact.
+ */
+describe('the shipped synthesis prose agrees with the fixtures it describes', () => {
+  const quotedTotalByBidId = new Map(
+    BID_FIXTURE_NAMES.map((bidId) => {
+      const result = readBid({ bidId });
+      if (result.status !== 'ok') {
+        throw new Error(`test setup: readBid("${bidId}") returned "${result.status}"`);
+      }
+      return [bidId, result.data.total.amount] as const;
+    }),
+  );
+
+  function factsFor(bidId: string): (typeof BID_FACTS)[number] {
+    const facts = BID_FACTS.find((entry) => entry.bidId === bidId);
+    if (facts === undefined) {
+      throw new Error(`test setup: BID_FACTS no longer carries "${bidId}"`);
+    }
+    return facts;
+  }
+
+  it('leaves the lowest RAW quote with Cedar & Sons -- the bid whose gaps the scope beat exists to price in', () => {
+    const lowestQuoted = [...quotedTotalByBidId.entries()].reduce((lowest, entry) =>
+      entry[1] < lowest[1] ? entry : lowest,
+    );
+    expect(lowestQuoted[0]).toBe('bid-cedar');
+    // Not merely lowest: lower than the bid the prose used to call lowest.
+    expect(lowestQuoted[1]).toBeLessThan(quotedTotalByBidId.get('bid-fieldstone') ?? 0);
+  });
+
+  it('leaves the lowest scope-ADJUSTED total with Fieldstone Plumbing Co., the only bid under Northgate once every bid is on the same basis', () => {
+    const lowestAdjusted = [...BID_FACTS].sort((a, b) => a.adjustedTotal - b.adjustedTotal)[0];
+    expect(lowestAdjusted?.bidId).toBe('bid-fieldstone');
+
+    const northgateAdjusted = factsFor('bid-northgate').adjustedTotal;
+    const under = BID_FACTS.filter((facts) => facts.adjustedTotal < northgateAdjusted).map(
+      (facts) => facts.bidId,
+    );
+    expect(under).toEqual(['bid-fieldstone']);
+  });
+
+  /** Every user-visible string an `ExecutionResult` carries, flattened -- the claims a specialist states, the limitations it records, and the summary on each piece of evidence it cites. */
+  function visibleStrings(context: ExecutionResult): string[] {
+    return [
+      ...context.claims.map((claim) => claim.statement),
+      ...context.limitations,
+      ...context.evidenceResults.map((evidence) => evidence.summary),
+    ];
+  }
+
+  it('never restates either retired claim in any string a person actually reads', () => {
+    const shipped = [
+      DECISION_TEXT_ROUND1_DRAFT,
+      DECISION_TEXT_ROUND1,
+      DECISION_TEXT_ROUND2,
+      PROPOSED_AWARD_ROUND1.rationale,
+      PROPOSED_AWARD_ROUND2.rationale,
+      ...visibleStrings(SCOPE_CONTEXT),
+      ...visibleStrings(PRICE_CONTEXT),
+      ...visibleStrings(CREDENTIAL_CONTEXT),
+      ...visibleStrings(SCHEDULE_CONTEXT),
+      ...visibleStrings(CHALLENGE_CONTEXT),
+    ].join(' \n ');
+
+    // "Fieldstone is the lowest quoted total" -- false; Cedar & Sons is.
+    expect(shipped).not.toMatch(/Fieldstone[^.]*lowest quoted/i);
+    expect(shipped).not.toMatch(/single lowest quoted total/i);
+    // "nothing is under Northgate's adjusted total" -- false; Fieldstone is.
+    expect(shipped).not.toMatch(/none has an adjusted total below/i);
   });
 });

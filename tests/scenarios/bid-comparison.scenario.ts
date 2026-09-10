@@ -59,7 +59,7 @@ export const BID_COMPARISON_DEMO_SCENARIO: DemoScenario = {
       command: 'startDemo',
       input: { demoId: 'bid-comparison' },
       description:
-        'Start the Bid Comparison demo: seeds the case with three subcontractor bids (Northgate Plumbing, Cedar & Sons, Two Rivers Mechanical) for the same plumbing scope of work.',
+        'Start the Bid Comparison demo: seeds the case with twelve subcontractor bids (a realistic public-bid-tab scale; Northgate Plumbing, Cedar & Sons, Two Rivers Mechanical, and Fieldstone Plumbing Co. are the four the demo narrative names individually) for the same plumbing scope of work.',
     },
     {
       command: 'requestInvestigation',
@@ -100,12 +100,14 @@ export const BID_COMPARISON_DEMO_SCENARIO: DemoScenario = {
     { kind: 'tool_called', toolId: 'bid-reader' },
     { kind: 'tool_called', toolId: 'scope-differ' },
     { kind: 'tool_called', toolId: 'bid-calculator' },
-    // credential-checker successfully calls license-lookup three times (once
-    // per bid's license number); price-analyst's own fourth, denied attempt
-    // is refused by ScopeAuthorization *before* it executes, so it never
-    // reaches a finished tool call at all (see the "deny" assertion below and
-    // the test file's own direct check of that denial).
-    { kind: 'tool_called', toolId: 'license-lookup', count: 3 },
+    // credential-checker successfully calls license-lookup four times (once
+    // per named bid's license number -- Northgate, Cedar, Two Rivers, and
+    // Fieldstone Plumbing Co., whose license class does not cover this
+    // scope); price-analyst's own fifth, denied attempt is refused by
+    // ScopeAuthorization *before* it executes, so it never reaches a
+    // finished tool call at all (see the "deny" assertion below and the
+    // test file's own direct check of that denial).
+    { kind: 'tool_called', toolId: 'license-lookup', count: 4 },
     { kind: 'tool_called', toolId: 'propose_award', count: 1 },
     // The three intervention outcomes docs/engineering-principles.md requires
     // visible on every run, all genuinely reachable within this one round-1

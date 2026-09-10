@@ -25,30 +25,43 @@ captured 2026-09-07 through `POST /invocations` — full breakdown in
 - [x] Real bounded Swarm with model-decided handoffs — `swarm.node_started` × 6,
       `swarm.node_completed` × 6, `swarm.handoff` × 5.
 - [x] AgentSkills progressive activation — `skill.activated` × 4, one per obligation.
-- [x] Context Injector — `context.injected` × 25.
-- [x] The SDK's own tracer, not a look-alike — 96 spans, and `unique` over their `otel.scope`
+- [x] Context Injector — `context.injected` × 28.
+- [x] The SDK's own tracer, not a look-alike — 105 spans, and `unique` over their `otel.scope`
       returns exactly `["strands-agents"]`.
 - [x] A denial is not a failure — no public `tool.failed` naming `license-lookup` exists in the
       activity stream, asserted in both `tests/scenarios/bid-comparison.scenario.test.ts` and
       `tests/e2e/bid-comparison-journey.spec.ts`.
 - [x] A hard constraint flags rather than eliminates — under the round-2 weighting Two Rivers is
-      the highest raw scorer (0.8125, rendered "81%") with
-      `violated: ['bid.credentials_valid']`, and stays visible at "#3 of 3" carrying "Flagged, not
-      removed — still ranked, and still yours to decide." Verified against live `scoreCaseState`
-      over the wire, not a reproduction.
+      the highest raw scorer of all twelve (0.9132, rendered "91%", against the winner's 0.7248 /
+      "72%") with `violated: ['bid.credentials_valid']`, and stays visible at "#11 of 12" carrying
+      "Flagged, not removed — still ranked, and still yours to decide." Fieldstone Plumbing Co.
+      carries the same flag at "#12 of 12" on a second, genuinely distinct ground (its licence
+      class covers no plumbing endorsement for this scope, not a named-insured mismatch). In
+      round 1 those two hold the 2nd and 3rd highest raw totals of the twelve (0.7603, 0.7532)
+      and still sort last, so the rule is doing visible work rather than agreeing with the
+      weighting by accident. Verified against live `scoreCaseState` over the wire, not a
+      reproduction.
 - [x] The agent never awards — the proposal ends `pending` with no approving actor, and
       `forbidden_event_absent` covers agent self-approval.
 - [x] Scenario trajectory report — 35 passing assertions, now required by `pnpm test:submission`
       (`HERO_SCENARIO_IDS`), which previously gated only the other two packs.
-- [x] E2E journey at six viewports with 36 inspected baselines.
+- [x] E2E journey at six viewports with 42 baselines, each named checkpoint additionally pinned
+      by a machine-checked identity string (headline plus seeded option count) so a content change
+      cannot pass under the pixel-diff ratio the way the three-to-twelve-bid scaling once did.
 - [x] Mutation gate extended to the pack's two decision rules; both at **100%**
       (`scope-differ` 84.72% → 100%, `bid-calculator` 90.76% → 100%), aggregate 86.56% against a
       break threshold of 80.
 
-**Two claims retired as false rather than left standing:** explicit unknowns do not block
+**Three claims retired as false rather than left standing:** explicit unknowns do not block
 readiness (they are held as unknowns and scored neutrally; readiness is blocked by fail-closed
-degraded evidence instead), and the round-2 rationale no longer states any score, having once
-claimed 0.31 for a bid the engine scored 0.2353 and the page rendered at 24%.
+degraded evidence instead); the round-2 rationale no longer states any score, having once
+claimed 0.31 for a bid the engine scored 0.2353 and the page rendered at 24%; and the round-1
+rationale no longer calls Fieldstone Plumbing Co. "the single lowest quoted total of all twelve"
+or claims no other bid undercuts Northgate's adjusted total — both false against the fixtures in
+this repository (Cedar & Sons quotes $223,500.00; Fieldstone's $268,000.00 adjusted total is
+below Northgate's $276,000.00), and the first contradicted by the rejected draft declared
+immediately above it. `scripted-beats/bid-comparison.test.ts` now reads the shipped strings back
+against the fixtures they describe, which is the gate that was missing.
 
 ## Eligibility and registration — human verification required
 
@@ -67,7 +80,7 @@ claimed 0.31 for a bid the engine scored 0.2353 and the page rendered at 24%.
 - [x] Sift is a new AI agent built for this hackathon with Strands Agents SDK. — `git log --reverse` shows the repository's first commit is `2008a9c` on 2026-08-27, inside the submission window (opened 2026-08-10) and 18 days before the deadline; `LICENSE` is a fresh 2026 Jordan Allen copyright, and `docs/reuse-attribution.md` (30,331 characters, confirmed present by `pnpm test:submission`'s `fixture-attribution` check) documents only small, individually attributed reused pieces, not a wholesale import — consistent with CLAUDE.md's "Sift is standalone" reuse policy.
 - [x] The agent performs a real task for people end to end rather than only answering a prompt. — the Home Energy Guardian scenario assertion report (`artifacts/verification/scenarios/home-energy-guardian/assertion-report.json`, 33/33 passing, reproduced by running `pnpm test:scenario` in this session: 2 files, 4 tests passed) proves a full causal run from `pack_selected` through six real specialist invocations, a `goal_validation_failed`/`goal_recovered` cycle, an intervention-gated `propose_inspection` tool call, two real `human_action`s (`update_criteria`, `approve_proposal`), and a `forbidden_event_absent` check that no proposal was ever approved by the agent itself — this is a complete decision-support task, not a single prompt/response.
 - [ ] The selected track is **`Professional Agents`**, changed deliberately on 2026-09-07 when `bid-comparison` became the hero. — the track text asks for "an agent that makes someone dramatically better at the work they already do — professionals, makers, creators, small-business owners" targeting "repetitive, judgment-heavy tasks that eat their day," and names no autonomy requirement at all. Comparing subcontractor bids is that task, and `docs/bid-comparison/prior-art.md` establishes that the AI bid-levelling incumbents all serve mid-to-large commercial GCs, leaving exactly the segment the track names unserved. `submission-details.md` now carries a "Track" section stating this. The literal Devpost selection remains submitter action.
-- [x] The bid-comparison hero fits the selected track through a small-business, judgment-heavy use case. — `packages/scenarios/fixtures/bids/job.json` and the three bid fixtures put a four-person remodeling contractor in front of three subcontractor bids for one bathroom scope; `docs/bid-comparison/domain-research.md` sources why the task is judgment-heavy (scope gaps, plug numbers, allowances, exclusions, deposits, credentials) and `prior-art.md` sources why this end of the market is unserved. Home Energy Guardian additionally fits the Everyday framing through a daily-life/home/family use case. — `docs/submissions/agents-for-humans/submission-details.md` "Problem"/"Solution" sections and `packages/scenarios/fixtures/energy/current-bill.json` (a household utility bill, "The Okafor-Bryant household") ground the case in ordinary home/money life, matching the Everyday Agents track description ("daily life, home, money, health, errands, and family").
+- [x] The bid-comparison hero fits the selected track through a small-business, judgment-heavy use case. — `packages/scenarios/fixtures/bids/job.json` and the twelve bid fixtures put Meridian Builders -- a nine-person general contractor with no estimating department, where the person choosing the subcontractor is also running the job -- in front of twelve subcontractor bids for one plumbing trade package. The buyer is deliberately a small contractor rather than the institutional owner: `prior-art.md` establishes that the AI bid-levelling incumbents all serve mid-to-large commercial GCs, so a scenario whose buyer is a school district's procurement office would place this squarely inside the segment those incumbents already serve and forfeit the differentiation this track claim rests on. The project is public and plan-room-released (which is why twelve bids arrive); the person comparing them is not. `docs/bid-comparison/domain-research.md` sources why the task is judgment-heavy (scope gaps, plug numbers, allowances, exclusions, deposits, credentials) and `prior-art.md` sources why this end of the market is unserved. Home Energy Guardian additionally fits the Everyday framing through a daily-life/home/family use case. — `docs/submissions/agents-for-humans/submission-details.md` "Problem"/"Solution" sections and `packages/scenarios/fixtures/energy/current-bill.json` (a household utility bill, "The Okafor-Bryant household") ground the case in ordinary home/money life, matching the Everyday Agents track description ("daily life, home, money, health, errands, and family").
 - [x] The system can work quietly and surface the user only for a genuine decision or authority boundary. — `apps/agent/src/runtime/interventions.ts`'s `ConsequenceGuard` confirms only the consequential `propose_inspection` tool call; the scenario report's `human_action` list contains exactly two entries (`update_criteria:cost_to_conservation`, `approve_proposal:request-hvac-inspection`) against six specialist invocations and six tool calls that ran with no human involved.
 - [x] The implementation uses real Strands runtime capabilities rather than naming them only in documentation. — verified directly against the installed package: `apps/agent/package.json` pins `"@strands-agents/sdk": "^1.14.0"`, and `apps/agent/src/runtime/plugins.ts` imports the real `AgentSkills` (`@strands-agents/sdk/vended-plugins/skills`), `ContextInjector` (`.../vended-plugins/context-injector`), and `GoalLoop` (`.../vended-plugins/goal`) classes verbatim — not local classes named after these features (its own header comment states this constraint and the code honors it). `apps/agent/src/runtime/home-energy-swarm.ts` imports `Swarm`/`Agent`/hook event types from `@strands-agents/sdk` and `@strands-agents/sdk/multiagent` directly.
 

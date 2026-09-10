@@ -99,11 +99,32 @@ export const HOME_ENERGY_RESPONSE_OPTIONS_OBLIGATION_ID = 'energy.response_optio
  * `HOME_ENERGY_RESPONSE_OPTION_IDS` above, this array needs no separate "real entity order"
  * export: `buildBidComparisonEntities` maps directly over `BID_FIXTURE_NAMES`
  * (`packages/scenarios/src/tools/bid-reader.ts`), whose own declared order already IS this
- * array's order (`bid-reader.test.ts` pins it: `['bid-northgate', 'bid-cedar', 'bid-tworivers']`)
- * -- so it is safe to index directly (e.g. `[0]`/`[1]`) for `OptionCompareView`'s narrow-layout
- * head-to-head selection, the same way `CAR_PURCHASE_CANDIDATE_IDS` is.
+ * array's order (`bid-reader.test.ts` pins it) -- so it is safe to index directly (e.g.
+ * `[0]`/`[1]`) for `OptionCompareView`'s narrow-layout head-to-head selection, the same way
+ * `CAR_PURCHASE_CANDIDATE_IDS` is.
+ *
+ * Deliberately hand-listed rather than imported from `BID_FIXTURE_NAMES`, exactly like every
+ * other id list in this file: the journey spec asserts the real seeded case's entity ids
+ * against this array, and an import would make that assertion tautological -- a bid silently
+ * dropped from (or added to) the pack would stop being a test failure.
+ *
+ * The first three are the bids the scripted narrative names individually; the remaining nine
+ * are the also-ran bids that make this a realistic twelve-bidder public bid tab.
  */
-export const BID_COMPARISON_ENTITY_IDS = ['bid-northgate', 'bid-cedar', 'bid-tworivers'] as const;
+export const BID_COMPARISON_ENTITY_IDS = [
+  'bid-northgate',
+  'bid-cedar',
+  'bid-tworivers',
+  'bid-summit',
+  'bid-ironclad',
+  'bid-parkside',
+  'bid-westbrook',
+  'bid-anchor',
+  'bid-crestview',
+  'bid-fieldstone',
+  'bid-brightwater',
+  'bid-oldmill',
+] as const;
 
 /** Every real obligation id `packages/packs/src/bid-comparison.ts` declares, in the manifest's own declared order. */
 export const BID_COMPARISON_OBLIGATION_IDS = [

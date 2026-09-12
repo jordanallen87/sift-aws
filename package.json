@@ -33,7 +33,8 @@
     "docs:diagram": "tsx scripts/generate-diagram.ts",
     "sift": "tsx scripts/sift-cli.ts",
     "verify": "tsx scripts/verify.ts",
-    "verify:release": "tsx scripts/verify-release.ts"
+    "verify:release": "tsx scripts/verify-release.ts",
+    "contact:sheet": "tsx scripts/contact-sheet.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

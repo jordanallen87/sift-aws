@@ -286,7 +286,11 @@ import { ReferenceLibrarySheet } from '../components/ReferenceLibrary.js';
 import { AnalysisStage } from '../components/AnalysisStage.js';
 import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper.js';
 import { deriveOptionProfile } from '../components/option-profile.js';
-import { deriveCaseWorkflow } from './case-workflow.js';
+import {
+  deriveCaseWorkflow,
+  type CaseWorkflowStageId,
+  type CaseWorkflowStageState,
+} from './case-workflow.js';
 import { useWidthMode } from '../hooks/use-width-mode.js';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -1723,6 +1727,19 @@ export function App() {
     clearHelpFocus();
   }, [helpFocusPending, snapshot, clearHelpFocus]);
 
+  // A stage a person navigated to belongs to the case they navigated it on.
+  // `workflowStageOverride` lives in the module-singleton UI store, so it
+  // outlives the workspace's `key={activeCaseId}` remount -- harmless while
+  // the stepper gated nothing, and wrong now that it gates the whole
+  // workspace: switching or resetting a decision would otherwise open the new
+  // case parked on a step whose prerequisites that case has never met, with
+  // the stepper drawing a locked step as the current one. Clearing it returns
+  // the new case to its own derived recommendation. Presentation state only --
+  // no command, no `eventSequence` (ADR 0005).
+  useEffect(() => {
+    setWorkflowStage(null);
+  }, [activeCaseId, setWorkflowStage]);
+
   const readiness = useMemo(() => (snapshot ? evaluateReadiness(snapshot) : null), [snapshot]);
 
   // `lastRunReceipt` (session-local) takes priority once a real command has
@@ -2001,6 +2018,14 @@ export function App() {
         now: new Date().toISOString(),
       });
       if (request === null) return;
+      // Intake owns "pending discovery interactions" (ADR 0016), so the
+      // question this command opens renders there. Navigating with it is what
+      // keeps the dock's `answer_topic`/`confirm_inference` moves answering
+      // something a person can see: without it, a move pressed from Analysis
+      // would post a real question onto a step the person is not standing on.
+      // Presentation state only -- `setWorkflowStage` writes to `ui-store`,
+      // never to the server (ADR 0005).
+      setWorkflowStage('intake');
       setInteractionError(null);
       resolveExpectedSequence()
         .then((expectedSequence) =>
@@ -2027,7 +2052,7 @@ export function App() {
           );
         });
     },
-    [activePack, commands, resolveExpectedSequence],
+    [activePack, commands, resolveExpectedSequence, setWorkflowStage],
   );
 
   const handleInteractionResponse = useCallback(
@@ -2114,10 +2139,22 @@ export function App() {
    * silently doing nothing is not.
    */
   const handleConfirmShortlist = useCallback(() => {
+    // Decide owns the approval controls (ADR 0016; change set: "Approval
+    // controls belong to Decide"), so this move navigates there first. The
+    // guard is the same condition that makes Decide available at all -- a
+    // `confirm_shortlist` derived from `recommendation.status === 'ready'`
+    // can be offered before any proposal exists, and sending a person to a
+    // locked step would be worse than the hero fallback below.
+    if (snapshotRef.current?.proposal != null) setWorkflowStage('decide');
+    // Still measured from whatever is mounted RIGHT NOW: the stage change
+    // above lands on the next render, so on the frame a person leaves an
+    // upstream step this falls back to the hero -- which is always on screen,
+    // always carries the recommendation, and sits directly above the approval
+    // card the next render mounts under it.
     const target: HTMLElement | null = approvalCardRef.current ?? recommendationHeroRef.current;
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     target?.focus();
-  }, []);
+  }, [setWorkflowStage]);
 
   /**
    * The `review_blind_spots` dock move: the last gate before discovery
@@ -2220,6 +2257,13 @@ export function App() {
       };
       const mode = viewForMove[move.kind];
       if (mode !== undefined) {
+        // Review owns every option view (ADR 0016), so a move that switches
+        // views has to arrive at the step that renders them -- otherwise the
+        // dock's primary button would change a view nobody is looking at.
+        // Guarded on having something to review, which is exactly what makes
+        // Review reachable (`reviewStarted`); with nothing to review the
+        // stage gate is already showing the views wherever the person is.
+        if ((snapshotRef.current?.entities.length ?? 0) > 0) setWorkflowStage('review');
         handleViewModeChange(mode);
         return;
       }
@@ -2234,6 +2278,7 @@ export function App() {
       handleReviewDecidedCase,
       handleConfirmShortlist,
       handleReviewBlindSpots,
+      setWorkflowStage,
     ],
   );
 
@@ -2315,6 +2360,7 @@ export function App() {
 
   const optionKind = activePack?.entities[0]?.id ?? 'option';
   const optionLabel = activePack?.presentation.optionLabel ?? 'option';
+  const optionLabelPlural = activePack?.presentation.optionLabelPlural ?? `${optionLabel}s`;
   const applicableKinds =
     activePack !== null ? activePack.entities.map((entity) => entity.id) : [optionKind];
 
@@ -2473,6 +2519,12 @@ export function App() {
       caseScopedActivityEvents.length > 0 ||
       (snapshot?.evidenceLinks.length ?? 0) > 0,
     analysisComplete: snapshot?.recommendation !== null && snapshot?.recommendation !== undefined,
+    // Review's own work is possible as soon as there is something to triage
+    // or compare. See `CaseWorkflowFacts.reviewStarted`: without it, Review
+    // stays `unavailable` until a recommendation exists, and the stage that
+    // OWNS Quick Pick/List/Compare/Board/filters would be unreachable on
+    // every case that has not been investigated yet.
+    reviewStarted: optionsCount > 0 || (snapshot?.discovery?.dispositions.length ?? 0) > 0,
     // Review is NOT complete merely because a proposal exists. These two were
     // the same expression, so the instant analysis produced a proposal the
     // stepper marked Review done and jumped to Decide -- the person was never
@@ -2490,6 +2542,47 @@ export function App() {
       snapshot.proposal.status !== 'pending',
   });
   const activeWorkflowStageId = workflowStageOverride ?? workflow.recommendedStageId;
+
+  /**
+   * THE STAGE GATE (ADR 0016's stage-ownership table, made real).
+   *
+   * Before this, the stepper navigated nowhere: only `AnalysisStage` read
+   * `activeWorkflowStageId`, so Intake and Priorities rendered byte-identical
+   * screens and the five steps were decoration over one flat workspace. Each
+   * region below now renders for the stage the ADR says owns it:
+   *
+   *   Intake     -- pack identity, option inventory, required setup, pending
+   *                 discovery interactions
+   *   Priorities -- criteria/importance, questions, the Decision Profile
+   *   Analysis   -- findings, sources/citations, activity (`AnalysisStage`)
+   *   Review     -- Quick Pick/List/Compare/Board, lenses, filters,
+   *                 readiness gaps
+   *   Decide     -- the proposal and its approve/reject/revise controls
+   *
+   * THE ESCAPE HATCH, and why it is not a loophole. The change set is
+   * absolute that "wider layouts ... may not contain capabilities that the
+   * right pane cannot reach," and the same rule has to hold across stages:
+   * moving a region behind a step a person cannot press would delete it, not
+   * relocate it. ADR 0016 also says "future steps may be visible but
+   * unavailable when their prerequisites are not satisfied" -- so an
+   * `unavailable` stage is exactly the case where its content has nowhere to
+   * go. `stageOwns` therefore shows a stage's regions when that stage is
+   * active OR when it cannot currently be visited at all. The gate is a
+   * relocation everywhere the destination exists, and a no-op in the states
+   * where the destination does not -- which makes "nothing becomes
+   * unreachable" true by construction rather than by case analysis.
+   *
+   * This is presentation only. It reads `activeWorkflowStageId` (session
+   * state in `ui-store.ts`, which may never persist or reach the server) and
+   * the derived stage states; no command, schema, or `eventSequence` is
+   * involved, and every relocated control keeps its existing callback and
+   * `data-testid` (ADR 0005; change set "Compatibility boundary").
+   */
+  const workflowStageStates = new Map<CaseWorkflowStageId, CaseWorkflowStageState>(
+    workflow.stages.map((stage) => [stage.id, stage.state]),
+  );
+  const stageOwns = (stageId: CaseWorkflowStageId): boolean =>
+    activeWorkflowStageId === stageId || workflowStageStates.get(stageId) === 'unavailable';
 
   // `WorkspaceAlertBanner` items (ADR 0008 decision 2/req 2 of this task):
   // DERIVED from real, already-canonical state -- never fabricated. Each
@@ -2616,7 +2709,12 @@ export function App() {
             title={snapshot.title}
             connectionState={mapAppBarConnectionState(connectionState)}
             findingsCount={flaggedFindingsCount}
-            showAnalysisControls={layout === 'expanded'}
+            // The Analysis stage owns findings and references at every width
+            // now (ADR 0016: they "stop consuming global app-bar priority and
+            // gain an explicit conceptual home"). Leaving them here as well
+            // gave the expanded layout two entry points to the same sheet,
+            // one of which contradicted the stage that claims to own them.
+            showAnalysisControls={false}
             optionCount={optionsCount}
             onAddOption={openManageOptions}
             onAddNote={openNotes}
@@ -2645,11 +2743,17 @@ export function App() {
         )}
       </div>
 
-      {layout === 'narrow' && snapshot !== null ? (
+      {/* Both layouts now, per ADR 0016's own "wider layouts may show all
+        labels when they fit". While this was narrow-only the entire guided
+        workflow was invisible above 800px: a desktop window got the
+        pre-redesign layout, which is an absence of the design rather than a
+        wider version of it. */}
+      {snapshot !== null ? (
         <CaseWorkflowStepper
           stages={workflow.stages}
           activeStageId={activeWorkflowStageId}
           onStageChange={setWorkflowStage}
+          layout={layout}
         />
       ) : null}
 
@@ -2714,7 +2818,7 @@ export function App() {
         disappears purely from case state -- no local "is a question open"
         flag that a reload could disagree with.
       */}
-        {snapshot?.discovery?.pendingInteraction != null && (
+        {stageOwns('intake') && snapshot?.discovery?.pendingInteraction != null && (
           <DiscoveryInteraction
             request={snapshot.discovery.pendingInteraction}
             onRespond={handleInteractionResponse}
@@ -2755,7 +2859,132 @@ export function App() {
 
         {streamError ? <ErrorState message={streamError} /> : null}
 
-        {layout === 'narrow' && activeWorkflowStageId === 'analysis' ? (
+        {/*
+          INTAKE owns "Pack identity, required setup, options, missing
+          inputs, pending discovery interactions" (ADR 0016). Four of those
+          five already existed and were reachable from global chrome (the app
+          bar names the pack's compliance, its create menu adds an option);
+          what Intake had was nothing of its own, which is why stepping
+          between Intake and Priorities rendered the same screen. This states
+          the two facts the stage is about -- how many options the case holds
+          and how much required setup is still open -- and offers the one
+          action that changes them. It adds no command and no state: the
+          button is the same `openManageOptions` the app bar's create menu
+          calls, over the same single `OptionEditor` sheet.
+        */}
+        {stageOwns('intake') && snapshot !== null ? (
+          <section
+            data-testid="case-stage-intake"
+            aria-labelledby="case-stage-intake-title"
+            className="flex flex-col gap-[var(--space-3)] rounded-[var(--radius-md)] bg-card p-[var(--space-4)]"
+          >
+            <div>
+              <h2
+                id="case-stage-intake-title"
+                className="font-display text-[length:var(--font-size-xl)]"
+              >
+                Intake
+              </h2>
+              <p className="text-[length:var(--font-size-sm)] text-[var(--color-ink-secondary)]">
+                {activePack === null
+                  ? 'What this decision is about, and what Sift still needs.'
+                  : `${activePack.identity.name} — what this decision is about, and what Sift still needs.`}
+              </p>
+            </div>
+            {/* Counts that name what they count (change set, "Copy
+              requirements"), never a bare number. */}
+            <p
+              data-testid="case-stage-intake-option-count"
+              className="text-[length:var(--font-size-sm)]"
+            >
+              {optionsCount === 0
+                ? `No ${optionLabelPlural} added yet`
+                : `${String(optionsCount)} ${optionsCount === 1 ? optionLabel : optionLabelPlural} on this case`}
+            </p>
+            {requiredDiscoveryTotal > 0 ? (
+              <p
+                data-testid="case-stage-intake-required-setup"
+                className="text-[length:var(--font-size-sm)] text-[var(--color-ink-secondary)]"
+              >
+                {`${String(requiredDiscoveryResolved)} of ${String(requiredDiscoveryTotal)} required question${requiredDiscoveryTotal === 1 ? '' : 's'} answered`}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              data-testid="case-stage-intake-add-option"
+              variant="secondary"
+              onClick={openManageOptions}
+              className="justify-start self-start"
+            >
+              {`Add ${optionLabel}`}
+            </Button>
+          </section>
+        ) : null}
+
+        {/*
+          PRIORITIES owns "criteria, constraints, importance, questions,
+          Decision Profile" (ADR 0016). The Decision Profile itself keeps its
+          existing two homes -- the narrow `decision-profile` disclosure and
+          the expanded toolbar's sheet button, both gated to this stage below
+          -- because relocating a working surface twice is churn, not design.
+          What was missing is the half of the stage that is not a read-only
+          projection: `CriteriaEditor` (the only surface in the product that
+          can change what the decision optimises for) and "Add a question"
+          were reachable ONLY from the app bar's menus, which say nothing
+          about which step they belong to. Same callbacks, same sheets.
+        */}
+        {stageOwns('priorities') && snapshot !== null ? (
+          <section
+            data-testid="case-stage-priorities"
+            aria-labelledby="case-stage-priorities-title"
+            className="flex flex-col gap-[var(--space-3)] rounded-[var(--radius-md)] bg-card p-[var(--space-4)]"
+          >
+            <div>
+              <h2
+                id="case-stage-priorities-title"
+                className="font-display text-[length:var(--font-size-xl)]"
+              >
+                Priorities
+              </h2>
+              <p className="text-[length:var(--font-size-sm)] text-[var(--color-ink-secondary)]">
+                What matters in this decision, how much, and what you still want asked.
+              </p>
+            </div>
+            <p
+              data-testid="case-stage-priorities-count"
+              className="text-[length:var(--font-size-sm)]"
+            >
+              {decisionProfileConcernCount === 0
+                ? 'No priorities set yet'
+                : `${String(decisionProfileConcernCount)} priorit${decisionProfileConcernCount === 1 ? 'y' : 'ies'} set`}
+            </p>
+            <div className="grid gap-[var(--space-2)]">
+              <Button
+                type="button"
+                data-testid="case-stage-priorities-adjust"
+                variant="secondary"
+                onClick={openPriorities}
+                className="justify-start"
+              >
+                Adjust priorities
+              </Button>
+              <Button
+                type="button"
+                data-testid="case-stage-priorities-add-question"
+                variant="secondary"
+                onClick={openAddConcern}
+                className="justify-start"
+              >
+                Add a question
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {/* Stage ownership in ADR 0016 is width-independent: Analysis owns
+          findings, sources and activity at every width, so this renders
+          wherever that stage is active rather than only in the pane. */}
+        {stageOwns('analysis') ? (
           <AnalysisStage
             findingsNeedingReview={flaggedFindingsCount}
             sourceCount={snapshot?.sources.length ?? 0}
@@ -2766,12 +2995,54 @@ export function App() {
           />
         ) : null}
 
+        {/*
+          THE RECOMMENDATION HERO STAYS ALWAYS-VISIBLE. Deliberate, and the
+          one region this task does NOT hand to a stage. Four reasons, in
+          order of how binding they are:
+
+          1. `assertRecommendationHeroAboveTheFold`
+             (`tests/e2e/helpers/layout-assertions.ts`) asserts
+             `recommendation-hero` is VISIBLE and that its top edge falls
+             within the first viewport height at every viewport <= 480px. Four
+             journey specs call it, and they call it mid-journey -- e.g.
+             `vehicle-catalog-journey` right after the case opens, where the
+             active stage is Intake. A stage-owned hero fails ADR 0004's
+             invariant outright in every stage but one. That alone settles it.
+
+          2. It is not one stage's content. Its contents straddle three rows
+             of ADR 0016's table: "Have Sift investigate" plus `LiveRunStatus`
+             plus `SpecialistActivityPanel` plus "Inspect run" are Analysis's
+             "investigation request/status ... activity"; `RecommendationCard`
+             and `ApprovalCard` are Decide's "recommendation summary,
+             proposal, explicit human approval". No single stage owns the box.
+
+          3. ADR 0004 built this region by collapsing three regions that could
+             disagree with each other into one that cannot. Splitting it back
+             apart by stage reopens exactly that seam.
+
+          4. It is the answer. ADR 0016 calls the stepper "an orientation and
+             navigation control over existing case state"; revisiting an
+             upstream step must not cost a person the answer they already
+             have, or the step list becomes a reason not to look back.
+
+          What IS stage-owned is the approval control inside it, and only
+          that: the change set is verbatim that "approval controls belong to
+          Decide," so `proposal` -- the single prop that mounts `ApprovalCard`
+          -- is passed only while Decide is the active stage. Everything else
+          in the hero, the headline included, is unconditional. Nothing is
+          lost by it: a pending proposal is precisely what makes Decide
+          available and recommended (`decisionAvailable` above), so a person
+          meets the controls on arrival, and from any other step the stepper
+          renders Decide as the current step while the headline overhead still
+          says a decision is waiting. `handleConfirmShortlist` navigates there
+          too, so the dock's one human-only move still lands on the control.
+        */}
         <RecommendationHero
           status={workspaceStatus}
           recommendation={snapshot?.recommendation ?? null}
           withheld={withheld}
           sources={sources}
-          proposal={snapshot?.proposal ?? null}
+          proposal={stageOwns('decide') ? (snapshot?.proposal ?? null) : null}
           approvalOptionLabel={favoredOptionLabel}
           onReview={handleReviewProposal}
           reviewPending={proposalReviewPending}
@@ -2813,6 +3084,16 @@ export function App() {
             // owns.
             className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-x-[var(--space-6)]"
           >
+            {/* The sidebar is persistent CONTEXT, not stage content, so it is
+              not gated: the change set allows exactly this -- "wider layouts
+              may reveal more context but may not contain capabilities that
+              the right pane cannot reach." Its read-only priorities list and
+              its "Still checking" count are both reachable in the pane
+              (Priorities' Decision Profile, Review's readiness disclosure),
+              so nothing here is expanded-only, and a 300px column that
+              emptied itself on four steps out of five would make the desktop
+              layout jump rather than guide. The MAIN column below is gated
+              identically at both widths. */}
             <WorkspaceSidebar
               layout={layout}
               decisionProfile={decisionProfile}
@@ -2834,7 +3115,7 @@ export function App() {
                   the app bar's "Add option"/"Findings" controls satisfy for
                   their own regions. Gated like the narrow disclosure above
                   it (ADR 0004 item 2: absent, not merely empty). */}
-                {!decisionProfileIsEmpty && decisionProfile !== null ? (
+                {stageOwns('priorities') && !decisionProfileIsEmpty && decisionProfile !== null ? (
                   <Button
                     type="button"
                     data-testid="workspace-expanded-open-decision-profile"
@@ -2863,62 +3144,72 @@ export function App() {
                   not offer and which narrow renders inline instead. */}
               </div>
 
-              <FilterBar
-                attributeDefinitions={filterableDefinitions}
-                options={allOptions}
-                filters={filters}
-                onFiltersChange={handleFiltersChange}
-                onOpenFilters={openFilters}
-                matchingCount={visibleOptions.length}
-                totalCount={allOptions.length}
-                presentation={activePack?.presentation ?? null}
-                assistantVisibleOptionIds={assistantVisibleOptionIds}
-                onClearAssistantNarrowing={handleClearAssistantNarrowing}
-              />
+              {/* REVIEW owns "Quick Pick, List, Compare, Board, filters,
+                option profiles, readiness gaps" (ADR 0016) and the change set
+                is verbatim that "Keep / Unsure / Pass and comparison views
+                belong to Review." Same three regions, same props, same
+                callbacks -- only the condition is new, and it is the same
+                condition the pane branch below uses. */}
+              {stageOwns('review') ? (
+                <>
+                  <FilterBar
+                    attributeDefinitions={filterableDefinitions}
+                    options={allOptions}
+                    filters={filters}
+                    onFiltersChange={handleFiltersChange}
+                    onOpenFilters={openFilters}
+                    matchingCount={visibleOptions.length}
+                    totalCount={allOptions.length}
+                    presentation={activePack?.presentation ?? null}
+                    assistantVisibleOptionIds={assistantVisibleOptionIds}
+                    onClearAssistantNarrowing={handleClearAssistantNarrowing}
+                  />
 
-              {/* Which FACTS the view below draws, alongside the switcher that
-                picks its SHAPE. Renders nothing for a pack that declares no
-                lenses. */}
-              <LensSwitcher
-                lenses={packLenses}
-                activeLensId={activeLensId}
-                onLensChange={handleLensChange}
-              />
+                  {/* Which FACTS the view below draws, alongside the switcher
+                    that picks its SHAPE. Renders nothing for a pack that
+                    declares no lenses. */}
+                  <LensSwitcher
+                    lenses={packLenses}
+                    activeLensId={activeLensId}
+                    onLensChange={handleLensChange}
+                  />
 
-              <WorkspaceViewSwitcher
-                mode={viewMode}
-                onModeChange={handleViewModeChange}
-                // The FILTERED list -- see the `visibleOptions` comment above
-                // for why this one prop is narrowed and the hero/notes/editor
-                // deliberately are not.
-                options={visibleOptions}
-                attributeDefinitions={snapshot?.attributeDefinitions ?? []}
-                caseExtensions={snapshot?.caseExtensions ?? []}
-                presentation={activePack?.presentation ?? null}
-                selectedOptionId={snapshot?.selectedOptionId ?? null}
-                onFocusOption={handleFocusOption}
-                compareOptionIds={compareOptionIds}
-                compareVisibleAttributeIds={compareVisibleAttributeIds}
-                comparePinnedAttributeIds={comparePinnedAttributeIds}
-                quickPickPosition={quickPickPosition}
-                quickPickDispositions={quickPickDispositions}
-                onQuickPickKeep={handleQuickPickKeep}
-                onQuickPickPass={handleQuickPickPass}
-                onQuickPickUnsure={handleQuickPickUnsure}
-                onQuickPickUndo={handleQuickPickUndo}
-                onQuickPickFocusChange={() => undefined}
-                // Real `Criterion[]`, so a card can rank its few facts by what
-                // the person actually said matters whenever a pack declares no
-                // `prominentAttributeIds` of its own.
-                criteria={snapshot?.criteria ?? []}
-                // The FULL board, not one narrowed to `visibleOptions` -- see
-                // the `scoreboard` memo above for why a rank must not be
-                // recomputed over a filtered subset.
-                scoreboard={scoreboard}
-                onOpenProfile={openOptionProfile}
-                boardPlacement={boardPlacement}
-                onMoveOption={handleMoveOption}
-              />
+                  <WorkspaceViewSwitcher
+                    mode={viewMode}
+                    onModeChange={handleViewModeChange}
+                    // The FILTERED list -- see the `visibleOptions` comment above
+                    // for why this one prop is narrowed and the hero/notes/editor
+                    // deliberately are not.
+                    options={visibleOptions}
+                    attributeDefinitions={snapshot?.attributeDefinitions ?? []}
+                    caseExtensions={snapshot?.caseExtensions ?? []}
+                    presentation={activePack?.presentation ?? null}
+                    selectedOptionId={snapshot?.selectedOptionId ?? null}
+                    onFocusOption={handleFocusOption}
+                    compareOptionIds={compareOptionIds}
+                    compareVisibleAttributeIds={compareVisibleAttributeIds}
+                    comparePinnedAttributeIds={comparePinnedAttributeIds}
+                    quickPickPosition={quickPickPosition}
+                    quickPickDispositions={quickPickDispositions}
+                    onQuickPickKeep={handleQuickPickKeep}
+                    onQuickPickPass={handleQuickPickPass}
+                    onQuickPickUnsure={handleQuickPickUnsure}
+                    onQuickPickUndo={handleQuickPickUndo}
+                    onQuickPickFocusChange={() => undefined}
+                    // Real `Criterion[]`, so a card can rank its few facts by what
+                    // the person actually said matters whenever a pack declares no
+                    // `prominentAttributeIds` of its own.
+                    criteria={snapshot?.criteria ?? []}
+                    // The FULL board, not one narrowed to `visibleOptions` -- see
+                    // the `scoreboard` memo above for why a rank must not be
+                    // recomputed over a filtered subset.
+                    scoreboard={scoreboard}
+                    onOpenProfile={openOptionProfile}
+                    boardPlacement={boardPlacement}
+                    onMoveOption={handleMoveOption}
+                  />
+                </>
+              ) : null}
 
               {/* The same read surface the pane keeps in its own column
                 below. Both branches mount it because the two are mutually
@@ -2935,58 +3226,66 @@ export function App() {
           // regions promoted into the app bar above (options, findings) --
           // see this file's own header comment for the full mapping.
           <>
-            {/* Same filter entry point as web-app mode, and the reason the
+            {/* Review's regions, gated exactly as the expanded branch above
+              gates its own copies -- ADR 0016's ownership table is
+              width-independent, so the pane and the web app agree about which
+              step owns the option views. */}
+            {stageOwns('review') ? (
+              <>
+                {/* Same filter entry point as web-app mode, and the reason the
               filter surface moved out of the sidebar at all: this component
               tree has no sidebar, so filters previously did not exist here
               in any form (ADR 0009). */}
-            <LensSwitcher
-              lenses={packLenses}
-              activeLensId={activeLensId}
-              onLensChange={handleLensChange}
-            />
-
-            <WorkspaceViewSwitcher
-              mode={viewMode}
-              onModeChange={handleViewModeChange}
-              options={visibleOptions}
-              attributeDefinitions={snapshot?.attributeDefinitions ?? []}
-              caseExtensions={snapshot?.caseExtensions ?? []}
-              presentation={activePack?.presentation ?? null}
-              selectedOptionId={snapshot?.selectedOptionId ?? null}
-              onFocusOption={handleFocusOption}
-              compareOptionIds={compareOptionIds}
-              compareVisibleAttributeIds={compareVisibleAttributeIds}
-              comparePinnedAttributeIds={comparePinnedAttributeIds}
-              quickPickPosition={quickPickPosition}
-              quickPickDispositions={quickPickDispositions}
-              onQuickPickKeep={handleQuickPickKeep}
-              onQuickPickPass={handleQuickPickPass}
-              onQuickPickUnsure={handleQuickPickUnsure}
-              onQuickPickUndo={handleQuickPickUndo}
-              onQuickPickFocusChange={() => undefined}
-              criteria={snapshot?.criteria ?? []}
-              scoreboard={scoreboard}
-              onOpenProfile={openOptionProfile}
-              boardPlacement={boardPlacement}
-              onMoveOption={handleMoveOption}
-              toolbarLeading={
-                <FilterBar
-                  compact
-                  attributeDefinitions={filterableDefinitions}
-                  options={allOptions}
-                  filters={filters}
-                  onFiltersChange={handleFiltersChange}
-                  onOpenFilters={openFilters}
-                  matchingCount={visibleOptions.length}
-                  totalCount={allOptions.length}
-                  presentation={activePack?.presentation ?? null}
-                  assistantVisibleOptionIds={assistantVisibleOptionIds}
-                  onClearAssistantNarrowing={handleClearAssistantNarrowing}
+                <LensSwitcher
+                  lenses={packLenses}
+                  activeLensId={activeLensId}
+                  onLensChange={handleLensChange}
                 />
-              }
-            />
 
-            {!decisionProfileIsEmpty && decisionProfile !== null ? (
+                <WorkspaceViewSwitcher
+                  mode={viewMode}
+                  onModeChange={handleViewModeChange}
+                  options={visibleOptions}
+                  attributeDefinitions={snapshot?.attributeDefinitions ?? []}
+                  caseExtensions={snapshot?.caseExtensions ?? []}
+                  presentation={activePack?.presentation ?? null}
+                  selectedOptionId={snapshot?.selectedOptionId ?? null}
+                  onFocusOption={handleFocusOption}
+                  compareOptionIds={compareOptionIds}
+                  compareVisibleAttributeIds={compareVisibleAttributeIds}
+                  comparePinnedAttributeIds={comparePinnedAttributeIds}
+                  quickPickPosition={quickPickPosition}
+                  quickPickDispositions={quickPickDispositions}
+                  onQuickPickKeep={handleQuickPickKeep}
+                  onQuickPickPass={handleQuickPickPass}
+                  onQuickPickUnsure={handleQuickPickUnsure}
+                  onQuickPickUndo={handleQuickPickUndo}
+                  onQuickPickFocusChange={() => undefined}
+                  criteria={snapshot?.criteria ?? []}
+                  scoreboard={scoreboard}
+                  onOpenProfile={openOptionProfile}
+                  boardPlacement={boardPlacement}
+                  onMoveOption={handleMoveOption}
+                  toolbarLeading={
+                    <FilterBar
+                      compact
+                      attributeDefinitions={filterableDefinitions}
+                      options={allOptions}
+                      filters={filters}
+                      onFiltersChange={handleFiltersChange}
+                      onOpenFilters={openFilters}
+                      matchingCount={visibleOptions.length}
+                      totalCount={allOptions.length}
+                      presentation={activePack?.presentation ?? null}
+                      assistantVisibleOptionIds={assistantVisibleOptionIds}
+                      onClearAssistantNarrowing={handleClearAssistantNarrowing}
+                    />
+                  }
+                />
+              </>
+            ) : null}
+
+            {stageOwns('priorities') && !decisionProfileIsEmpty && decisionProfile !== null ? (
               <DisclosureSection
                 testId="decision-profile"
                 title="Your priorities"
@@ -3029,13 +3328,18 @@ export function App() {
               two full rows shorter at rest. `CaseNotes` above is unaffected:
               it is the read half, and it still renders nothing at all on a
               case with no notes. */}
-            <DisclosureSection
-              testId="still-checking"
-              title="Decision readiness"
-              meta={stillCheckingMeta}
-            >
-              <ReadinessPanel readiness={readiness} loading={snapshot === null} />
-            </DisclosureSection>
+            {/* Review owns "readiness gaps" (ADR 0016). Expanded reaches the
+              same `ReadinessPanel` through the sidebar's "Still checking"
+              button, which is ungated persistent context -- see there. */}
+            {stageOwns('review') ? (
+              <DisclosureSection
+                testId="still-checking"
+                title="Decision readiness"
+                meta={stillCheckingMeta}
+              >
+                <ReadinessPanel readiness={readiness} loading={snapshot === null} />
+              </DisclosureSection>
+            ) : null}
           </>
         )}
 

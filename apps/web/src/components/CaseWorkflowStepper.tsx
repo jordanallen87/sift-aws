@@ -7,6 +7,17 @@ export interface CaseWorkflowStepperProps {
   readonly stages: readonly CaseWorkflowStage[];
   readonly activeStageId: CaseWorkflowStageId;
   readonly onStageChange: (stageId: CaseWorkflowStageId) => void;
+  /**
+   * Which presentation to render. ADR 0016 specifies both and only the
+   * narrow one was built: "At narrow width the persistent header shows only
+   * the current step, ordinal progress, and a compact progress affordance...
+   * Wider layouts may show all labels when they fit."
+   *
+   * Until this existed the whole guided workflow was invisible above 800px
+   * -- a desktop window got the pre-redesign layout and no stepper at all,
+   * which is not a smaller version of the design but an absence of it.
+   */
+  readonly layout: 'narrow' | 'expanded';
 }
 
 function stageAccessibleState(stage: CaseWorkflowStage): string {
@@ -20,6 +31,7 @@ export function CaseWorkflowStepper({
   stages,
   activeStageId,
   onStageChange,
+  layout,
 }: CaseWorkflowStepperProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const activeIndex = Math.max(
@@ -31,6 +43,61 @@ export function CaseWorkflowStepper({
 
   if (active === undefined) {
     return <></>;
+  }
+
+  // Expanded: all five labels on one row, because they fit. The ordinal
+  // ("step 3 of 5") is dropped -- with every step visible and its own state
+  // rendered, counting them for the reader adds nothing the row does not
+  // already say. Narrow keeps the ordinal precisely because the other four
+  // are hidden.
+  if (layout === 'expanded') {
+    return (
+      <section
+        data-testid="case-workflow-stepper"
+        aria-label="Case progress"
+        className="relative shrink-0 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)] px-[var(--space-6)] py-[var(--space-2)]"
+      >
+        <ol className="flex flex-wrap items-center gap-[var(--space-1)]">
+          {stages.map((stage, index) => (
+            <li key={stage.id} className="flex items-center gap-[var(--space-1)]">
+              <Button
+                type="button"
+                variant={stage.id === activeStageId ? 'secondary' : 'ghost'}
+                data-testid={`case-workflow-step-${stage.id}`}
+                disabled={stage.state === 'unavailable'}
+                aria-current={stage.id === activeStageId ? 'step' : undefined}
+                aria-label={`${stage.label}, ${stageAccessibleState(stage)}`}
+                onClick={() => {
+                  onStageChange(stage.id);
+                }}
+                size="sm"
+              >
+                <span className="inline-flex size-5 items-center justify-center" aria-hidden="true">
+                  {stage.state === 'complete' ? (
+                    <CheckIcon className="size-4 text-[color:var(--color-status-satisfied-ink)]" />
+                  ) : stage.state === 'unavailable' ? (
+                    <LockIcon className="size-4" />
+                  ) : stage.state === 'current' ? (
+                    <CircleAlertIcon className="size-4 text-[color:var(--color-status-active-ink)]" />
+                  ) : (
+                    <span>{String(index + 1)}</span>
+                  )}
+                </span>
+                <span>{stage.label}</span>
+              </Button>
+              {index < total - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="text-[color:var(--color-ink-muted)] select-none"
+                >
+                  ›
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
   }
 
   return (

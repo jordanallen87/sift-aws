@@ -129,6 +129,10 @@ test.describe('keyboard operation and accessibility', () => {
     // SSE case-snapshot delivery. On a loaded machine that lands after
     // `toBeVisible`'s default 5s, and the test then reported "no approval
     // card" for a proposal that existed and was merely still arriving.
+    // Approval controls are Decide-owned now (ADR 0016; the change set:
+    // "Approval controls belong to Decide"). A pending proposal is exactly
+    // what makes Decide reachable, so this is navigation, not a workaround.
+    await sift.goToWorkflowStage('decide');
     await expect(page.getByTestId('approval-card-pending')).toBeVisible({ timeout: 30_000 });
 
     const approveButton = page.getByTestId('approval-card-approve');

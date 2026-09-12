@@ -223,8 +223,6 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
     // attributes and its own `optionLabel`/`optionLabelPlural`, so this
     // proves the bar renders from whatever the active pack actually
     // declares rather than from anything car-shaped.
-    await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
-    await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
     // A second identity string, for the reason `bid-comparison-journey.spec.ts`'s
     // own `seeded-case.png` call documents in full: when that pack's case grew
@@ -247,6 +245,13 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
       ],
       { mask: masks, maxDiffPixelRatio: 0.01 },
     );
+
+    // Deliberately AFTER the capture above: the filter surface is Review-owned
+    // now (ADR 0016), and navigating there first would make a baseline called
+    // `seeded-case` depict Review rather than the state a person lands on.
+    await sift.goToWorkflowStage('review');
+    await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
+    await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
     // --- Workspace view switcher (ADR 0004 item 5; ADR 0005) -- see
     // `car-purchase-journey.spec.ts` for the full rationale on why Compare
@@ -469,6 +474,10 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
     ).toBe('request-hvac-inspection');
 
     // --- Pending proposal, gated by ConsequenceGuard server-side, awaiting human-only approval ---
+    // Approval controls are Decide-owned now (ADR 0016; the change set:
+    // "Approval controls belong to Decide"). A pending proposal is exactly
+    // what makes Decide reachable, so this is navigation, not a workaround.
+    await sift.goToWorkflowStage('decide');
     await expect(page.getByTestId('approval-card-pending')).toBeVisible();
     await assertNoSeriousAxeViolations(page, 'awaiting human approval');
 
@@ -504,6 +513,11 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
     await sift.closeManageOptionsSheet();
 
     await withVolatileRegionsHidden(page, async () => {
+      // The approval card is Decide-owned, and this capture's whole identity is
+      // "a decision is waiting on you" -- so stand on Decide before the shot.
+      // Earlier steps in this journey navigate to Review and Analysis, so the
+      // active stage at this point is not implied by the one set above.
+      await sift.goToWorkflowStage('decide');
       await expectNamedScreenshot(
         page,
         page.getByTestId('case-workspace'),

@@ -8,6 +8,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: false,
       analysisStarted: false,
       analysisComplete: false,
+      reviewStarted: false,
       reviewComplete: false,
       decisionAvailable: false,
       decided: false,
@@ -29,6 +30,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: true,
       analysisStarted: true,
       analysisComplete: false,
+      reviewStarted: false,
       reviewComplete: false,
       decisionAvailable: false,
       decided: false,
@@ -45,6 +47,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: true,
       analysisStarted: true,
       analysisComplete: true,
+      reviewStarted: false,
       reviewComplete: true,
       decisionAvailable: true,
       decided: false,
@@ -54,6 +57,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: true,
       analysisStarted: true,
       analysisComplete: true,
+      reviewStarted: false,
       reviewComplete: true,
       decisionAvailable: true,
       decided: true,
@@ -75,6 +79,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: false,
       analysisStarted: true,
       analysisComplete: true,
+      reviewStarted: false,
       reviewComplete: false,
       decisionAvailable: false,
       decided: false,
@@ -92,6 +97,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: false,
       analysisStarted: true,
       analysisComplete: false,
+      reviewStarted: false,
       reviewComplete: false,
       decisionAvailable: false,
       decided: false,
@@ -101,6 +107,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: false,
       analysisStarted: false,
       analysisComplete: false,
+      reviewStarted: false,
       reviewComplete: false,
       decisionAvailable: false,
       decided: false,
@@ -120,6 +127,7 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: true,
       analysisStarted: true,
       analysisComplete: true,
+      reviewStarted: false,
       reviewComplete: false,
       decisionAvailable: true,
       decided: false,
@@ -137,10 +145,37 @@ describe('deriveCaseWorkflow', () => {
       prioritiesComplete: true,
       analysisStarted: true,
       analysisComplete: true,
+      reviewStarted: false,
       reviewComplete: true,
       decisionAvailable: true,
       decided: true,
     });
     expect(settled.stages.find((stage) => stage.id === 'review')?.state).toBe('complete');
+  });
+
+  // Review owns Quick Pick, List, Compare, Board and filters (ADR 0016's
+  // stage-ownership table), and those are usable the moment a case has
+  // options -- so Review has to be reachable then, or gating the option views
+  // on their owning stage would delete Keep/Unsure/Pass from every
+  // un-investigated case rather than giving it a home.
+  it('makes Review reachable once there is something to review, before any analysis finishes', () => {
+    const facts = {
+      intakeComplete: true,
+      prioritiesComplete: true,
+      analysisStarted: false,
+      analysisComplete: false,
+      reviewComplete: false,
+      decisionAvailable: false,
+      decided: false,
+    } as const;
+
+    const withOptions = deriveCaseWorkflow({ ...facts, reviewStarted: true });
+    const withoutOptions = deriveCaseWorkflow({ ...facts, reviewStarted: false });
+
+    expect(withOptions.stages.find((stage) => stage.id === 'review')?.state).toBe('available');
+    // Reachable, not recommended: the person still belongs in Analysis, which
+    // is where their prerequisites have taken them.
+    expect(withOptions.recommendedStageId).toBe('analysis');
+    expect(withoutOptions.stages.find((stage) => stage.id === 'review')?.state).toBe('unavailable');
   });
 });

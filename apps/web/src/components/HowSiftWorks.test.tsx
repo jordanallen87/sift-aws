@@ -120,10 +120,16 @@ describe('HowSiftWorks shared content', () => {
     renderWithWebMcp();
     const boundary = screen.getByTestId('how-sift-works-authority');
     expect(boundary).toHaveTextContent(/cannot approve/i);
-    // ApprovalCard.tsx's three real decision controls.
-    expect(boundary).toHaveTextContent('Choose this');
+    // `ApprovalCard.tsx`'s three real decision controls, asserted both ways:
+    // the current labels must be present AND the retired ones absent. This
+    // help text went on naming "Choose this" and "Keep researching" after
+    // both were renamed, so it described buttons that no longer existed --
+    // a passing test is what let that sit there.
+    expect(boundary).toHaveTextContent('Select');
     expect(boundary).toHaveTextContent('Pass');
-    expect(boundary).toHaveTextContent('Keep researching');
+    expect(boundary).toHaveTextContent('Continue investigation');
+    expect(boundary).not.toHaveTextContent('Keep researching');
+    expect(boundary).not.toHaveTextContent('Choose this');
   });
 
   it('reports the real registered tool count rather than a hard-coded number', () => {

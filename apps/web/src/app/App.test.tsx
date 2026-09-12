@@ -228,6 +228,28 @@ async function openFindingsSheet(user: ReturnType<typeof userEvent.setup>) {
   });
 }
 
+// ADR 0016's five guided steps each own a slice of the workspace now
+// (`App.tsx`'s `stageOwns`), so a region is on screen when its own step is --
+// Review owns Quick Pick/List/Compare/Board and the filter bar, Priorities
+// owns the Decision Profile, Decide owns the approval controls. A test that
+// needs one of those reaches it the way a person does: by pressing the step
+// that owns it, rather than assuming one flat screen holds everything.
+//
+// The narrow stepper (jsdom's default, since `useWidthMode()` has no
+// `matchMedia` to read) keeps its step list behind the compact progress
+// affordance ADR 0016 specifies; expanded renders all five labels inline. So
+// this opens the list only when there is one to open, and uses the same
+// `case-workflow-step-<id>` testid either way.
+async function goToWorkflowStage(
+  user: ReturnType<typeof userEvent.setup>,
+  stageId: 'intake' | 'priorities' | 'analysis' | 'review' | 'decide',
+) {
+  if (screen.queryByTestId(`case-workflow-step-${stageId}`) === null) {
+    await user.click(screen.getByTestId('case-workflow-stepper-toggle'));
+  }
+  await user.click(await screen.findByTestId(`case-workflow-step-${stageId}`));
+}
+
 // The three create actions ("Add option", "Add a note", "Add a question")
 // are one app-bar menu now, in BOTH layouts -- and "Add a note"/"Add a
 // question" are no longer bottom-of-stack `DisclosureSection` rows at all
@@ -2487,6 +2509,8 @@ describe('App', () => {
       });
       renderLiveWorkspace(snapshot);
       const user = await startDemoAndWait();
+      // Priorities owns the Decision Profile (ADR 0016).
+      await goToWorkflowStage(user, 'priorities');
 
       await waitFor(() => {
         expect(screen.getByTestId('disclosure-decision-profile')).toBeInTheDocument();
@@ -2983,7 +3007,9 @@ describe('App', () => {
         ],
       });
       renderLiveWorkspace(snapshot);
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-view-content-compare')).toBeVisible();
@@ -3017,7 +3043,9 @@ describe('App', () => {
         ],
       });
       renderLiveWorkspace(snapshot);
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-view-content-compare')).toBeVisible();
@@ -3110,7 +3138,9 @@ describe('App', () => {
         ],
       });
       renderLiveWorkspace(snapshot);
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-view-content-compare')).toBeVisible();
@@ -3198,7 +3228,9 @@ describe('App', () => {
       renderLiveWorkspace(
         buildNarrowedCase({ visibleOptionIds: ['candidate-forester', 'candidate-rav4'] }),
       );
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('option-list-view-card-candidate-rav4')).toBeInTheDocument();
@@ -3211,7 +3243,9 @@ describe('App', () => {
       renderLiveWorkspace(
         buildNarrowedCase({ visibleOptionIds: ['candidate-forester', 'candidate-rav4'] }),
       );
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('option-list-view-cards')).toBeInTheDocument();
@@ -3231,7 +3265,9 @@ describe('App', () => {
       renderLiveWorkspace(
         buildNarrowedCase({ visibleOptionIds: ['candidate-rav4', 'candidate-forester'] }),
       );
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-filter-assistant-chip')).toBeInTheDocument();
@@ -3251,7 +3287,9 @@ describe('App', () => {
           filters: [{ fieldId: 'awd', operator: 'equals', value: 'true' }],
         }),
       );
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       // The CR-V is inside the assistant's set but fails the person's
       // filter; the Forester passes the filter but is outside the set.
@@ -3274,7 +3312,9 @@ describe('App', () => {
       renderLiveWorkspace(
         buildNarrowedCase({ visibleOptionIds: ['candidate-rav4', 'candidate-deleted'] }),
       );
-      await startDemoAndWait();
+      const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('option-list-view-card-candidate-rav4')).toBeInTheDocument();
@@ -3288,6 +3328,8 @@ describe('App', () => {
       renderLiveWorkspace(buildNarrowedCase({ visibleOptionIds: ['candidate-rav4'] }));
       server.use(commandHandler('setView', buildFakeCommandReceipt({ caseId: CASE_ID })));
       const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-filter-assistant-chip')).toBeInTheDocument();
@@ -3313,6 +3355,8 @@ describe('App', () => {
         }),
       );
       const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-filter-assistant-chip')).toBeInTheDocument();
@@ -3343,6 +3387,8 @@ describe('App', () => {
         }),
       );
       const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-filter-assistant-chip')).toBeInTheDocument();
@@ -3369,6 +3415,8 @@ describe('App', () => {
       renderLiveWorkspace(snapshot);
       server.use(commandHandler('setView', buildFakeCommandReceipt({ caseId: CASE_ID })));
       const user = await startDemoAndWait();
+      // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+      await goToWorkflowStage(user, 'review');
 
       await waitFor(() => {
         expect(screen.getByTestId('workspace-filter-assistant-chip')).toBeInTheDocument();
@@ -4044,6 +4092,8 @@ describe('App', () => {
           }),
         );
         const user = await startDemoAndWait();
+        // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+        await goToWorkflowStage(user, 'review');
 
         await waitFor(() => expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument());
         // The filter surface moved out of the sidebar into a sheet reachable
@@ -4105,6 +4155,8 @@ describe('App', () => {
           }),
         );
         const user = await startDemoAndWait();
+        // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+        await goToWorkflowStage(user, 'review');
 
         // Choose List, then IMMEDIATELY apply a filter -- without waiting for
         // the mode write to round-trip into the snapshot. That gap is exactly
@@ -4212,6 +4264,10 @@ describe('App', () => {
           expect(screen.queryByTestId('workspace-notes-sheet')).not.toBeInTheDocument();
         });
 
+        // Priorities owns the Decision Profile (ADR 0016), so its toolbar
+        // button lives on that step. Notes above deliberately does not: it is
+        // in no stage's ownership row, so it stays on screen throughout.
+        await goToWorkflowStage(user, 'priorities');
         await user.click(screen.getByTestId('workspace-expanded-open-decision-profile'));
         await waitFor(() => {
           expect(screen.getByTestId('workspace-decision-profile-sheet')).toBeInTheDocument();
@@ -4275,6 +4331,159 @@ describe('App', () => {
         );
         expect(screen.getByTestId('option-editor')).toBeInTheDocument();
       });
+    });
+  });
+
+  /**
+   * ADR 0016's stage-ownership table, asserted as behaviour.
+   *
+   * The defect these cover, found in a live browser: the five-step stepper
+   * rendered, and pressing a step changed nothing. Intake and Priorities
+   * produced byte-identical screens, because `activeWorkflowStageId` gated
+   * exactly one region (Analysis) out of the whole workspace. A stepper that
+   * navigates nowhere is worse than no stepper -- it claims a sequence the
+   * product does not have.
+   */
+  describe('guided workflow stage ownership (ADR 0016)', () => {
+    const RANKED_CAR = {
+      id: 'candidate-rav4',
+      kind: 'car',
+      label: 'Toyota RAV4',
+      attributes: {},
+      createdAt: '2026-08-27T00:00:00.000Z',
+      updatedAt: '2026-08-27T00:00:00.000Z',
+    };
+    const BUDGET_CRITERION = {
+      id: 'crit-budget',
+      label: 'Budget',
+      kind: 'hard_constraint' as const,
+      weight: 20,
+      direction: 'higher_better' as const,
+      origin: 'pack' as const,
+      status: 'active' as const,
+      target: { type: 'money' as const, amount: 40000, currency: 'USD' },
+    };
+    const READY_RECOMMENDATION = {
+      id: 'rec-1',
+      status: 'ready' as const,
+      favoredOptionId: 'candidate-rav4',
+      rationale: 'Best overall fit.',
+      facts: [],
+      hypotheses: [],
+      confidence: 0.8,
+      limitations: [],
+      sourceIds: [],
+      resolvedObligationIds: [],
+      acceptedUncertaintyObligationIds: [],
+      generatedAt: '2026-08-27T00:00:00.000Z',
+    };
+
+    it('Intake and Priorities no longer render the same screen', async () => {
+      renderLiveWorkspace(
+        buildFixtureCaseState({
+          id: CASE_ID,
+          entities: [RANKED_CAR],
+          criteria: [BUDGET_CRITERION],
+        }),
+      );
+      const user = await startDemoAndWait();
+
+      await goToWorkflowStage(user, 'intake');
+      await waitFor(() => {
+        expect(screen.getByTestId('case-stage-intake')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('case-stage-intake-option-count')).toHaveTextContent(
+        '1 car on this case',
+      );
+      expect(screen.queryByTestId('case-stage-priorities')).not.toBeInTheDocument();
+
+      await goToWorkflowStage(user, 'priorities');
+      await waitFor(() => {
+        expect(screen.getByTestId('case-stage-priorities')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('case-stage-intake')).not.toBeInTheDocument();
+    });
+
+    it('Review owns the option views, the lens strip and the filter bar', async () => {
+      renderLiveWorkspace(
+        buildFixtureCaseState({
+          id: CASE_ID,
+          entities: [RANKED_CAR],
+          criteria: [BUDGET_CRITERION],
+          recommendation: READY_RECOMMENDATION,
+          view: { mode: 'list' },
+        }),
+      );
+      const user = await startDemoAndWait();
+
+      await goToWorkflowStage(user, 'intake');
+      await waitFor(() => {
+        expect(screen.getByTestId('case-stage-intake')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('workspace-view-switcher')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('disclosure-still-checking')).not.toBeInTheDocument();
+
+      await goToWorkflowStage(user, 'review');
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-view-switcher')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('option-list-view-card-candidate-rav4')).toBeInTheDocument();
+      expect(screen.getByTestId('disclosure-still-checking')).toBeInTheDocument();
+    });
+
+    it('Decide owns the approval controls, and the recommendation hero stays on every step', async () => {
+      renderLiveWorkspace(
+        buildFixtureCaseState({
+          id: CASE_ID,
+          entities: [RANKED_CAR],
+          criteria: [BUDGET_CRITERION],
+          recommendation: READY_RECOMMENDATION,
+          proposal: {
+            id: 'prop-1',
+            recommendationId: 'rec-1',
+            status: 'pending',
+            createdAt: '2026-08-27T00:00:00.000Z',
+          },
+        }),
+      );
+      const user = await startDemoAndWait();
+
+      // A pending proposal is the action awaiting the person, so Decide is
+      // where the derived workflow puts them -- the approval controls are met
+      // on arrival, not hunted for.
+      await waitFor(() => {
+        expect(screen.getByTestId('approval-card-approve')).toBeInTheDocument();
+      });
+
+      await goToWorkflowStage(user, 'review');
+      await waitFor(() => {
+        expect(screen.queryByTestId('approval-card-approve')).not.toBeInTheDocument();
+      });
+      // ADR 0004's answer-first region is NOT stage-owned: the recommendation
+      // is still on screen while the person revisits an upstream step, which
+      // is what `assertRecommendationHeroAboveTheFold` asserts in the browser.
+      expect(screen.getByTestId('recommendation-hero')).toBeInTheDocument();
+      expect(screen.getByTestId('recommendation-card')).toBeInTheDocument();
+
+      await goToWorkflowStage(user, 'decide');
+      await waitFor(() => {
+        expect(screen.getByTestId('approval-card-approve')).toBeInTheDocument();
+      });
+    });
+
+    it('shows a stage’s regions where the person is standing when that stage cannot be reached at all', async () => {
+      // A case with nothing to review: Review is `unavailable`, so gating its
+      // regions behind it would delete them rather than relocate them. The
+      // change set is absolute -- no capability may end up somewhere the pane
+      // cannot reach -- so the gate stands down exactly there.
+      renderLiveWorkspace(buildFixtureCaseState({ id: CASE_ID, entities: [], criteria: [] }));
+      await startDemoAndWait();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('case-stage-intake')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('workspace-view-switcher')).toBeInTheDocument();
+      expect(screen.getByTestId('disclosure-still-checking')).toBeInTheDocument();
     });
   });
 
@@ -4810,6 +5019,8 @@ describe('App scoreboard', () => {
   it('ranks the option cards and explains the rank in the profile', async () => {
     renderLiveWorkspace(RANKED_CASE);
     const user = await startDemoAndWait();
+    // Review owns the option views, the lens strip and the filter bar (ADR 0016).
+    await goToWorkflowStage(user, 'review');
 
     await user.click(screen.getByTestId('workspace-view-tab-list'));
 

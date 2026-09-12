@@ -316,9 +316,6 @@ test.describe('Bid Comparison -- full demo journey', () => {
     // ADR 0009: the filter surface is pack-agnostic, exercised a third time
     // here against a THIRD pack's own declared attributes/`optionLabelPlural`
     // ("Bids").
-    await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
-    await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
-
     // Two identity strings, not one, and the second is here for a reason
     // this spec learned the hard way. When this case grew from three bids
     // to twelve, `maxDiffPixelRatio: 0.01` genuinely absorbed the whole
@@ -349,6 +346,15 @@ test.describe('Bid Comparison -- full demo journey', () => {
       ],
       { mask: masks, maxDiffPixelRatio: 0.01 },
     );
+
+    // Deliberately AFTER the capture above. The filter surface is Review-owned
+    // now (ADR 0016), and navigating there before the shot would have made a
+    // baseline called `seeded-case` depict the Review stage rather than the
+    // state a person actually lands on -- the named baseline would still pass
+    // while quietly showing the wrong screen.
+    await sift.goToWorkflowStage('review');
+    await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
+    await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
     // --- Workspace view switcher: Compare narrows to a head-to-head pair
     // (real entity order -- `BID_COMPARISON_ENTITY_IDS` needs no separate
@@ -569,6 +575,10 @@ test.describe('Bid Comparison -- full demo journey', () => {
     // it genuinely exists. The click itself is deferred to the very end of
     // this journey (see this file's header comment's "Ordering note") so 6b's
     // own reweight below runs against a still-`ready` recommendation. ---
+    // Approval controls are Decide-owned now (ADR 0016; the change set:
+    // "Approval controls belong to Decide"). A pending proposal is exactly
+    // what makes Decide reachable, so this is navigation, not a workaround.
+    await sift.goToWorkflowStage('decide');
     await expect(page.getByTestId('approval-card-pending')).toBeVisible();
     await assertRightPaneIntegrity(page, ['approval-card-approve', 'approval-card-reject']);
 
@@ -669,6 +679,11 @@ test.describe('Bid Comparison -- full demo journey', () => {
     await assertRightPaneIntegrity(page, ['approval-card-approve', 'approval-card-reject']);
 
     await withVolatileRegionsHidden(page, async () => {
+      // The approval card is Decide-owned, and this capture's whole identity is
+      // "a decision is waiting on you" -- so stand on Decide before the shot.
+      // Earlier steps in this journey navigate to Review and Analysis, so the
+      // active stage at this point is not implied by the one set above.
+      await sift.goToWorkflowStage('decide');
       await expectNamedScreenshot(
         page,
         page.getByTestId('case-workspace'),

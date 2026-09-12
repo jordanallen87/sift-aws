@@ -385,10 +385,17 @@ export function HowSiftWorksContent({
         </h3>
         <p className="text-[length:var(--font-size-sm)] leading-[var(--line-height-normal)] text-foreground">
           Your assistant can research, reweight, re-frame and ask for a revision. It cannot approve.{' '}
-          <strong className="font-[var(--font-weight-semibold)]">Choose this</strong>,{' '}
+          {/* These three name the real controls `ApprovalCard` renders. They
+            drifted once already: this paragraph went on saying "Choose this"
+            and "Keep researching" after both were renamed, so the help
+            described buttons that no longer existed. The select action now
+            interpolates the recommendation's own name ("Select Northgate
+            Plumbing"), so it is named here by its verb rather than by a
+            label this text cannot know. */}
+          <strong className="font-[var(--font-weight-semibold)]">Select</strong>,{' '}
           <strong className="font-[var(--font-weight-semibold)]">Pass</strong> and{' '}
-          <strong className="font-[var(--font-weight-semibold)]">Keep researching</strong> are yours
-          alone — no tool in the catalog can reach them.
+          <strong className="font-[var(--font-weight-semibold)]">Continue investigation</strong> are
+          yours alone — no tool in the catalog can reach them.
         </p>
       </section>
     </div>

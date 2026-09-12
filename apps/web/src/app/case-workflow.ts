@@ -20,6 +20,19 @@ export interface CaseWorkflowFacts {
   readonly prioritiesComplete: boolean;
   readonly analysisStarted: boolean;
   readonly analysisComplete: boolean;
+  /**
+   * Review's own work is possible: there is something to triage or compare.
+   *
+   * Distinct from `reviewComplete`, and the same kind of fact
+   * `analysisStarted` already is. It exists because Review OWNS Quick Pick,
+   * List, Compare, Board and filters (ADR 0016's stage-ownership table), and
+   * those are usable from the moment a case has options -- long before a
+   * recommendation exists. Without this, availability derived purely from
+   * `analysisComplete` made Review unreachable on every un-investigated case,
+   * so gating the option views on the stage that owns them would have taken
+   * Keep/Unsure/Pass away entirely rather than giving it a home.
+   */
+  readonly reviewStarted: boolean;
   readonly reviewComplete: boolean;
   readonly decisionAvailable: boolean;
   readonly decided: boolean;
@@ -62,7 +75,7 @@ export function deriveCaseWorkflow(facts: CaseWorkflowFacts): CaseWorkflow {
       (facts.intakeComplete && facts.prioritiesComplete) ||
       facts.analysisStarted ||
       facts.analysisComplete,
-    review: facts.analysisComplete || facts.reviewComplete,
+    review: facts.analysisComplete || facts.reviewStarted || facts.reviewComplete,
     decide: facts.decisionAvailable || facts.decided,
   };
 

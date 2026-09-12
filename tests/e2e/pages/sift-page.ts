@@ -111,6 +111,15 @@ export const HOME_ENERGY_RESPONSE_OPTIONS_OBLIGATION_ID = 'energy.response_optio
  * The first three are the bids the scripted narrative names individually; the remaining nine
  * are the also-ran bids that make this a realistic twelve-bidder public bid tab.
  */
+/** The stepper's own visible label per stage id (`case-workflow.ts`'s `LABELS`), used to confirm a stage change from the narrow compact affordance's accessible name. */
+const STAGE_LABELS: Record<'intake' | 'priorities' | 'analysis' | 'review' | 'decide', string> = {
+  intake: 'Intake',
+  priorities: 'Priorities',
+  analysis: 'Analysis',
+  review: 'Review',
+  decide: 'Decide',
+};
+
 export const BID_COMPARISON_ENTITY_IDS = [
   'bid-northgate',
   'bid-cedar',
@@ -660,7 +669,65 @@ export class SiftPage {
    * and "What Sift found" into the app bar/alert banner above it, but never
    * touched this switcher's own position).
    */
+  /**
+   * Navigates the guided stepper (ADR 0016) to one of the five workflow
+   * stages, the way a person does.
+   *
+   * Necessary because each stage now OWNS its regions rather than the
+   * workspace rendering all of them at once: the option views, filters and
+   * lens switcher live on Review, the criteria surfaces on Priorities, the
+   * approval controls on Decide. A spec that drives one of those has to be
+   * standing on the owning step first.
+   *
+   * Both presentations are handled. At expanded width all five labels are on
+   * one row and the step button is directly clickable; at narrow width they
+   * sit behind the compact progress affordance, which this opens first. The
+   * `case-workflow-step-*` test ids exist in both, so the only difference is
+   * whether the list needs revealing.
+   *
+   * Idempotent: calling it for the stage already active is a no-op, so a spec
+   * may call it defensively before any stage-owned interaction.
+   */
+  async goToWorkflowStage(
+    stageId: 'intake' | 'priorities' | 'analysis' | 'review' | 'decide',
+  ): Promise<void> {
+    // Wait for the stepper itself before deciding which presentation this is.
+    // Without this, a page that is still mounting (a reload, or a case being
+    // restored) reports the step button "not visible", falls through to the
+    // compact affordance, and times out clicking a toggle that the expanded
+    // presentation never renders.
+    await expect(this.page.getByTestId('case-workflow-stepper')).toBeVisible();
+
+    const step = this.page.getByTestId(`case-workflow-step-${stageId}`);
+    if (!(await step.isVisible().catch(() => false))) {
+      const toggle = this.page.getByTestId('case-workflow-stepper-toggle');
+      // Only the narrow presentation has one; at expanded width every step is
+      // already on the row, so an invisible step there means something real
+      // is wrong and the assertion below should say so rather than hang.
+      if (await toggle.isVisible().catch(() => false)) await toggle.click();
+    }
+    await expect(step).toBeVisible();
+    await step.click();
+
+    // Confirming the move is presentation-specific, because the narrow step
+    // list UNMOUNTS on selection: asserting `aria-current` on the step button
+    // works at expanded width and fails at narrow against an element that no
+    // longer exists. At narrow the compact affordance is what survives, and
+    // its accessible name already names the active stage ("Review, step 4 of
+    // 5"), so that is the stable thing to wait on.
+    const toggle = this.page.getByTestId('case-workflow-stepper-toggle');
+    if (await toggle.isVisible().catch(() => false)) {
+      await expect(toggle).toHaveAttribute('aria-label', new RegExp(`^${STAGE_LABELS[stageId]},`));
+      return;
+    }
+    await expect(this.page.getByTestId(`case-workflow-step-${stageId}`)).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+  }
+
   async selectWorkspaceView(mode: 'quick_pick' | 'list' | 'compare' | 'board'): Promise<void> {
+    await this.goToWorkflowStage('review');
     await this.page.getByTestId(`workspace-view-tab-${mode}`).click();
     await expect(this.page.getByTestId(`workspace-view-content-${mode}`)).toBeVisible();
   }
@@ -803,6 +870,8 @@ export class SiftPage {
    * exactly that mistake with a different sheet.
    */
   async openFilterSheet(): Promise<void> {
+    // Filters are Review-owned (ADR 0016).
+    await this.goToWorkflowStage('review');
     await this.openSheetVia('workspace-filter-open', 'workspace-filter-sheet');
   }
 
@@ -821,6 +890,8 @@ export class SiftPage {
    * is: mounted once as global chrome above the narrow/expanded split.
    */
   async openOptionProfile(optionId: string): Promise<void> {
+    // Option profiles are Review-owned (ADR 0016).
+    await this.goToWorkflowStage('review');
     await this.openSheetVia(`option-card-open-profile-${optionId}`, 'option-profile-sheet');
   }
 
@@ -843,6 +914,8 @@ export class SiftPage {
    * main-column toolbar's "Your priorities" button, which opens a Sheet.
    */
   async openDecisionProfile(): Promise<Locator> {
+    // The Decision Profile is Priorities-owned (ADR 0016).
+    await this.goToWorkflowStage('priorities');
     if (isNarrowLayout(this.page)) {
       await this.openDisclosure('decision-profile');
       return this.page.getByTestId('disclosure-decision-profile');
@@ -976,7 +1049,18 @@ export class SiftPage {
     // sleep, and not a retry around the screenshot -- removes the race at its
     // source, the same way `reweightCriteria` itself replaced the out-of-band
     // POST that used to race the page's cached snapshot.
-    await expect(this.page.getByTestId('workspace-app-bar-create-menu-content')).toBeHidden();
+    //
+    // Waiting alone was not enough once the guided stages landed: the stage
+    // navigation changes what has focus when the Sheet unmounts, so Radix can
+    // leave the menu genuinely open rather than merely mid-animation, and a
+    // wait for it to hide then burns its whole timeout. Escape is the same
+    // dismissal a person would use and settles it deterministically; the wait
+    // below still guards the animation.
+    const createMenu = this.page.getByTestId('workspace-app-bar-create-menu-content');
+    if (await createMenu.isVisible().catch(() => false)) {
+      await this.page.keyboard.press('Escape');
+    }
+    await expect(createMenu).toBeHidden();
   }
 
   /** The `openAddConcern` counterpart -- see `closeNotes` above for why closing is no longer optional in pane mode. */
@@ -984,20 +1068,16 @@ export class SiftPage {
     await this.closeSheet('workspace-add-concern-sheet');
   }
 
-  /** Opens findings from the expanded app bar or, in the guided narrow pane, its Analysis stage. Both controls open the same sheet. */
+  /**
+   * Opens findings from the Analysis stage, which owns them at every width
+   * now (ADR 0016). The app-bar control this used to prefer at expanded
+   * width is gone: leaving it there gave the expanded layout two entry
+   * points to one sheet, one of them contradicting the stage that claims
+   * ownership.
+   */
   async openFindingsSheet(): Promise<void> {
-    const appBarTrigger = this.page.getByTestId('workspace-app-bar-findings');
-    let triggerTestId = 'workspace-app-bar-findings';
-    if (!(await appBarTrigger.isVisible().catch(() => false))) {
-      const analysisTrigger = this.page.getByTestId('case-stage-analysis-open-findings');
-      if (!(await analysisTrigger.isVisible().catch(() => false))) {
-        const stepper = this.page.getByTestId('case-workflow-stepper');
-        await stepper.getByTestId('case-workflow-stepper-toggle').click();
-        await stepper.getByRole('button', { name: /^Analysis, / }).click();
-      }
-      triggerTestId = 'case-stage-analysis-open-findings';
-    }
-    await this.openSheetVia(triggerTestId, 'findings-sheet');
+    await this.goToWorkflowStage('analysis');
+    await this.openSheetVia('case-stage-analysis-open-findings', 'findings-sheet');
   }
 
   /** Fills and submits `CustomConcernForm` without asserting the outcome -- used directly by tests that expect a real error (`error-recovery.spec.ts`); `submitCustomConcern` below is the success-asserting convenience wrapper every other spec uses. Opens the layout-appropriate "Add a question" region first via `openAddConcern` (ADR 0008). */

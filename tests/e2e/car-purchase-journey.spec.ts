@@ -196,8 +196,6 @@ test.describe('Choose our next car -- full demo journey', () => {
     // as durable state nothing read. Asserted UNCONDITIONALLY, outside the
     // layout branch above, precisely because "the same in both modes" is
     // the property under test.
-    await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
-    await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
     // A second identity string, for the reason `bid-comparison-journey.spec.ts`'s
     // own `seeded-case.png` call documents in full: when that pack's case grew
@@ -220,6 +218,13 @@ test.describe('Choose our next car -- full demo journey', () => {
       ],
       { mask: masks, maxDiffPixelRatio: 0.01 },
     );
+
+    // Deliberately AFTER the capture above: the filter surface is Review-owned
+    // now (ADR 0016), and navigating there first would make a baseline called
+    // `seeded-case` depict Review rather than the state a person lands on.
+    await sift.goToWorkflowStage('review');
+    await expect(page.getByTestId('workspace-filter-bar')).toBeVisible();
+    await expect(page.getByTestId('workspace-filter-open')).toBeVisible();
 
     // --- Workspace view switcher (ADR 0004 item 5; ADR 0005): always
     // expanded, never a disclosure -- renders directly below
@@ -467,6 +472,10 @@ test.describe('Choose our next car -- full demo journey', () => {
     await sift.waitForRecommendationReady();
 
     // --- Revised recommendation + human-only approval ---
+    // Approval controls are Decide-owned now (ADR 0016; the change set:
+    // "Approval controls belong to Decide"). A pending proposal is exactly
+    // what makes Decide reachable, so this is navigation, not a workaround.
+    await sift.goToWorkflowStage('decide');
     await expect(page.getByTestId('approval-card-pending')).toBeVisible();
     await assertNoSeriousAxeViolations(page, 'awaiting human approval');
 
@@ -501,6 +510,11 @@ test.describe('Choose our next car -- full demo journey', () => {
     ]);
     await sift.closeManageOptionsSheet();
 
+    // The approval card is Decide-owned, and this capture's whole identity is
+    // "a decision is waiting on you" -- so stand on Decide before the shot.
+    // Earlier steps in this journey navigate to Review and Analysis, so the
+    // active stage at this point is not implied by the one set above.
+    await sift.goToWorkflowStage('decide');
     await withVolatileRegionsHidden(page, () =>
       expectNamedScreenshot(
         page,

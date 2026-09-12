@@ -455,6 +455,47 @@ export function checkExtensionPolicy(manifest: DecisionPackManifest): PackCompil
  * failure -- a dangling reference -- and is already caught by step 3's
  * `checkDanglingReferences`, not repeated here.)
  */
+/**
+ * Every lens must name attributes this pack actually declares, and must name
+ * each one once.
+ *
+ * Without this a typo is invisible at authoring time and silently degrading
+ * at runtime: selecting the lens writes `visibleAttributeIds` containing an
+ * id nothing matches, so the person gets a comparison with a column missing
+ * and no indication anything went wrong. A duplicate is the same class of
+ * quiet defect -- it renders the same column twice.
+ */
+export function checkLensReferences(manifest: DecisionPackManifest): PackCompilationIssue[] {
+  const lenses = manifest.lenses ?? [];
+  if (lenses.length === 0) return [];
+
+  const declaredAttributeIds = new Set(manifest.attributes.map((attribute) => attribute.id));
+  const issues: PackCompilationIssue[] = [];
+
+  for (const lens of lenses) {
+    const seen = new Set<string>();
+    for (const attributeId of lens.attributeIds) {
+      if (!declaredAttributeIds.has(attributeId)) {
+        issues.push({
+          step: 'ui_renderability' as const,
+          message: `Lens "${lens.id}" names attribute "${attributeId}", which this pack does not declare, so selecting it would hide a column with no explanation.`,
+          path: `lenses["${lens.id}"].attributeIds`,
+        });
+      }
+      if (seen.has(attributeId)) {
+        issues.push({
+          step: 'ui_renderability' as const,
+          message: `Lens "${lens.id}" names attribute "${attributeId}" more than once, which would render the same column twice.`,
+          path: `lenses["${lens.id}"].attributeIds`,
+        });
+      }
+      seen.add(attributeId);
+    }
+  }
+
+  return issues;
+}
+
 export function checkUiRenderability(manifest: DecisionPackManifest): PackCompilationIssue[] {
   const renderableAttributeIds = new Set(
     manifest.presentation.attributeGroups.flatMap((group) => group.attributeIds),

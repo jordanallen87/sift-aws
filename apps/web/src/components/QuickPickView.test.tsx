@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import type { AttributeDefinition, EntityRecord } from '@sift/contracts';
@@ -1208,5 +1208,328 @@ describe('QuickPickView: reactive segmented Pass/Unsure/Keep control', () => {
     });
     expect(screen.getByTestId('quick-pick-keep')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('quick-pick-current-disposition')).toHaveTextContent(/kept/i);
+  });
+});
+
+/*
+ * Swipe to triage (this task) -- see QuickPickView.tsx's file-header "SWIPE
+ * TO TRIAGE" section for the design these pin.
+ *
+ * jsdom has no pointer physics and no layout engine: it does implement
+ * `PointerEvent` (so `clientX`/`pointerId` survive `fireEvent`), but it does
+ * not implement `setPointerCapture`/`releasePointerCapture` at all (the
+ * component feature-detects both for exactly this reason) and
+ * `getBoundingClientRect().width` is always 0. That zero width is why every
+ * gesture below is judged against `SWIPE_COMMIT_MIN_DISTANCE_PX` (56px), the
+ * floor under the fractional threshold -- the fraction itself contributes
+ * nothing here. Gestures are therefore driven with explicit coordinates,
+ * never with `userEvent`'s pointer simulation, so what commits and what does
+ * not is arithmetic rather than timing.
+ */
+const SWIPE_POINTER_ID = 7;
+
+/**
+ * Drives one pointer gesture across `card`. `positions` are absolute
+ * `clientX` values: the first is where the pointer went down, the rest are
+ * `pointermove`s, and the gesture ends at the last one with `pointerup`
+ * (`end: 'cancel'` sends `pointercancel` instead; `'none'` leaves the
+ * pointer down).
+ */
+function swipeCard(card: HTMLElement, positions: number[], end: 'up' | 'cancel' | 'none' = 'up') {
+  const [start, ...moves] = positions;
+  fireEvent.pointerDown(card, {
+    pointerId: SWIPE_POINTER_ID,
+    button: 0,
+    clientX: start,
+    clientY: 0,
+  });
+  for (const x of moves) {
+    fireEvent.pointerMove(card, { pointerId: SWIPE_POINTER_ID, clientX: x, clientY: 0 });
+  }
+  const last = moves.length > 0 ? moves[moves.length - 1]! : start!;
+  if (end === 'up') {
+    fireEvent.pointerUp(card, { pointerId: SWIPE_POINTER_ID, clientX: last, clientY: 0 });
+  }
+  if (end === 'cancel') {
+    fireEvent.pointerCancel(card, { pointerId: SWIPE_POINTER_ID, clientX: last, clientY: 0 });
+  }
+}
+
+describe('QuickPickView: swipe to triage', () => {
+  // `matchMedia` is stubbed by the reduced-motion tests below; unstub after
+  // every test in this block so it can never leak into a later one.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function renderAndGetCard(overrides: Partial<QuickPickViewProps> = {}) {
+    const rendered = renderQuickPick({ position: 1, ...overrides });
+    return { ...rendered, card: screen.getByTestId('quick-pick-card-candidate-crv') };
+  }
+
+  it('commits a swipe left as Pass -- once, with the option on screen, and never as Keep or Unsure', () => {
+    const { card, onPass, onKeep, onUnsure } = renderAndGetCard();
+
+    swipeCard(card, [260, 180, 60]);
+
+    expect(onPass).toHaveBeenCalledTimes(1);
+    expect(onPass).toHaveBeenCalledWith('candidate-crv');
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(onUnsure).not.toHaveBeenCalled();
+  });
+
+  it('commits a swipe right as Keep -- once, with the option on screen, and never as Pass or Unsure', () => {
+    const { card, onPass, onKeep, onUnsure } = renderAndGetCard();
+
+    swipeCard(card, [40, 120, 240]);
+
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(onKeep).toHaveBeenCalledWith('candidate-crv');
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onUnsure).not.toHaveBeenCalled();
+  });
+
+  it('follows the pointer while the drag is in flight, without committing anything mid-drag', () => {
+    const { card, onPass, onKeep } = renderAndGetCard();
+
+    swipeCard(card, [200, 20], 'none');
+
+    // Already far past the commit threshold, but the pointer is still down:
+    // WCAG 2.5.2 forbids the down/move events from being the commit point.
+    expect(card).toHaveAttribute('data-swipe-phase', 'dragging');
+    expect(card.style.transform).toContain('translateX(-180px)');
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+  });
+
+  it('springs back and commits nothing when the drag is released short of the threshold', () => {
+    const { card, onPass, onKeep, onUnsure } = renderAndGetCard();
+
+    // 24px of travel: under the 56px distance floor AND under the 32px
+    // minimum the velocity escape hatch itself requires, so no amount of
+    // apparent speed can commit it.
+    swipeCard(card, [100, 112, 124]);
+
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(onUnsure).not.toHaveBeenCalled();
+    expect(card).toHaveAttribute('data-swipe-phase', 'settling');
+    expect(card.style.transform).toBe('translateX(0px) rotate(0deg)');
+  });
+
+  it('commits nothing when a drag taken well past the threshold is brought back to where it started (WCAG 2.5.2 pointer cancellation)', () => {
+    const { card, onPass, onKeep, onUnsure } = renderAndGetCard();
+
+    // Out to -200px (well past commit), then back to the start before
+    // release: the up-event is the only commit point, and it is judged on
+    // where the pointer actually ended.
+    swipeCard(card, [300, 100, 180, 296]);
+
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(onUnsure).not.toHaveBeenCalled();
+    expect(card).toHaveAttribute('data-swipe-phase', 'settling');
+  });
+
+  it('commits nothing when the browser cancels the pointer mid-gesture', () => {
+    const { card, onPass, onKeep, onUnsure } = renderAndGetCard();
+
+    swipeCard(card, [300, 40], 'cancel');
+
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(onUnsure).not.toHaveBeenCalled();
+    expect(card).toHaveAttribute('data-swipe-phase', 'settling');
+  });
+
+  it('commits nothing for a purely vertical drag -- Unsure is never bound to an axis', () => {
+    const { card, onPass, onKeep, onUnsure } = renderAndGetCard();
+
+    fireEvent.pointerDown(card, {
+      pointerId: SWIPE_POINTER_ID,
+      button: 0,
+      clientX: 150,
+      clientY: 0,
+    });
+    fireEvent.pointerMove(card, { pointerId: SWIPE_POINTER_ID, clientX: 150, clientY: 160 });
+    fireEvent.pointerUp(card, { pointerId: SWIPE_POINTER_ID, clientX: 150, clientY: 320 });
+
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(onUnsure).not.toHaveBeenCalled();
+  });
+
+  it('leaves vertical scrolling to the browser rather than claiming both axes', () => {
+    const { card } = renderAndGetCard();
+    expect(card.style.touchAction).toBe('pan-y');
+  });
+
+  // WCAG 2.5.1 Pointer Gestures (Level A): a path-based gesture needs a
+  // single-pointer, non-path alternative. The three buttons ARE it, so they
+  // must stay present, operable, and unhidden now that swipe exists.
+  it('keeps Pass, Unsure, and Keep visible and fully working alongside the gesture (WCAG 2.5.1)', async () => {
+    const user = userEvent.setup();
+    const { onPass, onUnsure, onKeep } = renderAndGetCard();
+
+    const pass = screen.getByTestId('quick-pick-pass');
+    const unsure = screen.getByTestId('quick-pick-unsure');
+    const keep = screen.getByTestId('quick-pick-keep');
+    expect(pass).toBeVisible();
+    expect(unsure).toBeVisible();
+    expect(keep).toBeVisible();
+    expect(pass).not.toHaveAttribute('aria-hidden');
+    expect(unsure).not.toHaveAttribute('aria-hidden');
+    expect(keep).not.toHaveAttribute('aria-hidden');
+
+    await user.click(pass);
+    expect(onPass).toHaveBeenCalledWith('candidate-crv');
+    await user.click(unsure);
+    expect(onUnsure).toHaveBeenCalledWith('candidate-crv');
+    await user.click(keep);
+    expect(onKeep).toHaveBeenCalledWith('candidate-crv');
+  });
+
+  it('keeps all three actions reachable and activatable by keyboard alone now that swipe exists (WCAG 2.5.1)', async () => {
+    const user = userEvent.setup();
+    const { onPass, onUnsure, onKeep } = renderAndGetCard();
+
+    await user.tab();
+    expect(screen.getByTestId('quick-pick-pass')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onPass).toHaveBeenCalledWith('candidate-crv');
+
+    await user.tab();
+    expect(screen.getByTestId('quick-pick-unsure')).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onUnsure).toHaveBeenCalledWith('candidate-crv');
+
+    await user.tab();
+    expect(screen.getByTestId('quick-pick-keep')).toHaveFocus();
+    await user.keyboard(' ');
+    expect(onKeep).toHaveBeenCalledWith('candidate-crv');
+  });
+
+  it('never turns a press that started on an action button into a drag', () => {
+    const { card, onPass, onKeep } = renderAndGetCard();
+    const pass = screen.getByTestId('quick-pick-pass');
+
+    // A press that begins on the button and wanders must stay a button
+    // press attempt, never a card gesture -- otherwise the 2.5.1
+    // alternative would be eaten by the gesture it exists to replace.
+    fireEvent.pointerDown(pass, {
+      pointerId: SWIPE_POINTER_ID,
+      button: 0,
+      clientX: 200,
+      clientY: 0,
+    });
+    fireEvent.pointerMove(card, { pointerId: SWIPE_POINTER_ID, clientX: 10, clientY: 0 });
+    fireEvent.pointerUp(card, { pointerId: SWIPE_POINTER_ID, clientX: 10, clientY: 0 });
+
+    expect(card).toHaveAttribute('data-swipe-phase', 'idle');
+    expect(onPass).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+  });
+
+  it('shows a committed swipe as the selected segment in the same render, exactly as a button press does', () => {
+    const { card } = renderAndGetCard();
+
+    swipeCard(card, [40, 120, 240]);
+
+    expect(screen.getByTestId('quick-pick-keep')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('quick-pick-current-disposition')).toHaveTextContent(/kept/i);
+  });
+
+  it('honours the documented optional-promise revert contract on the swipe path, not just the button path', async () => {
+    const onPass = vi.fn(() => Promise.reject(new Error('network error')));
+    const { card } = renderAndGetCard({ onPass });
+
+    swipeCard(card, [260, 180, 40]);
+    expect(onPass).toHaveBeenCalledWith('candidate-crv');
+    expect(screen.getByTestId('quick-pick-pass')).toHaveAttribute('aria-pressed', 'true');
+
+    // The command never landed -- the swipe must leave the card showing a
+    // choice the case does not hold no more than a button press would.
+    await waitFor(() => {
+      expect(screen.getByTestId('quick-pick-pass')).toHaveAttribute('aria-pressed', 'false');
+    });
+    expect(screen.queryByTestId('quick-pick-current-disposition')).not.toBeInTheDocument();
+  });
+
+  it('does not re-dispatch a disposition the option already holds, and settles the card instead of flying it out', () => {
+    const { card, onPass } = renderAndGetCard({ dispositions: { 'candidate-crv': 'pass' } });
+
+    swipeCard(card, [260, 180, 40]);
+
+    expect(onPass).not.toHaveBeenCalled();
+    expect(card).toHaveAttribute('data-swipe-phase', 'settling');
+  });
+
+  it('flies the card out on a committed swipe, on token motion durations', () => {
+    const { card } = renderAndGetCard();
+
+    swipeCard(card, [260, 180, 40]);
+
+    expect(card).toHaveAttribute('data-swipe-phase', 'flinging');
+    expect(card.style.transform).toContain('translateX(-120%)');
+    expect(card.style.transition).toContain('var(--duration-normal)');
+  });
+
+  describe('prefers-reduced-motion', () => {
+    function stubReducedMotion() {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('prefers-reduced-motion'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      }));
+    }
+
+    it('renders the whole card normally when less motion is asked for', () => {
+      stubReducedMotion();
+      renderAndGetCard();
+
+      expect(screen.getByTestId('quick-pick-option-label')).toHaveTextContent(
+        '2025 Honda CR-V EX-L',
+      );
+      expect(screen.getByTestId('quick-pick-highlight-price')).toHaveTextContent('$32,400');
+      expect(screen.getByTestId('quick-pick-pass')).toBeVisible();
+      expect(screen.getByTestId('quick-pick-unsure')).toBeVisible();
+      expect(screen.getByTestId('quick-pick-keep')).toBeVisible();
+    });
+
+    it('still commits a swipe, but plays no fly-out -- the card returns straight to rest', () => {
+      stubReducedMotion();
+      const { card, onKeep } = renderAndGetCard();
+
+      swipeCard(card, [40, 120, 240]);
+
+      expect(onKeep).toHaveBeenCalledTimes(1);
+      expect(onKeep).toHaveBeenCalledWith('candidate-crv');
+      // No transient animation state to end, so nothing depends on a
+      // `transitionend` that a zero-length transition may never fire.
+      expect(card).toHaveAttribute('data-swipe-phase', 'idle');
+      expect(card.style.transform).toBe('');
+      expect(card.style.transition).toBe('');
+    });
+
+    it('plays no spring-back either -- a released sub-threshold drag simply stops', () => {
+      stubReducedMotion();
+      const { card, onPass, onKeep } = renderAndGetCard();
+
+      swipeCard(card, [100, 112, 124]);
+
+      expect(onPass).not.toHaveBeenCalled();
+      expect(onKeep).not.toHaveBeenCalled();
+      expect(card).toHaveAttribute('data-swipe-phase', 'idle');
+      expect(card.style.transform).toBe('');
+    });
+  });
+
+  it('has no axe violations mid-gesture', async () => {
+    const { container } = renderAndGetCard();
+    swipeCard(container.querySelector('article')!, [200, 60], 'none');
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

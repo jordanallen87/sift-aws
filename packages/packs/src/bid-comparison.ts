@@ -832,6 +832,44 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
   // reader's own project, and never that satisfying one of these checks
   // makes an award lawful. That determination is always the human's own,
   // informed by their own counsel and their own jurisdiction.
+  /**
+   * Three lenses, because twelve bids is the point at which a person stops
+   * reading a wide table and starts sorting by whichever number is nearest.
+   * Each one answers a question a person choosing a subcontractor actually
+   * asks, and the three together cover every attribute -- but they overlap
+   * deliberately: `bid.adjusted_total` appears under both Price and Risk,
+   * because "is this the cheapest" and "can this bidder actually do it for
+   * that" are different questions about the same number.
+   */
+  lenses: [
+    {
+      id: 'bid.lens.price',
+      label: 'Price',
+      description:
+        'What each bid costs once every bid prices the same work -- and what it quoted before that correction.',
+      attributeIds: ['bid.quoted_total', 'bid.adjusted_total', 'bid.scope_completeness'],
+    },
+    {
+      id: 'bid.lens.schedule',
+      label: 'Schedule & warranty',
+      description: 'When each bidder can start, how long they need, and what they stand behind.',
+      attributeIds: ['bid.start_weeks', 'bid.duration_days', 'bid.warranty_months'],
+    },
+    {
+      id: 'bid.lens.risk',
+      label: 'Credentials & risk',
+      description:
+        'Whether each bidder is licensed and insured for this scope, and how much money you are asked for up front.',
+      attributeIds: [
+        'bid.credentials_valid',
+        'bid.license_status',
+        'bid.insurance_named_insured_match',
+        'bid.deposit_percent',
+        'bid.adjusted_total',
+      ],
+    },
+  ],
+
   compliance: {
     disclaimer:
       'These are informational minimums on the party making the award -- not a cap on how many bids may be received, and not a claim that any particular number is typical. They are not legal advice: confirm which rules actually govern this award in your own jurisdiction before relying on them.',

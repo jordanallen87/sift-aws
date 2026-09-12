@@ -6,6 +6,7 @@ import {
   PackCompilationError,
   checkApprovalPolicies,
   checkExtensionPolicy,
+  checkLensReferences,
   checkUiRenderability,
   compilePack,
   validateNegativeScenarios,
@@ -561,6 +562,74 @@ describe('checkExtensionPolicy (step 8)', () => {
       },
     });
     expect(checkExtensionPolicy(manifest)).toEqual([]);
+  });
+});
+
+describe('checkLensReferences', () => {
+  it('accepts a manifest with no lenses at all', () => {
+    expect(checkLensReferences(validManifest())).toEqual([]);
+  });
+
+  it('rejects a lens naming an attribute the pack does not declare', () => {
+    const manifest = validManifest();
+    const issues = checkLensReferences({
+      ...manifest,
+      lenses: [
+        {
+          id: 'lens.made-up',
+          label: 'Made up',
+          description: 'Names a field that does not exist.',
+          attributeIds: ['attr.does-not-exist'],
+        },
+      ],
+    });
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.message).toContain('attr.does-not-exist');
+    expect(issues[0]?.path).toBe('lenses["lens.made-up"].attributeIds');
+  });
+
+  it('rejects a lens naming the same attribute twice, which would render one column twice', () => {
+    const manifest = validManifest();
+    const declared = manifest.attributes[0]?.id;
+    if (declared === undefined) {
+      throw new Error('test setup: validManifest() declares no attributes');
+    }
+    const issues = checkLensReferences({
+      ...manifest,
+      lenses: [
+        {
+          id: 'lens.dupe',
+          label: 'Dupe',
+          description: 'Names one field twice.',
+          attributeIds: [declared, declared],
+        },
+      ],
+    });
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.message).toContain('more than once');
+  });
+
+  it('accepts a lens whose attributes are all declared', () => {
+    const manifest = validManifest();
+    const declared = manifest.attributes[0]?.id;
+    if (declared === undefined) {
+      throw new Error('test setup: validManifest() declares no attributes');
+    }
+    expect(
+      checkLensReferences({
+        ...manifest,
+        lenses: [
+          {
+            id: 'lens.ok',
+            label: 'Fine',
+            description: 'Names only declared fields.',
+            attributeIds: [declared],
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 });
 

@@ -465,6 +465,63 @@ export const PackComplianceSchema = z
   .strict();
 export type PackCompliance = z.infer<typeof PackComplianceSchema>;
 
+/**
+ * A **lens**: a named subset of this pack's own attributes, so a person can
+ * look at the same options through one concern at a time.
+ *
+ * The product owner asked for this as "sub-views" and then asked what the
+ * right word was, because a lens is not a view: List, Compare, Board and
+ * Quick Pick decide the SHAPE the options are drawn in, and a lens decides
+ * WHICH FACTS are drawn in that shape. The two compose -- any lens applies
+ * to any view -- which is exactly why they cannot share a name. "Lens" also
+ * already carries the right connotation in ordinary English: you look
+ * through it, it does not change what you are looking at, and swapping it
+ * hides nothing permanently.
+ *
+ * A lens is pure presentation. Selecting one writes `visibleAttributeIds` on
+ * `WorkspaceViewState` (case.ts), which persists through
+ * `CaseStore.updateSelection()` and therefore can never advance
+ * `eventSequence` or invalidate a recommendation -- ADR 0005's whole point.
+ * No lens can hide an attribute from the scoring engine; `scoreCaseState`
+ * never reads this. It is what a person is shown, never what Sift measures,
+ * and that distinction is the reason this is safe to let a model edit.
+ *
+ * Distinct from `presentation.attributeGroups`, which is the nearest
+ * neighbour and the thing a reader will ask about. A group is part of an
+ * EXHAUSTIVE partition: `checkUiRenderability` fails a pack whose
+ * non-sensitive attribute belongs to no group, because groups are how a
+ * detail profile and the comparison table section everything they must
+ * show. A lens is the opposite shape -- deliberately partial, freely
+ * overlapping, and chosen by a person at runtime. The same attribute may
+ * appear in several lenses (a bid's adjusted total matters to both "Price"
+ * and "Award decision") and an attribute may appear in none. Collapsing the
+ * two would force every lens to be a partition, which is exactly the
+ * constraint that makes groups unsuitable for this.
+ *
+ * Declared by the pack rather than invented per case so the groupings carry
+ * the author's domain knowledge (a bid's "Price" concern is not a guess),
+ * and optional for the identical hash-stability reason `compliance` above
+ * is: `canonicalizeManifest` drops `undefined` before hashing, so a pack
+ * that declares no lenses hashes exactly as it did before this field
+ * existed and every stored `CasePackPin.compiledHash` stays valid.
+ */
+export const PackLensSchema = z
+  .object({
+    id: idString(),
+    /** The lens name a person picks from, e.g. "Price" or "Credentials & risk." Short: this renders in a 390px pane. */
+    label: safeString(60),
+    /** What this lens is for, in plain language -- shown so picking one is an informed choice rather than a guess at what got hidden. */
+    description: safeString(240),
+    /**
+     * The attribute ids this lens shows, in the order it shows them. Must be
+     * a non-empty subset of the pack's own `attributes`; a lens that shows
+     * nothing is an authoring mistake, not a legitimate empty state.
+     */
+    attributeIds: z.array(idString()).min(1).max(100),
+  })
+  .strict();
+export type PackLens = z.infer<typeof PackLensSchema>;
+
 export const DecisionPackManifestSchema = z
   .object({
     schemaVersion: z.literal('1.0'),
@@ -529,6 +586,12 @@ export const DecisionPackManifestSchema = z
      * `decisionGuide`'s and `discovery`'s immediately above.
      */
     compliance: PackComplianceSchema.optional(),
+
+    /**
+     * Named groupings of this pack's own attributes, for looking at the same
+     * options through one concern at a time. See `PackLensSchema` above.
+     */
+    lenses: z.array(PackLensSchema).max(12).optional(),
   })
   .strict();
 export type DecisionPackManifest = z.infer<typeof DecisionPackManifestSchema>;

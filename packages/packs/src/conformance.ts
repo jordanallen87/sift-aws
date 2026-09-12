@@ -52,6 +52,7 @@ import {
   checkUiRenderability,
   validateNegativeScenarios,
   validateOrchestrationBounds,
+  checkLensReferences,
 } from './compiler.js';
 import { resolveCapabilityReferences } from './capability-catalog.js';
 import type { CapabilityCatalog } from './capability-catalog.js';
@@ -126,10 +127,13 @@ export function runPackConformance(
     extensionIssues.map((issue) => issue.message),
   );
 
-  const renderabilityIssues = checkUiRenderability(pack);
+  // Lens references share the `ui_renderability` step because they fail the
+  // same way: an attribute the person should be able to see, that the
+  // renderer has no way to show.
+  const renderabilityIssues = [...checkUiRenderability(pack), ...checkLensReferences(pack)];
   const renderabilityCheck = summarize(
     'ui_renderability',
-    'Every declared, non-sensitive attribute renders in the generic UI.',
+    'Every declared, non-sensitive attribute renders in the generic UI, and every lens names attributes this pack declares.',
     renderabilityIssues.map((issue) => issue.message),
   );
 

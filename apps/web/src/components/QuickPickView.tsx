@@ -222,8 +222,101 @@
  *      `@media (prefers-reduced-motion: reduce)` rule already forces every
  *      element's `transition-duration` to near-zero, so this needs no
  *      separate reduced-motion branch of its own.
+ *
+ * SWIPE TO TRIAGE (this task, product-owner request: a Tinder-style swipe
+ * for working through a long option list -- the shipped pack now carries
+ * twelve options and the vehicle catalog carries far more). The card itself
+ * is draggable with Pointer Events: a committed swipe LEFT is Pass, a
+ * committed swipe RIGHT is Keep. No gesture library and no new dependency;
+ * `onPointerDown`/`Move`/`Up`/`Cancel` plus `setPointerCapture` is the whole
+ * mechanism. Five decisions are load-bearing:
+ *
+ *   1. **The gesture is an accelerator, never the only route (WCAG 2.5.1
+ *      Pointer Gestures, Level A).** 2.5.1 requires a single-pointer,
+ *      non-path-based alternative for any path-based gesture. The
+ *      Pass/Unsure/Keep segmented control below IS that alternative: it is
+ *      untouched by this task, always rendered, never hidden or de-
+ *      emphasised when a pointer capable of swiping is present, and still
+ *      individually Tab-reachable and Enter/Space-operable (the
+ *      `rovingFocus={false}` decision in section 1 above). Swipe adds a
+ *      second way to do what the buttons already do; it removes nothing.
+ *      Nothing about the card is swipe-only -- in particular Unsure is
+ *      deliberately NOT bound to a vertical swipe. A two-axis gesture is
+ *      easy to trigger by accident while scrolling a pane, and the third
+ *      disposition would then be the one reachable only by the least
+ *      reliable motion. Left/right only; Unsure keeps its button.
+ *   2. **Nothing commits until release, and an abandoned drag commits
+ *      nothing (WCAG 2.5.2 Pointer Cancellation, Level A).** The down-event
+ *      only starts tracking -- no disposition is dispatched on
+ *      `pointerdown`, on `pointermove`, or at the instant the threshold is
+ *      crossed mid-drag. The decision is taken exactly once, in
+ *      `pointerup`, from the offset the pointer actually ended at. So a
+ *      person who drags the card halfway out, thinks better of it, and
+ *      brings the pointer back to where the gesture started releases below
+ *      the threshold and nothing is dispatched (the "up-event and undo"
+ *      path 2.5.2 asks for). `pointercancel` -- the event the browser fires
+ *      when it takes the pointer over for a scroll, or the gesture is
+ *      otherwise interrupted -- likewise dispatches nothing and simply
+ *      settles the card back. `touch-action: pan-y` on the card is what
+ *      keeps vertical scrolling with the browser (and makes that
+ *      `pointercancel` the normal, expected end of a mostly-vertical drag)
+ *      while leaving the horizontal axis to this component.
+ *   3. **One dispatch path, not two.** A committed swipe calls the same
+ *      `pressDisposition()` the three buttons call, with the same
+ *      `onPass`/`onKeep` prop -- so the optimistic same-frame echo, the
+ *      "re-pressing the current disposition is a no-op" guard, and the
+ *      documented optional-promise-for-revert contract (a rejected dispatch
+ *      reverting the shown choice, a stale rejection never stomping a newer
+ *      one) all hold identically for a swipe. There is no second, parallel
+ *      implementation of the dispatch rules that could drift from the
+ *      buttons'. `pressDisposition` returns whether it actually dispatched
+ *      purely so the gesture knows whether to fly the card out or settle it
+ *      back; the buttons ignore that return exactly as before.
+ *   4. **Reduced motion.** The transition durations are read from
+ *      `var(--duration-*)`, which tokens.css already zeroes under
+ *      `prefers-reduced-motion: reduce` -- the repo-wide pattern every other
+ *      animated component here relies on. But tokens.css's own note says a
+ *      component whose animation is a translate should "branch on this
+ *      media query directly when the animation itself (not just its speed)
+ *      should be skipped," which is exactly this case: a card that flies
+ *      across the viewport is large-scale motion, not a tint fade, and
+ *      near-zero duration would still flash it off-screen and back. So
+ *      `usePrefersReducedMotion()` (the same jsdom/SSR-safe `matchMedia`
+ *      shape `hooks/use-width-mode.ts` uses -- feature-detected, listener
+ *      cleaned up, falling back to "no preference" rather than throwing
+ *      where `matchMedia` does not exist) skips the fly-out and the
+ *      spring-back entirely: the disposition is dispatched and the card
+ *      simply returns to rest. This is the one `matchMedia` read in this
+ *      component and it is not a layout read -- `layout` remains strictly
+ *      caller-supplied per ADR 0005 Decision 4, since there is no motion-
+ *      preference prop and no caller that could sensibly own one.
+ *   5. **Threshold.** A swipe commits when the release offset is at least
+ *      `SWIPE_COMMIT_WIDTH_FRACTION` (a quarter) of the card's own measured
+ *      width, floored at `SWIPE_COMMIT_MIN_DISTANCE_PX`. A fraction rather
+ *      than a fixed distance because the same card is ~358px wide in the
+ *      390px pane and ~1200px wide in expanded mode -- a fixed 90px would
+ *      be a deliberate shove in the pane and a twitch on a desktop. A
+ *      quarter specifically: far enough past the ~10px of pointer slop that
+ *      separates a tap from a drag that it cannot be reached by accident,
+ *      and close enough that the card is visibly, obviously displaced
+ *      before the person has to commit to the full travel. The floor keeps
+ *      a very narrow container (or a zero-width measurement, which is what
+ *      jsdom reports since it runs no layout engine) from producing a
+ *      threshold small enough to fire on a nudge. The velocity escape hatch
+ *      exists because a fast flick is an unambiguous intent that stops
+ *      short: releasing at >= `SWIPE_FLICK_VELOCITY_PX_PER_MS` (500px/s,
+ *      comfortably above a drag and below a fling) commits from as little
+ *      as `SWIPE_FLICK_MIN_DISTANCE_PX`, which is itself well past pointer
+ *      slop so a fast accidental brush still cannot trigger it.
  */
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type TransitionEvent as ReactTransitionEvent,
+} from 'react';
 import type { AttributeDefinition, CandidateDisposition, EntityRecord } from '@sift/contracts';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -261,6 +354,141 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
     value !== null &&
     typeof (value as { then?: unknown }).then === 'function'
   );
+}
+
+/* --------------------------------------------------------------------------
+ * Swipe to triage -- see this file's header comment, "SWIPE TO TRIAGE",
+ * for why each of these exists and how the numbers were chosen.
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Descendants that own their own pointer semantics. A `pointerdown` that
+ * starts inside one of these never starts a drag: the three disposition
+ * segments and Undo must keep behaving as plain presses (WCAG 2.5.1's
+ * single-pointer alternative is worthless if the gesture eats its clicks),
+ * and capturing the pointer to the card would retarget the resulting
+ * `click` away from the button in a real browser.
+ */
+const NON_DRAGGABLE_SELECTOR = 'button, a, input, select, textarea, [role="button"]';
+
+/** Fraction of the card's own measured width the pointer must travel before release commits. */
+const SWIPE_COMMIT_WIDTH_FRACTION = 0.25;
+/** Floor under the fractional threshold, for a very narrow container -- or a zero-width measurement, which is what jsdom reports (it runs no layout engine). */
+const SWIPE_COMMIT_MIN_DISTANCE_PX = 56;
+/** A flick this fast commits short of the distance threshold. 0.5px/ms == 500px/s: above a deliberate drag, below a throw. */
+const SWIPE_FLICK_VELOCITY_PX_PER_MS = 0.5;
+/** ...but never from less travel than this, so a fast accidental brush (pointer slop is ~10px) still cannot commit. */
+const SWIPE_FLICK_MIN_DISTANCE_PX = 32;
+/** Degrees of tilt per px of travel, and its cap -- the small rotation that makes the card read as picked up rather than slid. */
+const SWIPE_TILT_DEG_PER_PX = 0.05;
+const SWIPE_MAX_TILT_DEG = 8;
+
+/**
+ * Where the card is in a gesture. `settling` (releasing below the
+ * threshold, or a `pointercancel`) and `flinging` (a committed swipe) are
+ * both transient animation states that end on the card's own
+ * `transitionend`; `idle` is both the resting state and where a
+ * reduced-motion gesture goes directly, since it plays no animation to end.
+ */
+type SwipeState =
+  | { kind: 'idle' }
+  | {
+      kind: 'dragging';
+      pointerId: number;
+      startX: number;
+      startTimeMs: number;
+      /** Measured once at `pointerdown` -- the card's width cannot change mid-gesture, and re-measuring per `pointermove` would force layout on every frame. */
+      commitDistancePx: number;
+      dx: number;
+    }
+  | { kind: 'settling' }
+  | { kind: 'flinging'; direction: -1 | 1 };
+
+const IDLE_SWIPE: SwipeState = { kind: 'idle' };
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+function readPrefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
+}
+
+/**
+ * Whether the person has asked for less motion, kept live. Deliberately the
+ * same shape as `hooks/use-width-mode.ts`'s `useWidthMode` -- feature-detect
+ * `matchMedia` (jsdom, where this repo's component tests run, does not have
+ * it; nor would a server render), fall back to a renderable default rather
+ * than throwing, subscribe with `addEventListener` and fall back to the
+ * deprecated `addListener` for older Safari, and clean both up. Local to
+ * this file because this task's brief scopes it here; if a second component
+ * needs it, it belongs in `hooks/` next to `useWidthMode`.
+ */
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] =
+    useState<boolean>(readPrefersReducedMotion);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+
+    const mediaQueryList = window.matchMedia(REDUCED_MOTION_QUERY);
+    // Reconcile in case the preference changed between this render's initial
+    // `useState` computation and this effect committing.
+    setPrefersReducedMotion(mediaQueryList.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      setPrefersReducedMotion(event.matches);
+    };
+
+    if (typeof mediaQueryList.addEventListener === 'function') {
+      mediaQueryList.addEventListener('change', handleChange);
+      return () => mediaQueryList.removeEventListener('change', handleChange);
+    }
+    if (typeof mediaQueryList.addListener === 'function') {
+      mediaQueryList.addListener(handleChange);
+      return () => mediaQueryList.removeListener(handleChange);
+    }
+    return undefined;
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+/** Monotonic where it exists, wall clock where it does not -- only ever used for a duration, never a timestamp. */
+function nowMs(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+/**
+ * Keeps every later `pointermove`/`pointerup` of this gesture targeted at
+ * the card even once the pointer leaves its bounds -- which a committed
+ * swipe does by definition. Both failure modes are tolerated rather than
+ * asserted: jsdom implements `PointerEvent` but not the capture methods at
+ * all (checked against the jsdom this repo pins), and a real browser throws
+ * `NotFoundError` if the pointer is already gone. Capture makes the gesture
+ * better; it is never a precondition for it.
+ */
+function capturePointer(element: Element, pointerId: number): void {
+  if (typeof element.setPointerCapture !== 'function') return;
+  try {
+    element.setPointerCapture(pointerId);
+  } catch {
+    // No live pointer to capture -- the gesture still resolves without it.
+  }
+}
+
+function releasePointer(element: Element, pointerId: number): void {
+  if (typeof element.releasePointerCapture !== 'function') return;
+  try {
+    element.releasePointerCapture(pointerId);
+  } catch {
+    // Already released (a browser releases implicitly on pointerup/cancel).
+  }
+}
+
+function clampTilt(dx: number): number {
+  return Math.max(-SWIPE_MAX_TILT_DEG, Math.min(SWIPE_MAX_TILT_DEG, dx * SWIPE_TILT_DEG_PER_PX));
 }
 
 export interface QuickPickViewProps {
@@ -551,11 +779,20 @@ export function QuickPickView({
     disposition: QuickPickDisposition;
   } | null>(null);
 
+  // Where the card is in a swipe gesture (see this file's header comment,
+  // "SWIPE TO TRIAGE"). `idle` for everything that never touches the card.
+  const [swipe, setSwipe] = useState<SwipeState>(IDLE_SWIPE);
+  const prefersReducedMotion = usePrefersReducedMotion();
+
   // A fresh card means a fresh choice -- an optimistic value left over from
   // the option that was on screen a moment ago must never bleed onto the
-  // next one.
+  // next one. The same is true of a half-finished gesture: a card that
+  // arrives mid-fly-out (the caller advanced the queue while the previous
+  // card was still animating out) must render at rest, not part-way through
+  // the previous option's swipe.
   useEffect(() => {
     setOptimistic(null);
+    setSwipe(IDLE_SWIPE);
   }, [currentOptionId]);
 
   // Once the real, core-owned disposition catches up to what this component
@@ -588,12 +825,19 @@ export function QuickPickView({
    * (matches `EvidenceCard.tsx`'s identical guard for its own segmented
    * disposition control) -- Undo, not a second press of the same button, is
    * this product's affordance back to "nothing decided."
+   *
+   * Returns whether it actually dispatched. The buttons ignore that (their
+   * `onClick` discards it, exactly as before); the swipe path reads it to
+   * decide between flying the card out and settling it back, so a swipe
+   * that hit the no-op guard does not animate away as if something had
+   * happened. This is the single dispatch path both routes share -- see
+   * "SWIPE TO TRIAGE" section 3 in this file's header.
    */
   function pressDisposition(
     disposition: QuickPickDisposition,
     dispatch: (optionId: string) => void | Promise<unknown>,
-  ) {
-    if (currentOption === null || disposition === displayedDisposition) return;
+  ): boolean {
+    if (currentOption === null || disposition === displayedDisposition) return false;
     const optionId = currentOption.id;
     setOptimistic({ optionId, disposition });
     const result = dispatch(optionId);
@@ -611,6 +855,107 @@ export function QuickPickView({
         );
       });
     }
+    return true;
+  }
+
+  /**
+   * Starts tracking a drag. Deliberately does NOT dispatch anything (WCAG
+   * 2.5.2: the down-event may never be the commit point) and deliberately
+   * declines to start at all when the press began on one of the card's own
+   * controls, so the buttons keep behaving as buttons.
+   */
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (currentOption === null) return;
+    // Primary button only (0 for touch and pen too); a secondary/middle
+    // press is not a swipe.
+    if (event.button !== 0) return;
+    // A second pointer arriving mid-gesture is ignored rather than allowed
+    // to hijack the drag -- multi-touch has no meaning here.
+    if (swipe.kind === 'dragging') return;
+    if (event.target instanceof Element && event.target.closest(NON_DRAGGABLE_SELECTOR) !== null) {
+      return;
+    }
+
+    capturePointer(event.currentTarget, event.pointerId);
+    setSwipe({
+      kind: 'dragging',
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startTimeMs: nowMs(),
+      commitDistancePx: Math.max(
+        SWIPE_COMMIT_MIN_DISTANCE_PX,
+        event.currentTarget.getBoundingClientRect().width * SWIPE_COMMIT_WIDTH_FRACTION,
+      ),
+      dx: 0,
+    });
+  }
+
+  /** Moves the card with the pointer. Still never a commit point -- this only records where the pointer is. */
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (swipe.kind !== 'dragging' || event.pointerId !== swipe.pointerId) return;
+    setSwipe({ ...swipe, dx: event.clientX - swipe.startX });
+  }
+
+  /**
+   * The one and only commit point (WCAG 2.5.2). Judges the gesture on where
+   * the pointer actually ended: a drag taken past the threshold and then
+   * brought back inside it releases below the threshold and dispatches
+   * nothing, which is exactly the "abort by returning to the start" escape
+   * 2.5.2 requires.
+   */
+  function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (swipe.kind !== 'dragging' || event.pointerId !== swipe.pointerId) return;
+    releasePointer(event.currentTarget, event.pointerId);
+
+    const dx = event.clientX - swipe.startX;
+    const distance = Math.abs(dx);
+    const elapsedMs = nowMs() - swipe.startTimeMs;
+    const velocity = elapsedMs > 0 ? distance / elapsedMs : 0;
+    const committed =
+      distance >= swipe.commitDistancePx ||
+      (distance >= SWIPE_FLICK_MIN_DISTANCE_PX && velocity >= SWIPE_FLICK_VELOCITY_PX_PER_MS);
+
+    if (!committed) {
+      setSwipe(prefersReducedMotion ? IDLE_SWIPE : { kind: 'settling' });
+      return;
+    }
+
+    // Left is Pass, right is Keep -- through the same `pressDisposition` the
+    // buttons use, so the optimistic echo and the optional-promise revert
+    // contract behave identically on this path (header section 3).
+    const direction: -1 | 1 = dx < 0 ? -1 : 1;
+    const dispatched =
+      direction < 0 ? pressDisposition('pass', onPass) : pressDisposition('keep', onKeep);
+
+    if (prefersReducedMotion || !dispatched) {
+      setSwipe(prefersReducedMotion ? IDLE_SWIPE : { kind: 'settling' });
+      return;
+    }
+    setSwipe({ kind: 'flinging', direction });
+  }
+
+  /**
+   * The browser took the pointer away (a scroll took over, the window lost
+   * it, the gesture was interrupted). WCAG 2.5.2 again: this dispatches
+   * nothing at all, it only puts the card back.
+   */
+  function handlePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    if (swipe.kind !== 'dragging' || event.pointerId !== swipe.pointerId) return;
+    releasePointer(event.currentTarget, event.pointerId);
+    setSwipe(prefersReducedMotion ? IDLE_SWIPE : { kind: 'settling' });
+  }
+
+  /**
+   * Ends a transient animation state. Scoped to the card's own `transform`
+   * transition -- `transitionend` bubbles, so an unrelated transition on a
+   * descendant (the segments' own `transition-colors`, for one) must not be
+   * mistaken for the end of the gesture.
+   */
+  function handleTransitionEnd(event: ReactTransitionEvent<HTMLElement>) {
+    if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
+    setSwipe((current) =>
+      current.kind === 'settling' || current.kind === 'flinging' ? IDLE_SWIPE : current,
+    );
   }
 
   const applicableDefinitions = useMemo(() => {
@@ -717,6 +1062,38 @@ export function QuickPickView({
   // since it is not expensive enough to warrant one.
   const remainingAfterCurrent = isEndOfQueue ? 0 : options.length - position - 1;
   const nextOption = remainingAfterCurrent > 0 ? (options[position + 1] ?? null) : null;
+
+  // The card's gesture presentation, derived entirely from `swipe` (see this
+  // file's header, "SWIPE TO TRIAGE"). `touch-action: pan-y` is the part
+  // that matters even when nothing is being dragged: it hands vertical
+  // scrolling to the browser and keeps only the horizontal axis for this
+  // component, which is both why a vertical drag scrolls normally and why
+  // the browser -- rather than a hand-rolled axis lock -- is what decides a
+  // mostly-vertical gesture is a scroll (and sends the `pointercancel`
+  // `handlePointerCancel` treats as "commit nothing").
+  //
+  // While dragging there is no transition at all: the card must sit exactly
+  // under the pointer, not lag behind it. The two transient states animate
+  // on `--duration-*` tokens, which tokens.css zeroes under reduced motion
+  // -- but neither state is ever entered under reduced motion in the first
+  // place (`handlePointerUp`/`handlePointerCancel`), so the card simply
+  // returns to rest with no travel rather than flashing across the viewport
+  // in near-zero time.
+  const cardStyle: CSSProperties = { touchAction: 'pan-y' };
+  if (swipe.kind === 'dragging') {
+    cardStyle.transform = `translateX(${swipe.dx}px) rotate(${clampTilt(swipe.dx)}deg)`;
+    cardStyle.transition = 'none';
+  } else if (swipe.kind === 'settling') {
+    cardStyle.transform = 'translateX(0px) rotate(0deg)';
+    cardStyle.transition = 'transform var(--duration-fast) var(--ease-standard)';
+  } else if (swipe.kind === 'flinging') {
+    cardStyle.transform = `translateX(${swipe.direction * 120}%) rotate(${
+      swipe.direction * SWIPE_MAX_TILT_DEG
+    }deg)`;
+    cardStyle.opacity = 0;
+    cardStyle.transition =
+      'transform var(--duration-normal) var(--ease-exit), opacity var(--duration-normal) var(--ease-exit)';
+  }
 
   // `identityHeading`/`highlightsBlock`/`insightSections` are computed once
   // here, before the `layout` branch below decides how to ARRANGE them.
@@ -909,11 +1286,28 @@ export function QuickPickView({
       ) : (
         <article
           data-testid={`quick-pick-card-${currentOption.id}`}
-          className={
+          // Not a testid and not read by the component -- a plain state
+          // read-out so a test (and a future Playwright pass) can assert
+          // which phase a gesture ended in without reverse-engineering it
+          // from an inline transform string.
+          data-swipe-phase={swipe.kind}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onTransitionEnd={handleTransitionEnd}
+          style={cardStyle}
+          className={`${
             layout === 'expanded'
               ? 'flex flex-col gap-[var(--space-4)]'
               : 'flex flex-col gap-[var(--space-3)]'
-          }
+          }${
+            // Only while a drag is actually in flight: a permanent
+            // `select-none` would cost every non-swiping reader the ability
+            // to select the card's text, which is a real loss for a pane
+            // full of prices and specs.
+            swipe.kind === 'dragging' ? ' cursor-grabbing select-none' : ''
+          }`}
         >
           {layout === 'expanded' ? (
             // Section 2 of the file-header "EXPANDED LAYOUT" note: a

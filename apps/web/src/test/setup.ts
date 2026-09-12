@@ -14,6 +14,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { toHaveNoViolations } from 'jest-axe';
+import { resetUiStore } from '../app/ui-store';
 
 expect.extend(toHaveNoViolations);
 
@@ -28,4 +29,11 @@ expect.extend(toHaveNoViolations);
 // `screen.getByRole(...)` queries would start matching multiple elements.
 afterEach(() => {
   cleanup();
+  // `useUiStore` (apps/web/src/app/ui-store.ts) holds the workspace's
+  // overlay state in a module singleton, which unmounting cannot clear the
+  // way a `useState` is cleared. Without this, a test that leaves the
+  // Findings sheet open hands the next test a workspace that is already
+  // showing it -- a cross-test dependency that would only appear as a
+  // failure in whichever test happened to run second.
+  resetUiStore();
 });

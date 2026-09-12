@@ -197,7 +197,7 @@
  * only while `runtimeInspectorOpen` is true) rather than replacing it, so
  * the case body stays visible underneath. Task A5 gives it a real,
  * explicit, discoverable entry point that needs no prior activity to reach
- * (`CaseHeader`'s "Developer view" control, `handleOpenDeveloperView`) --
+ * (`CaseHeader`'s "Developer view" control, `openDeveloperView`) --
  * before this task, the ONLY way in was the run-scoped "Inspect run"
  * control (`RecommendationHero`/`LiveRunStatus`, still present and
  * unchanged), which stays hidden until a run has actually happened this
@@ -207,7 +207,7 @@
  * the missing trigger half of I2 ("a consumer event opens its exact runtime
  * event") all the way through: `ActivityTimeline`'s own "Inspect event"
  * button (rendered only when an item carries a `debugEventId`) calls
- * `handleInspectEvent`, which re-targets the same open Inspector to that
+ * `inspectRunEvent`, which re-targets the same open Inspector to that
  * event's exact Timeline entry via `focusEventId`.
  *
  * `readiness` is computed by calling the REAL `evaluateReadiness` from
@@ -243,6 +243,7 @@ import { ReadinessPanel } from '../components/ReadinessPanel.js';
 import { FindingsSheet } from '../components/FindingsSheet.js';
 import { BlindSpotReviewSheet } from '../components/BlindSpotReviewSheet.js';
 import { OptionEditor } from '../components/OptionEditor.js';
+import { LensSwitcher } from '../components/LensSwitcher.js';
 import { WorkspaceViewSwitcher } from '../components/WorkspaceViewSwitcher.js';
 import { DecisionProfileView } from '../components/DecisionProfileView.js';
 import {
@@ -285,11 +286,12 @@ import { ReferenceLibrarySheet } from '../components/ReferenceLibrary.js';
 import { AnalysisStage } from '../components/AnalysisStage.js';
 import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper.js';
 import { deriveOptionProfile } from '../components/option-profile.js';
-import { deriveCaseWorkflow, type CaseWorkflowStageId } from './case-workflow.js';
+import { deriveCaseWorkflow } from './case-workflow.js';
 import { useWidthMode } from '../hooks/use-width-mode.js';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useApiConfig, useSiftCommands, useWebMcpAdapter } from './AppProviders.js';
+import { useUiStore } from './ui-store.js';
 import { useCaseEvents, type CaseEventsConnectionState } from '../hooks/use-case-events.js';
 import {
   registerSiftTools,
@@ -445,11 +447,29 @@ function mapAppBarConnectionState(
  * lifting it.
  */
 function applyIntendedNarrowing(
-  intent: { clearedAssistantNarrowing?: boolean },
+  intent: {
+    clearedAssistantNarrowing?: boolean;
+    lensAttributeIds?: readonly string[] | null;
+  },
   view: WorkspaceViewState,
 ): WorkspaceViewState {
-  if (intent.clearedAssistantNarrowing !== true) return view;
-  const { visibleOptionIds: _dismissed, ...withoutNarrowing } = view;
+  let next = view;
+
+  // A lens decides which ATTRIBUTES are shown; the assistant narrowing below
+  // decides which OPTIONS are. They are independent fields and both must
+  // survive a write made by the other writer, which is why both are applied
+  // here rather than at either call site.
+  if (intent.lensAttributeIds !== undefined) {
+    if (intent.lensAttributeIds === null) {
+      const { visibleAttributeIds: _allFields, ...withoutLens } = next;
+      next = withoutLens;
+    } else {
+      next = { ...next, visibleAttributeIds: [...intent.lensAttributeIds] };
+    }
+  }
+
+  if (intent.clearedAssistantNarrowing !== true) return next;
+  const { visibleOptionIds: _dismissed, ...withoutNarrowing } = next;
   return withoutNarrowing;
 }
 
@@ -487,6 +507,23 @@ export function App() {
    */
   const [workInFlight, setWorkInFlight] = useState<WorkInFlight | null>(null);
   const [lastRunReceipt, setLastRunReceipt] = useState<LiveRunStatusReceipt | null>(null);
+  // Everything from here to `setWorkflowStage` below is overlay/presentation
+  // state, and it lives in `useUiStore` (./ui-store.ts) rather than in this
+  // component. Which overlay is showing is decided by the app bar, the alert
+  // banner, the hero, the dock, the workflow stepper and the sheets
+  // themselves; as `useState` that meant one `() => setXOpen(true)` prop per
+  // entry point and no single place that said what the overlay layer can do.
+  //
+  // Each value is read through its OWN narrow selector, never
+  // `useUiStore()` wholesale: a whole-store read re-renders this component
+  // on every unrelated UI change, which would make the store a regression
+  // rather than an improvement. Action selectors are free -- an action's
+  // identity never changes, so subscribing to one can never fire a render.
+  //
+  // Nothing here is persisted or sent anywhere, by design: see the store's
+  // own header for why ADR 0005 puts durable presentation state on
+  // `CaseState.view` instead, and this session-scoped layer nowhere at all.
+  //
   // Runtime Inspector (Task A5 extends this beyond the pre-existing
   // run-scoped "Inspect run" trigger): `runtimeInspectorOpen` is the single
   // mount gate -- true whenever the Sheet should be showing at all, whether
@@ -496,12 +533,17 @@ export function App() {
   // `runId` prop. `inspectingDebugEventId` is the exact correlated runtime
   // event to jump straight to (Task I2b's "Inspect event" trigger,
   // `RuntimeInspector`'s `focusEventId` prop) -- `undefined` for every
-  // other entry point.
-  const [runtimeInspectorOpen, setRuntimeInspectorOpen] = useState(false);
-  const [inspectingRunId, setInspectingRunId] = useState<string | null>(null);
-  const [inspectingDebugEventId, setInspectingDebugEventId] = useState<string | undefined>(
-    undefined,
-  );
+  // other entry point. The four actions below (Task A5 / I2b) are the only
+  // way in or out, so those three fields cannot drift apart -- `inspectRun`
+  // after an `inspectRunEvent` clears the stale event, rather than reopening
+  // the Inspector scrolled to an event from a different run.
+  const runtimeInspectorOpen = useUiStore((state) => state.runtimeInspectorOpen);
+  const inspectingRunId = useUiStore((state) => state.inspectingRunId);
+  const inspectingDebugEventId = useUiStore((state) => state.inspectingDebugEventId);
+  const openDeveloperView = useUiStore((state) => state.openDeveloperView);
+  const inspectRun = useUiStore((state) => state.inspectRun);
+  const inspectRunEvent = useUiStore((state) => state.inspectRunEvent);
+  const closeRuntimeInspector = useUiStore((state) => state.closeRuntimeInspector);
   /**
    * The first-run guide (`components/FirstRunGuide.tsx`): the same "How
    * Sift works" content the Help control gives, shown without being asked
@@ -512,7 +554,9 @@ export function App() {
    * `activeCaseId`, which lives here. The component itself is a pure
    * controlled `Sheet`.
    */
-  const [firstRunGuideOpen, setFirstRunGuideOpen] = useState(false);
+  const firstRunGuideOpen = useUiStore((state) => state.firstRunGuideOpen);
+  const openFirstRunGuide = useUiStore((state) => state.openFirstRunGuide);
+  const closeFirstRunGuide = useUiStore((state) => state.closeFirstRunGuide);
   /**
    * Where focus goes when the guide closes: the app bar's Help control.
    *
@@ -526,8 +570,12 @@ export function App() {
    */
   const helpButtonRef = useRef<HTMLButtonElement>(null);
   /** Set when the first-run guide is dismissed, cleared once focus reaches the Help control -- see the effect below. */
-  const [helpFocusPending, setHelpFocusPending] = useState(false);
-  const [findingsSheetOpen, setFindingsSheetOpen] = useState(false);
+  const helpFocusPending = useUiStore((state) => state.helpFocusPending);
+  const requestHelpFocus = useUiStore((state) => state.requestHelpFocus);
+  const clearHelpFocus = useUiStore((state) => state.clearHelpFocus);
+  const findingsSheetOpen = useUiStore((state) => state.findingsSheetOpen);
+  const openFindings = useUiStore((state) => state.openFindings);
+  const closeFindings = useUiStore((state) => state.closeFindings);
   // ADR 0008 sheet-based entry points -- each replaces (expanded mode) or
   // supplements (narrow mode, via the app bar's now-uniform "Add option")
   // a former bottom-of-page disclosure. All five are mounted unconditionally
@@ -537,10 +585,18 @@ export function App() {
   // narrow-mode disclosures that render the SAME underlying components --
   // see this file's own header comment for why "Manage options" has no
   // narrow-mode disclosure any more specifically to avoid that collision.
-  const [manageOptionsSheetOpen, setManageOptionsSheetOpen] = useState(false);
-  const [stillCheckingSheetOpen, setStillCheckingSheetOpen] = useState(false);
-  const [decisionProfileSheetOpen, setDecisionProfileSheetOpen] = useState(false);
-  const [notesSheetOpen, setNotesSheetOpen] = useState(false);
+  const manageOptionsSheetOpen = useUiStore((state) => state.manageOptionsSheetOpen);
+  const openManageOptions = useUiStore((state) => state.openManageOptions);
+  const closeManageOptions = useUiStore((state) => state.closeManageOptions);
+  const stillCheckingSheetOpen = useUiStore((state) => state.stillCheckingSheetOpen);
+  const openStillChecking = useUiStore((state) => state.openStillChecking);
+  const closeStillChecking = useUiStore((state) => state.closeStillChecking);
+  const decisionProfileSheetOpen = useUiStore((state) => state.decisionProfileSheetOpen);
+  const openDecisionProfile = useUiStore((state) => state.openDecisionProfile);
+  const closeDecisionProfile = useUiStore((state) => state.closeDecisionProfile);
+  const notesSheetOpen = useUiStore((state) => state.notesSheetOpen);
+  const openNotes = useUiStore((state) => state.openNotes);
+  const closeNotes = useUiStore((state) => state.closeNotes);
   // The create menu's "Add a question" surface. Its "Add a note" sibling
   // reuses `notesSheetOpen` above rather than owning a second write-only
   // sheet.
@@ -550,25 +606,34 @@ export function App() {
   // branch, and pairing it with a shared sheet double-mounted the component
   // and its DOM ids. The inline copy is gone now (see the note where it used
   // to render), so one sheet is the whole story at every width.
-  const [addConcernSheetOpen, setAddConcernSheetOpen] = useState(false);
-  const [prioritiesSheetOpen, setPrioritiesSheetOpen] = useState(false);
+  const addConcernSheetOpen = useUiStore((state) => state.addConcernSheetOpen);
+  const openAddConcern = useUiStore((state) => state.openAddConcern);
+  const closeAddConcern = useUiStore((state) => state.closeAddConcern);
+  const prioritiesSheetOpen = useUiStore((state) => state.prioritiesSheetOpen);
+  const openPriorities = useUiStore((state) => state.openPriorities);
+  const closePriorities = useUiStore((state) => state.closePriorities);
   // Filters live in a sheet reachable from BOTH layouts, not in the
   // expanded-only sidebar they used to occupy (ADR 0009). That placement is
   // what makes filtering exist at all in pane/WebMCP mode, where
   // `WorkspaceSidebar` renders `null` outright.
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const filterSheetOpen = useUiStore((state) => state.filterSheetOpen);
+  const openFilters = useUiStore((state) => state.openFilters);
+  const closeFilters = useUiStore((state) => state.closeFilters);
   // Which option's detail profile is open, by id -- NOT the option record
   // itself. Holding the id means the open sheet re-derives from each new
   // snapshot, so a live run that adds evidence about this option updates the
   // sheet under the reader instead of freezing a copy taken when it opened.
-  const [profileOptionId, setProfileOptionId] = useState<string | null>(null);
+  const profileOptionId = useUiStore((state) => state.profileOptionId);
+  const openOptionProfile = useUiStore((state) => state.openOptionProfile);
+  const closeOptionProfile = useUiStore((state) => state.closeOptionProfile);
   // The case's reference library -- every `Source` on the case, tagged and
   // browsable. Global chrome like the other sheets: it is the model's
   // durable memory made legible, and must be reachable in both layouts.
-  const [referenceLibraryOpen, setReferenceLibraryOpen] = useState(false);
-  const [workflowStageOverride, setWorkflowStageOverride] = useState<CaseWorkflowStageId | null>(
-    null,
-  );
+  const referenceLibraryOpen = useUiStore((state) => state.referenceLibraryOpen);
+  const openReferenceLibrary = useUiStore((state) => state.openReferenceLibrary);
+  const closeReferenceLibrary = useUiStore((state) => state.closeReferenceLibrary);
+  const workflowStageOverride = useUiStore((state) => state.workflowStageOverride);
+  const setWorkflowStage = useUiStore((state) => state.setWorkflowStage);
   const [resetPending, setResetPending] = useState(false);
   const [runRequestPending, setRunRequestPending] = useState(false);
   const [runRequestError, setRunRequestError] = useState<string | null>(null);
@@ -595,7 +660,9 @@ export function App() {
    * here must say so on screen rather than leaving a control that appears to
    * work and does not.
    */
-  const [blindSpotSheetOpen, setBlindSpotSheetOpen] = useState(false);
+  const blindSpotSheetOpen = useUiStore((state) => state.blindSpotSheetOpen);
+  const openBlindSpotReview = useUiStore((state) => state.openBlindSpotReview);
+  const closeBlindSpotReview = useUiStore((state) => state.closeBlindSpotReview);
   const [blindSpotReviewPending, setBlindSpotReviewPending] = useState(false);
   const [blindSpotReviewError, setBlindSpotReviewError] = useState<string | null>(null);
   const {
@@ -986,6 +1053,14 @@ export function App() {
     mode?: WorkspaceViewMode;
     filters?: WorkspaceFilter[];
     clearedAssistantNarrowing?: boolean;
+    // A lens selection, carried in the SAME shared-intent ref every other
+    // view writer reads, for the reason this ref exists at all: each writer
+    // spreads `snapshotRef.current.view`, so a lens change written by one
+    // and a mode change written by another would each clobber the other's
+    // field. `null` is a real, distinct value here -- "show all fields",
+    // which must clear `visibleAttributeIds` rather than leave it absent
+    // (absent means "no intent recorded", and the two are not the same).
+    lensAttributeIds?: readonly string[] | null;
   }>({});
 
   const drainViewWrites = useCallback(async () => {
@@ -1310,6 +1385,50 @@ export function App() {
   const activePack = installedPacks.find((pack) => pack.identity.id === snapshot?.pack.id) ?? null;
 
   /**
+   * The lens the person is looking through, and the handler that changes it.
+   *
+   * Derived, never tracked: the active lens is whichever declared lens's
+   * attribute set matches the persisted `visibleAttributeIds`, so a lens set
+   * by a WebMCP `sift_set_view` call from ChatGPT shows as selected here
+   * too. Tracking it in local state instead would make the pane and the
+   * assistant disagree about what is on screen, which is the exact class of
+   * bug ADR 0005 exists to prevent.
+   *
+   * Order-insensitive comparison: `setView` round-trips the array through
+   * the server, and a lens is a SET of fields. Comparing element-wise would
+   * silently deselect a lens whose own order the server ever returned
+   * differently.
+   */
+  const packLenses = activePack?.lenses ?? [];
+  const persistedVisibleAttributeIds = snapshot?.view?.visibleAttributeIds;
+  const activeLensId =
+    persistedVisibleAttributeIds === undefined
+      ? null
+      : (packLenses.find(
+          (lens) =>
+            lens.attributeIds.length === persistedVisibleAttributeIds.length &&
+            lens.attributeIds.every((id) => persistedVisibleAttributeIds.includes(id)),
+        )?.id ?? null);
+
+  const handleLensChange = useCallback(
+    (lensId: string | null) => {
+      const lens = lensId === null ? null : (packLenses.find((l) => l.id === lensId) ?? null);
+      // `null` for "All fields" is a real intent, distinct from "no intent":
+      // it must CLEAR `visibleAttributeIds` so the case returns to the state
+      // it had before anyone picked a lens.
+      intendedViewRef.current.lensAttributeIds = lens === null ? null : lens.attributeIds;
+      // Reuses the filter writer rather than adding a third single-flight
+      // queue racing the other two. Both fields land in one `setView`, which
+      // is strictly safer than a separate writer would be -- and a lens
+      // changes which FIELDS are shown, never which options, so unlike a
+      // filter change it cannot strand the Quick Pick queue position.
+      desiredFiltersRef.current = intendedViewRef.current.filters ?? filters;
+      void drainFilterWrites();
+    },
+    [packLenses, filters, drainFilterWrites],
+  );
+
+  /**
    * The persistent frame's two halves, both derived rather than tracked.
    *
    * `deriveNextMoves` is the single source of "what should I do next" -- the
@@ -1526,10 +1645,22 @@ export function App() {
   // stale `runId`/`debugEventId` from a case that no longer applies would
   // otherwise still be showing when the new case's workspace renders.
   useEffect(() => {
-    setRuntimeInspectorOpen(false);
-    setInspectingRunId(null);
-    setInspectingDebugEventId(undefined);
-  }, [activeCaseId]);
+    closeRuntimeInspector();
+  }, [activeCaseId, closeRuntimeInspector]);
+
+  /**
+   * Which case THIS instance of `App` has already decided the guide for.
+   *
+   * Two things force the guard. `markFirstRunGuideSeen()` is a side effect
+   * on the effect's FIRST pass, so React's StrictMode double-invoke would
+   * otherwise reach the "already seen" branch on its second pass and shut
+   * the guide it had just opened. And the open flag now lives in a module
+   * singleton (`useUiStore`), which a remount does not clear the way the
+   * former `useState` did -- so the effect has to be able to say "not this
+   * time" as well as "now", and the ref is what stops those two facts from
+   * cancelling each other out.
+   */
+  const firstRunDecidedForCaseRef = useRef<string | null>(null);
 
   /**
    * Shows the first-run guide once, ever, per browser.
@@ -1554,19 +1685,24 @@ export function App() {
    */
   useEffect(() => {
     if (activeCaseId === null) return;
-    if (hasSeenFirstRunGuide()) return;
+    if (firstRunDecidedForCaseRef.current === activeCaseId) return;
+    firstRunDecidedForCaseRef.current = activeCaseId;
+    if (hasSeenFirstRunGuide()) {
+      closeFirstRunGuide();
+      return;
+    }
     markFirstRunGuideSeen();
-    setFirstRunGuideOpen(true);
-  }, [activeCaseId]);
+    openFirstRunGuide();
+  }, [activeCaseId, openFirstRunGuide, closeFirstRunGuide]);
 
   const handleDismissFirstRunGuide = useCallback(() => {
     // Idempotent with the effect above -- kept so a storage write that
     // failed at open time (a transient quota error) gets one more chance
     // before this browser is nagged again.
     markFirstRunGuideSeen();
-    setFirstRunGuideOpen(false);
-    setHelpFocusPending(true);
-  }, []);
+    closeFirstRunGuide();
+    requestHelpFocus();
+  }, [closeFirstRunGuide, requestHelpFocus]);
 
   // The guide can be dismissed before the workspace has finished loading,
   // and the app bar -- which owns the Help control focus is handed back to
@@ -1584,38 +1720,8 @@ export function App() {
     const target = helpButtonRef.current;
     if (target === null) return;
     if (document.activeElement !== target) target.focus();
-    setHelpFocusPending(false);
-  }, [helpFocusPending, snapshot]);
-
-  // Runtime Inspector open/close/navigate handlers (Task A5 / I2b). Every
-  // entry point funnels through these three so `runtimeInspectorOpen`/
-  // `inspectingRunId`/`inspectingDebugEventId` never drift out of sync with
-  // each other.
-  const handleOpenDeveloperView = useCallback(() => {
-    setInspectingRunId(null);
-    setInspectingDebugEventId(undefined);
-    setRuntimeInspectorOpen(true);
-  }, []);
-
-  const handleInspectRun = useCallback((runId: string) => {
-    setInspectingRunId(runId);
-    setInspectingDebugEventId(undefined);
-    setRuntimeInspectorOpen(true);
-  }, []);
-
-  // Task I2b's trigger: opens (or re-targets an already-open) Inspector to
-  // the exact runtime event correlated with a consumer activity item.
-  const handleInspectEvent = useCallback((runId: string, debugEventId: string) => {
-    setInspectingRunId(runId);
-    setInspectingDebugEventId(debugEventId);
-    setRuntimeInspectorOpen(true);
-  }, []);
-
-  const handleCloseRuntimeInspector = useCallback(() => {
-    setRuntimeInspectorOpen(false);
-    setInspectingRunId(null);
-    setInspectingDebugEventId(undefined);
-  }, []);
+    clearHelpFocus();
+  }, [helpFocusPending, snapshot, clearHelpFocus]);
 
   const readiness = useMemo(() => (snapshot ? evaluateReadiness(snapshot) : null), [snapshot]);
 
@@ -2027,8 +2133,8 @@ export function App() {
    */
   const handleReviewBlindSpots = useCallback(() => {
     setBlindSpotReviewError(null);
-    setBlindSpotSheetOpen(true);
-  }, []);
+    openBlindSpotReview();
+  }, [openBlindSpotReview]);
 
   const handleCompleteBlindSpotReview = useCallback(
     (selectedPromptIds: string[]) => {
@@ -2056,7 +2162,7 @@ export function App() {
             lastAcceptedSequenceRef.current,
             receipt.acceptedSequence,
           );
-          setBlindSpotSheetOpen(false);
+          closeBlindSpotReview();
         })
         .catch((error: unknown) => {
           // Surfaced in the sheet, not swallowed -- the same rule
@@ -2071,7 +2177,7 @@ export function App() {
           setBlindSpotReviewPending(false);
         });
     },
-    [applicableBlindSpotPrompts, commands, resolveExpectedSequence],
+    [applicableBlindSpotPrompts, commands, resolveExpectedSequence, closeBlindSpotReview],
   );
 
   const handleDockAction = useCallback(
@@ -2171,9 +2277,10 @@ export function App() {
   // the single home for `CustomConcernForm`/`CaseExtensionReviewCard` in
   // both layouts and the old double-mount hazard cannot occur. See this
   // file's header comment ("Second follow-up") for the full reasoning.
-  const handleReviewPendingExtension = useCallback(() => {
-    setAddConcernSheetOpen(true);
-  }, []);
+  // Named rather than inlined at the alert-banner item below because this
+  // file's own header comment refers to it by name when it explains why the
+  // action stopped being layout-aware.
+  const handleReviewPendingExtension = openAddConcern;
 
   if (activeCaseId === null) {
     if (restoringCaseId !== null) {
@@ -2415,7 +2522,7 @@ export function App() {
       tone: 'attention',
       message: `${flaggedFindingsCount} finding${flaggedFindingsCount === 1 ? '' : 's'} need${flaggedFindingsCount === 1 ? 's' : ''} your attention.`,
       actionLabel: 'Review findings',
-      onAction: () => setFindingsSheetOpen(true),
+      onAction: openFindings,
     });
   }
   if (pendingExtension !== null) {
@@ -2511,17 +2618,15 @@ export function App() {
             findingsCount={flaggedFindingsCount}
             showAnalysisControls={layout === 'expanded'}
             optionCount={optionsCount}
-            onAddOption={() => setManageOptionsSheetOpen(true)}
-            onAddNote={() => {
-              setNotesSheetOpen(true);
-            }}
-            onAddConcern={() => setAddConcernSheetOpen(true)}
-            onAdjustPriorities={() => setPrioritiesSheetOpen(true)}
+            onAddOption={openManageOptions}
+            onAddNote={openNotes}
+            onAddConcern={openAddConcern}
+            onAdjustPriorities={openPriorities}
             onSwitchDecision={handleSwitchDecision}
-            onReviewFindings={() => setFindingsSheetOpen(true)}
-            onOpenReferenceLibrary={() => setReferenceLibraryOpen(true)}
+            onReviewFindings={openFindings}
+            onOpenReferenceLibrary={openReferenceLibrary}
             referenceCount={snapshot?.sources.length ?? 0}
-            onOpenDeveloperView={handleOpenDeveloperView}
+            onOpenDeveloperView={openDeveloperView}
             onResetDemo={handleResetDemo}
             resetPending={resetPending}
             helpButtonRef={helpButtonRef}
@@ -2544,7 +2649,7 @@ export function App() {
         <CaseWorkflowStepper
           stages={workflow.stages}
           activeStageId={activeWorkflowStageId}
-          onStageChange={setWorkflowStageOverride}
+          onStageChange={setWorkflowStage}
         />
       ) : null}
 
@@ -2650,9 +2755,9 @@ export function App() {
             findingsNeedingReview={flaggedFindingsCount}
             sourceCount={snapshot?.sources.length ?? 0}
             activityCount={caseScopedActivityEvents.length}
-            onOpenFindings={() => setFindingsSheetOpen(true)}
-            onOpenSources={() => setReferenceLibraryOpen(true)}
-            onOpenActivity={handleOpenDeveloperView}
+            onOpenFindings={openFindings}
+            onOpenSources={openReferenceLibrary}
+            onOpenActivity={openDeveloperView}
           />
         ) : null}
 
@@ -2670,10 +2775,10 @@ export function App() {
           requestPending={runRequestPending}
           requestDisabled={snapshot === null}
           requestError={runRequestError}
-          onReviewFindingsClick={() => setFindingsSheetOpen(true)}
+          onReviewFindingsClick={openFindings}
           liveRunReceipt={liveRunStatusReceipt}
           liveEvents={events}
-          onInspectRun={handleInspectRun}
+          onInspectRun={inspectRun}
           containerRef={recommendationHeroRef}
           approvalRef={approvalCardRef}
         />
@@ -2707,7 +2812,7 @@ export function App() {
               layout={layout}
               decisionProfile={decisionProfile}
               openQuestionsCount={remainingObligationCount}
-              onOpenQuestions={() => setStillCheckingSheetOpen(true)}
+              onOpenQuestions={openStillChecking}
             />
             <div className="flex min-w-0 flex-col gap-[var(--space-4)]">
               <div
@@ -2730,7 +2835,7 @@ export function App() {
                     data-testid="workspace-expanded-open-decision-profile"
                     variant="secondary"
                     size="sm"
-                    onClick={() => setDecisionProfileSheetOpen(true)}
+                    onClick={openDecisionProfile}
                   >
                     Your priorities
                   </Button>
@@ -2740,7 +2845,7 @@ export function App() {
                   data-testid="workspace-expanded-open-notes"
                   variant="secondary"
                   size="sm"
-                  onClick={() => setNotesSheetOpen(true)}
+                  onClick={openNotes}
                 >
                   Notes
                 </Button>
@@ -2758,12 +2863,21 @@ export function App() {
                 options={allOptions}
                 filters={filters}
                 onFiltersChange={handleFiltersChange}
-                onOpenFilters={() => setFilterSheetOpen(true)}
+                onOpenFilters={openFilters}
                 matchingCount={visibleOptions.length}
                 totalCount={allOptions.length}
                 presentation={activePack?.presentation ?? null}
                 assistantVisibleOptionIds={assistantVisibleOptionIds}
                 onClearAssistantNarrowing={handleClearAssistantNarrowing}
+              />
+
+              {/* Which FACTS the view below draws, alongside the switcher that
+                picks its SHAPE. Renders nothing for a pack that declares no
+                lenses. */}
+              <LensSwitcher
+                lenses={packLenses}
+                activeLensId={activeLensId}
+                onLensChange={handleLensChange}
               />
 
               <WorkspaceViewSwitcher
@@ -2796,7 +2910,7 @@ export function App() {
                 // the `scoreboard` memo above for why a rank must not be
                 // recomputed over a filtered subset.
                 scoreboard={scoreboard}
-                onOpenProfile={setProfileOptionId}
+                onOpenProfile={openOptionProfile}
                 boardPlacement={boardPlacement}
                 onMoveOption={handleMoveOption}
               />
@@ -2820,6 +2934,12 @@ export function App() {
               filter surface moved out of the sidebar at all: this component
               tree has no sidebar, so filters previously did not exist here
               in any form (ADR 0009). */}
+            <LensSwitcher
+              lenses={packLenses}
+              activeLensId={activeLensId}
+              onLensChange={handleLensChange}
+            />
+
             <WorkspaceViewSwitcher
               mode={viewMode}
               onModeChange={handleViewModeChange}
@@ -2841,7 +2961,7 @@ export function App() {
               onQuickPickFocusChange={() => undefined}
               criteria={snapshot?.criteria ?? []}
               scoreboard={scoreboard}
-              onOpenProfile={setProfileOptionId}
+              onOpenProfile={openOptionProfile}
               boardPlacement={boardPlacement}
               onMoveOption={handleMoveOption}
               toolbarLeading={
@@ -2851,7 +2971,7 @@ export function App() {
                   options={allOptions}
                   filters={filters}
                   onFiltersChange={handleFiltersChange}
-                  onOpenFilters={() => setFilterSheetOpen(true)}
+                  onOpenFilters={openFilters}
                   matchingCount={visibleOptions.length}
                   totalCount={allOptions.length}
                   presentation={activePack?.presentation ?? null}
@@ -2929,7 +3049,9 @@ export function App() {
       */}
       <FindingsSheet
         open={findingsSheetOpen}
-        onOpenChange={setFindingsSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeFindings();
+        }}
         items={evidenceItems ?? []}
         onSetDisposition={handleSetDisposition}
         dispositionPendingId={dispositionPendingId}
@@ -2942,7 +3064,9 @@ export function App() {
           reaches the review is completely unaffected by it. */}
       <BlindSpotReviewSheet
         open={blindSpotSheetOpen}
-        onOpenChange={setBlindSpotSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeBlindSpotReview();
+        }}
         prompts={applicableBlindSpotPrompts}
         onComplete={handleCompleteBlindSpotReview}
         pending={blindSpotReviewPending}
@@ -2965,7 +3089,7 @@ export function App() {
       <OptionProfileSheet
         open={profileOptionId !== null}
         onOpenChange={(open) => {
-          if (!open) setProfileOptionId(null);
+          if (!open) closeOptionProfile();
         }}
         profile={openProfile}
         presentation={activePack?.presentation ?? null}
@@ -2974,7 +3098,9 @@ export function App() {
 
       <ReferenceLibrarySheet
         open={referenceLibraryOpen}
-        onOpenChange={setReferenceLibraryOpen}
+        onOpenChange={(open) => {
+          if (!open) closeReferenceLibrary();
+        }}
         sources={snapshot?.sources ?? []}
         // `claims`/`evidenceLinks` are REQUIRED, not decorative: they are
         // the only way to tell a REFERENCE (kept because it is relevant)
@@ -2987,7 +3113,9 @@ export function App() {
 
       <FilterSheet
         open={filterSheetOpen}
-        onOpenChange={setFilterSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeFilters();
+        }}
         attributeDefinitions={filterableDefinitions}
         options={allOptions}
         filters={filters}
@@ -2996,7 +3124,12 @@ export function App() {
         totalCount={allOptions.length}
       />
 
-      <Sheet open={manageOptionsSheetOpen} onOpenChange={setManageOptionsSheetOpen}>
+      <Sheet
+        open={manageOptionsSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeManageOptions();
+        }}
+      >
         <SheetContent data-testid="workspace-add-option-sheet">
           <SheetHeader>
             <SheetTitle>{`Add ${optionLabel}`}</SheetTitle>
@@ -3014,7 +3147,12 @@ export function App() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={stillCheckingSheetOpen} onOpenChange={setStillCheckingSheetOpen}>
+      <Sheet
+        open={stillCheckingSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeStillChecking();
+        }}
+      >
         <SheetContent data-testid="workspace-still-checking-sheet">
           <SheetHeader>
             <SheetTitle>Still checking</SheetTitle>
@@ -3025,7 +3163,12 @@ export function App() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={decisionProfileSheetOpen} onOpenChange={setDecisionProfileSheetOpen}>
+      <Sheet
+        open={decisionProfileSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeDecisionProfile();
+        }}
+      >
         <SheetContent data-testid="workspace-decision-profile-sheet">
           <SheetHeader>
             <SheetTitle>Your priorities</SheetTitle>
@@ -3052,7 +3195,12 @@ export function App() {
         One surface fixes it: existing notes and the add form together, opened
         identically at every width from the app bar, which is global chrome.
       */}
-      <Sheet open={notesSheetOpen} onOpenChange={setNotesSheetOpen}>
+      <Sheet
+        open={notesSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeNotes();
+        }}
+      >
         <SheetContent data-testid="workspace-notes-sheet">
           <SheetHeader>
             <SheetTitle>Notes</SheetTitle>
@@ -3073,7 +3221,12 @@ export function App() {
         both demo scripts turn on was reachable only through WebMCP or a
         console call against the same command endpoint.
       */}
-      <Sheet open={prioritiesSheetOpen} onOpenChange={setPrioritiesSheetOpen}>
+      <Sheet
+        open={prioritiesSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closePriorities();
+        }}
+      >
         <SheetContent data-testid="workspace-priorities-sheet">
           <SheetHeader>
             <SheetTitle>Priorities</SheetTitle>
@@ -3090,15 +3243,18 @@ export function App() {
               // than being predicted here from a second source of truth.
               protectedCriterionIds={[]}
               resolveExpectedSequence={resolveExpectedSequence}
-              onDone={() => {
-                setPrioritiesSheetOpen(false);
-              }}
+              onDone={closePriorities}
             />
           </SheetBody>
         </SheetContent>
       </Sheet>
 
-      <Sheet open={addConcernSheetOpen} onOpenChange={setAddConcernSheetOpen}>
+      <Sheet
+        open={addConcernSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) closeAddConcern();
+        }}
+      >
         <SheetContent data-testid="workspace-add-concern-sheet">
           <SheetHeader>
             <SheetTitle>Add a question</SheetTitle>
@@ -3141,10 +3297,10 @@ export function App() {
           {...(inspectingDebugEventId !== undefined
             ? { focusEventId: inspectingDebugEventId }
             : {})}
-          onClose={handleCloseRuntimeInspector}
+          onClose={closeRuntimeInspector}
           apiConfig={apiConfig}
           events={caseScopedActivityEvents}
-          onInspectEvent={handleInspectEvent}
+          onInspectEvent={inspectRunEvent}
         />
       ) : null}
 

@@ -230,7 +230,16 @@ export function ApprovalCard({
                   submit('approve');
                 }}
                 variant="default"
-                className="min-h-[var(--size-touch-target-min)]"
+                // `h-auto`/`whitespace-normal` override the shared Button
+                // base's `whitespace-nowrap` and fixed height, which are
+                // right for a fixed label and wrong for this one. This label
+                // now interpolates the recommendation's own name, so its
+                // length is the pack's to decide -- "Select Schedule a
+                // technician inspection" is 293px of text in a 270px box at
+                // the 390px pane, which `html, body { overflow-x: hidden }`
+                // would hide rather than fix. It wraps and grows downward
+                // instead; `min-h` keeps the 44px touch target intact.
+                className="h-auto min-h-[var(--size-touch-target-min)] py-[var(--space-2)] whitespace-normal"
               >
                 {reviewPending ? 'Submitting…' : approveLabel}
               </Button>

@@ -2732,6 +2732,11 @@ export function App() {
             // Repeating it here stacked the same words twice, which no unit
             // test could see because they render the shell on its own.
             showDecisionTitle={false}
+            // The guided stepper is the pinned orientation wherever it
+            // renders (narrow only), so this shell scrolls there rather than
+            // pinning a second orientation bar beneath it -- see the `pinned`
+            // prop's own comment for the overflow that caused.
+            pinned={layout !== 'narrow'}
           />
         )}
 

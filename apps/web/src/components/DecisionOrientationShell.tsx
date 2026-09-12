@@ -179,6 +179,23 @@ export interface DecisionOrientationShellProps {
    * nothing else names the decision.
    */
   readonly showDecisionTitle?: boolean;
+  /**
+   * Whether this shell is the pinned orientation, or whether something above
+   * it already is.
+   *
+   * Same shape of problem as `showDecisionTitle`, one level up: ADR 0016's
+   * guided stepper is itself "an orientation and navigation control," and at
+   * narrow width it sits directly above this shell OUTSIDE the scrolling
+   * region -- so pinning both stacks two orientation bars on the pane this
+   * product is actually used in. That is not merely redundant: the app bar,
+   * the stepper and this shell together pinned enough of a 640px pane that
+   * `request-investigation` ended up behind it while a run streamed and the
+   * hero grew, which `assertRightPaneIntegrity` caught.
+   *
+   * Defaults to `true` so the shell stays self-sufficient wherever nothing
+   * above it is pinned.
+   */
+  readonly pinned?: boolean;
   readonly workInFlight?: WorkInFlight | null;
   /**
    * A handle on this shell's own outer element, for a caller that needs to
@@ -212,6 +229,7 @@ export function DecisionOrientationShell({
   orientation,
   layout,
   showDecisionTitle = true,
+  pinned = true,
   workInFlight = null,
   containerRef,
 }: DecisionOrientationShellProps): React.JSX.Element {
@@ -299,7 +317,8 @@ export function DecisionOrientationShell({
         aria-label="Decision status"
         data-testid="decision-orientation-shell"
         className={[
-          'sticky top-0 z-20 flex flex-col gap-[var(--space-1)]',
+          pinned ? 'sticky top-0 z-20' : '',
+          'flex flex-col gap-[var(--space-1)]',
           'border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]',
           layout === 'expanded'
             ? 'px-[var(--space-6)] py-[var(--space-3)]'

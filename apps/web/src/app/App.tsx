@@ -282,7 +282,10 @@ import { OptionProfileSheet } from '../components/OptionProfileSheet.js';
 import { CaseInsightsPanel } from '../components/CaseInsightsPanel.js';
 import { buildWorkspaceScoreboard, selectOptionRanking } from '../components/case-scoreboard.js';
 import { ReferenceLibrarySheet } from '../components/ReferenceLibrary.js';
+import { AnalysisStage } from '../components/AnalysisStage.js';
+import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper.js';
 import { deriveOptionProfile } from '../components/option-profile.js';
+import { deriveCaseWorkflow, type CaseWorkflowStageId } from './case-workflow.js';
 import { useWidthMode } from '../hooks/use-width-mode.js';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -563,6 +566,9 @@ export function App() {
   // browsable. Global chrome like the other sheets: it is the model's
   // durable memory made legible, and must be reachable in both layouts.
   const [referenceLibraryOpen, setReferenceLibraryOpen] = useState(false);
+  const [workflowStageOverride, setWorkflowStageOverride] = useState<CaseWorkflowStageId | null>(
+    null,
+  );
   const [resetPending, setResetPending] = useState(false);
   const [runRequestPending, setRunRequestPending] = useState(false);
   const [runRequestError, setRunRequestError] = useState<string | null>(null);
@@ -1475,9 +1481,15 @@ export function App() {
 
   useEffect(() => {
     let disposed = false;
+    // This controller exists before registration's first await, so React
+    // Strict Mode's development-only setup -> cleanup -> setup cycle can
+    // cancel a partially-registered generation before the replacement tries
+    // to register the same stable WebMCP tool names.
+    const registrationController = new AbortController();
     registerSiftTools({
       adapter: webMcpAdapter,
       commands,
+      signal: registrationController.signal,
       getActiveCase: () => snapshotRef.current,
       listPacks: () => installedPacksRef.current,
     })
@@ -1492,6 +1504,7 @@ export function App() {
       .catch(() => undefined);
     return () => {
       disposed = true;
+      registrationController.abort();
       toolHandleRef.current?.disposeAll();
       toolHandleRef.current = null;
       setToolHandle(null);
@@ -2330,6 +2343,47 @@ export function App() {
     ...(favoredOptionLabel === undefined ? {} : { favoredOptionLabel }),
   });
 
+  const requiredDiscoveryTopics =
+    snapshot?.discovery?.topics.filter((topic) => topic.necessity === 'required') ?? [];
+  const requiredDiscoveryTotal = requiredDiscoveryTopics.length;
+  const requiredDiscoveryResolved = requiredDiscoveryTopics.filter(
+    (topic) => topic.status === 'confirmed' || topic.status === 'not_applicable',
+  ).length;
+  const intakeComplete =
+    snapshot !== null &&
+    snapshot.entities.length > 0 &&
+    requiredDiscoveryResolved >= requiredDiscoveryTotal;
+  const workflow = deriveCaseWorkflow({
+    intakeComplete,
+    prioritiesComplete: (snapshot?.criteria.length ?? 0) > 0,
+    // Evidence is analysis output, so its presence is proof the stage has
+    // done work even when no run is active and the activity feed is empty
+    // (a restored case, or a snapshot loaded fresh from the server). Without
+    // this the stage locks behind its own results: a case holding findings
+    // reports Analysis as unavailable and the person cannot open them.
+    analysisStarted:
+      isRunActive ||
+      caseScopedActivityEvents.length > 0 ||
+      (snapshot?.evidenceLinks.length ?? 0) > 0,
+    analysisComplete: snapshot?.recommendation !== null && snapshot?.recommendation !== undefined,
+    // Review is NOT complete merely because a proposal exists. These two were
+    // the same expression, so the instant analysis produced a proposal the
+    // stepper marked Review done and jumped to Decide -- the person was never
+    // routed to the stage that owns Quick Pick, List, Compare, Board, filters
+    // and readiness gaps (ADR 0016's stage ownership table). Reviewing stays
+    // open to you until you actually settle the decision.
+    reviewComplete:
+      snapshot?.proposal !== null &&
+      snapshot?.proposal !== undefined &&
+      snapshot.proposal.status !== 'pending',
+    decisionAvailable: snapshot?.proposal !== null && snapshot?.proposal !== undefined,
+    decided:
+      snapshot?.proposal !== null &&
+      snapshot?.proposal !== undefined &&
+      snapshot.proposal.status !== 'pending',
+  });
+  const activeWorkflowStageId = workflowStageOverride ?? workflow.recommendedStageId;
+
   // `WorkspaceAlertBanner` items (ADR 0008 decision 2/req 2 of this task):
   // DERIVED from real, already-canonical state -- never fabricated. Each
   // condition below is the exact same signal an existing region already
@@ -2455,6 +2509,7 @@ export function App() {
             title={snapshot.title}
             connectionState={mapAppBarConnectionState(connectionState)}
             findingsCount={flaggedFindingsCount}
+            showAnalysisControls={layout === 'expanded'}
             optionCount={optionsCount}
             onAddOption={() => setManageOptionsSheetOpen(true)}
             onAddNote={() => {
@@ -2484,6 +2539,14 @@ export function App() {
           </div>
         )}
       </div>
+
+      {layout === 'narrow' && snapshot !== null ? (
+        <CaseWorkflowStepper
+          stages={workflow.stages}
+          activeStageId={activeWorkflowStageId}
+          onStageChange={setWorkflowStageOverride}
+        />
+      ) : null}
 
       {/*
         The one scrolling region.
@@ -2582,12 +2645,24 @@ export function App() {
 
         {streamError ? <ErrorState message={streamError} /> : null}
 
+        {layout === 'narrow' && activeWorkflowStageId === 'analysis' ? (
+          <AnalysisStage
+            findingsNeedingReview={flaggedFindingsCount}
+            sourceCount={snapshot?.sources.length ?? 0}
+            activityCount={caseScopedActivityEvents.length}
+            onOpenFindings={() => setFindingsSheetOpen(true)}
+            onOpenSources={() => setReferenceLibraryOpen(true)}
+            onOpenActivity={handleOpenDeveloperView}
+          />
+        ) : null}
+
         <RecommendationHero
           status={workspaceStatus}
           recommendation={snapshot?.recommendation ?? null}
           withheld={withheld}
           sources={sources}
           proposal={snapshot?.proposal ?? null}
+          approvalOptionLabel={favoredOptionLabel}
           onReview={handleReviewProposal}
           reviewPending={proposalReviewPending}
           reviewError={proposalReviewError}
@@ -2745,19 +2820,6 @@ export function App() {
               filter surface moved out of the sidebar at all: this component
               tree has no sidebar, so filters previously did not exist here
               in any form (ADR 0009). */}
-            <FilterBar
-              attributeDefinitions={filterableDefinitions}
-              options={allOptions}
-              filters={filters}
-              onFiltersChange={handleFiltersChange}
-              onOpenFilters={() => setFilterSheetOpen(true)}
-              matchingCount={visibleOptions.length}
-              totalCount={allOptions.length}
-              presentation={activePack?.presentation ?? null}
-              assistantVisibleOptionIds={assistantVisibleOptionIds}
-              onClearAssistantNarrowing={handleClearAssistantNarrowing}
-            />
-
             <WorkspaceViewSwitcher
               mode={viewMode}
               onModeChange={handleViewModeChange}
@@ -2782,6 +2844,21 @@ export function App() {
               onOpenProfile={setProfileOptionId}
               boardPlacement={boardPlacement}
               onMoveOption={handleMoveOption}
+              toolbarLeading={
+                <FilterBar
+                  compact
+                  attributeDefinitions={filterableDefinitions}
+                  options={allOptions}
+                  filters={filters}
+                  onFiltersChange={handleFiltersChange}
+                  onOpenFilters={() => setFilterSheetOpen(true)}
+                  matchingCount={visibleOptions.length}
+                  totalCount={allOptions.length}
+                  presentation={activePack?.presentation ?? null}
+                  assistantVisibleOptionIds={assistantVisibleOptionIds}
+                  onClearAssistantNarrowing={handleClearAssistantNarrowing}
+                />
+              }
             />
 
             {!decisionProfileIsEmpty && decisionProfile !== null ? (

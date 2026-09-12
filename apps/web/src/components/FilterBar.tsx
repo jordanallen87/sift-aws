@@ -86,6 +86,8 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface FilterBarProps {
+  /** Compact right-pane presentation: icon-only trigger plus the truthful result count. */
+  compact?: boolean;
   /** `CaseState.attributeDefinitions`. When none of them is filterable this component renders nothing at all. */
   attributeDefinitions: AttributeDefinition[];
   /** The case's real saved options -- read only so a `money` chip can recover the currency its own values declared. */
@@ -204,6 +206,7 @@ function AssistantNarrowingChip({ label, onRemove }: { label: string; onRemove: 
 }
 
 export function FilterBar({
+  compact = false,
   attributeDefinitions,
   options,
   filters,
@@ -283,7 +286,11 @@ export function FilterBar({
   return (
     <div
       data-testid="workspace-filter-bar"
-      className="flex flex-col gap-[var(--space-2)]"
+      className={
+        compact
+          ? 'flex flex-wrap items-center gap-[var(--space-2)]'
+          : 'flex flex-col gap-[var(--space-2)]'
+      }
       aria-label="Filters"
       role="group"
     >
@@ -299,11 +306,17 @@ export function FilterBar({
             type="button"
             data-testid="workspace-filter-open"
             variant="secondary"
+            size={compact ? 'icon-lg' : 'default'}
+            aria-label={compact ? 'Filter options' : undefined}
             onClick={onOpenFilters}
-            className="min-h-[var(--size-touch-target-min)] gap-[var(--space-2)] px-[var(--space-3)]"
+            className={
+              compact
+                ? 'min-h-[var(--size-touch-target-min)] min-w-[var(--size-touch-target-min)]'
+                : 'min-h-[var(--size-touch-target-min)] gap-[var(--space-2)] px-[var(--space-3)]'
+            }
           >
             <SlidersHorizontalIcon aria-hidden="true" />
-            <span>Filters</span>
+            {compact ? null : <span>Filters</span>}
             {hasApplied ? (
               <Badge
                 data-testid="workspace-filter-active-count"

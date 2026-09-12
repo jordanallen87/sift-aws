@@ -984,9 +984,20 @@ export class SiftPage {
     await this.closeSheet('workspace-add-concern-sheet');
   }
 
-  /** Opens the "What Sift found" review Sheet via `WorkspaceAppBar`'s always-present "Findings" control (ADR 0008; supersedes the retired "What Sift found" disclosure trigger row). Identical in both layouts, like `openManageOptionsSheet` above. */
+  /** Opens findings from the expanded app bar or, in the guided narrow pane, its Analysis stage. Both controls open the same sheet. */
   async openFindingsSheet(): Promise<void> {
-    await this.openSheetVia('workspace-app-bar-findings', 'findings-sheet');
+    const appBarTrigger = this.page.getByTestId('workspace-app-bar-findings');
+    let triggerTestId = 'workspace-app-bar-findings';
+    if (!(await appBarTrigger.isVisible().catch(() => false))) {
+      const analysisTrigger = this.page.getByTestId('case-stage-analysis-open-findings');
+      if (!(await analysisTrigger.isVisible().catch(() => false))) {
+        const stepper = this.page.getByTestId('case-workflow-stepper');
+        await stepper.getByTestId('case-workflow-stepper-toggle').click();
+        await stepper.getByRole('button', { name: /^Analysis, / }).click();
+      }
+      triggerTestId = 'case-stage-analysis-open-findings';
+    }
+    await this.openSheetVia(triggerTestId, 'findings-sheet');
   }
 
   /** Fills and submits `CustomConcernForm` without asserting the outcome -- used directly by tests that expect a real error (`error-recovery.spec.ts`); `submitCustomConcern` below is the success-asserting convenience wrapper every other spec uses. Opens the layout-appropriate "Add a question" region first via `openAddConcern` (ADR 0008). */

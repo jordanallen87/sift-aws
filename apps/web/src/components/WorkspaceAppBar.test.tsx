@@ -192,6 +192,17 @@ describe('WorkspaceAppBar', () => {
   });
 
   describe('Findings', () => {
+    it('omits findings and references when Analysis owns those controls', () => {
+      render(
+        <WorkspaceAppBar
+          {...buildProps({ onOpenReferenceLibrary: vi.fn(), showAnalysisControls: false })}
+        />,
+      );
+
+      expect(screen.queryByTestId('workspace-app-bar-findings')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('workspace-app-bar-references')).not.toBeInTheDocument();
+    });
+
     it('renders a real, clickable control even at zero findings (de-emphasised, never hidden)', () => {
       render(<WorkspaceAppBar {...buildProps({ findingsCount: 0 })} />);
       const control = screen.getByTestId('workspace-app-bar-findings');

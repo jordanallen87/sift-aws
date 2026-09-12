@@ -138,6 +138,13 @@ The `pack-authoring` skill integration suite uses the real Strands AgentSkills a
 
 ### Browser E2E tests
 
+The guided consumer workflow requires semantic assertions at 390, 430, and
+480 px for all five stages; stage navigation must not emit a case mutation;
+future stages must expose prerequisite state; completed stages must remain
+reachable; and the compact filter/view controls must retain accessible names
+and keyboard operation. Screenshot baselines remain secondary to these
+semantic assertions.
+
 Playwright starts the real web and agent services with deterministic fixtures. Tests cover:
 
 - launching each demo from a clean state;

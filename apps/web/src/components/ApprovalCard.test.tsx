@@ -35,13 +35,25 @@ describe('ApprovalCard', () => {
     );
   });
 
-  it('renders the pending state with "Your approval needed" and three explicit controls (Choose this / Pass / Keep researching)', () => {
+  it('renders the pending state with concrete approval controls', () => {
     render(<ApprovalCard proposal={buildProposal()} onReview={vi.fn()} />);
 
     expect(screen.getByTestId('approval-card-pending')).toHaveTextContent(/your approval needed/i);
-    expect(screen.getByRole('button', { name: 'Choose this' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select recommendation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pass' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Keep researching' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue investigation' })).toBeInTheDocument();
+  });
+
+  it('names the recommended option when the caller provides one', () => {
+    render(
+      <ApprovalCard
+        proposal={buildProposal()}
+        optionLabel="Northgate Plumbing"
+        onReview={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Select Northgate Plumbing' })).toBeInTheDocument();
   });
 
   describe('human-only approval (architecture.md "reviewProposal rejects requests whose actor is not human")', () => {
@@ -50,7 +62,7 @@ describe('ApprovalCard', () => {
       const onReview = vi.fn();
       render(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
 
-      await user.click(screen.getByRole('button', { name: 'Choose this' }));
+      await user.click(screen.getByRole('button', { name: 'Select recommendation' }));
 
       expect(onReview).toHaveBeenCalledTimes(1);
       expect(onReview).toHaveBeenCalledWith({ actor: 'human', decision: 'approve' });
@@ -71,7 +83,7 @@ describe('ApprovalCard', () => {
       const onReview = vi.fn();
       render(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
 
-      await user.click(screen.getByRole('button', { name: 'Keep researching' }));
+      await user.click(screen.getByRole('button', { name: 'Continue investigation' }));
       await user.type(
         screen.getByTestId('approval-card-revision-instructions-input'),
         'Please re-check the trade-in value.',
@@ -90,11 +102,11 @@ describe('ApprovalCard', () => {
       const onReview = vi.fn<ApprovalCardProps['onReview']>();
       const { rerender } = render(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
 
-      await user.click(screen.getByRole('button', { name: 'Choose this' }));
+      await user.click(screen.getByRole('button', { name: 'Select recommendation' }));
       rerender(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
       await user.click(screen.getByRole('button', { name: 'Pass' }));
       rerender(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
-      await user.click(screen.getByRole('button', { name: 'Keep researching' }));
+      await user.click(screen.getByRole('button', { name: 'Continue investigation' }));
       await user.type(
         screen.getByTestId('approval-card-revision-instructions-input'),
         'Double-check mileage.',
@@ -113,7 +125,7 @@ describe('ApprovalCard', () => {
     const onReview = vi.fn();
     render(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
 
-    await user.click(screen.getByRole('button', { name: 'Keep researching' }));
+    await user.click(screen.getByRole('button', { name: 'Continue investigation' }));
     expect(screen.getByRole('button', { name: 'Submit revision request' })).toBeDisabled();
 
     await user.type(screen.getByTestId('approval-card-revision-instructions-input'), 'a');
@@ -125,7 +137,7 @@ describe('ApprovalCard', () => {
     const onReview = vi.fn();
     render(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
 
-    await user.click(screen.getByRole('button', { name: 'Keep researching' }));
+    await user.click(screen.getByRole('button', { name: 'Continue investigation' }));
     await user.type(screen.getByTestId('approval-card-revision-instructions-input'), '   ');
     fireEvent.submit(screen.getByTestId('approval-card-revision-form'));
 
@@ -139,7 +151,7 @@ describe('ApprovalCard', () => {
     const onReview = vi.fn();
     render(<ApprovalCard proposal={buildProposal()} onReview={onReview} />);
 
-    await user.click(screen.getByRole('button', { name: 'Keep researching' }));
+    await user.click(screen.getByRole('button', { name: 'Continue investigation' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(screen.queryByTestId('approval-card-revision-form')).not.toBeInTheDocument();
@@ -170,7 +182,9 @@ describe('ApprovalCard', () => {
       expect(screen.getByTestId('approval-card-stamp')).toHaveTextContent(expectedLabel);
       // No pending controls remain once a decision has settled.
       expect(screen.queryByTestId('approval-card-pending')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Choose this' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Select recommendation' }),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -240,7 +254,7 @@ describe('ApprovalCard', () => {
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(/could not submit your review/i);
-    expect(screen.getByRole('button', { name: 'Choose this' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Select recommendation' })).toBeEnabled();
   });
 
   it('has no axe violations across empty, pending, revising, settled, and error states', async () => {

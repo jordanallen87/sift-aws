@@ -7,6 +7,20 @@ records what in it was adapted from a private reference repository.
 
 ## The design world: a case dossier, not a dashboard
 
+### Guided workflow and action hierarchy
+
+The consumer pane uses a compact stepper for Intake, Priorities, Analysis,
+Review, and Decide. It is a progress and navigation control, not a tab strip.
+At 390–480 px it leads with the current step and ordinal progress; the full
+sequence is disclosed on demand rather than compressed into five truncated
+labels.
+
+Each region has at most one filled primary action. Sift Green is the normal
+primary-action color; neutral outlined buttons are secondary; quiet controls
+handle navigation and utilities; amber communicates attention; and brick red
+is reserved for errors or genuinely rejecting/destructive actions. Status
+colors never create competing calls to action.
+
 Sift's own language is casework: a **case**, **evidence**, **obligations**
 ("questions to resolve"), **readiness**, a **recommendation**, and a human
 **approval**. `docs/specs/product.md` describes the product as "a calm case

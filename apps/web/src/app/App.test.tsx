@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -17,8 +18,15 @@ import {
 import { createFakeSiftCommands, buildFakeCommandReceipt } from '../test/fake-sift-commands.js';
 import { buildFixtureCaseState, buildFixtureCompiledPack } from '../test/fixtures.js';
 import { FakeEventSource, createFakeEventSource } from '../test/fake-event-source.js';
-import { InMemoryModelContextAdapter } from '../model-context/adapter.js';
-import { CASE_SCOPED_SIFT_TOOL_NAMES } from '../model-context/register-sift-tools.js';
+import {
+  InMemoryModelContextAdapter,
+  type WebMcpRegisterOptions,
+  type WebMcpToolDefinition,
+} from '../model-context/adapter.js';
+import {
+  CASE_SCOPED_SIFT_TOOL_NAMES,
+  GLOBAL_SIFT_TOOL_NAMES,
+} from '../model-context/register-sift-tools.js';
 import { renderAtNarrowWidth } from '../test/narrow-viewport.js';
 import { buildCarCaseState } from '../test/scoreboard-fixtures.js';
 
@@ -187,12 +195,34 @@ async function startDemoAndWait() {
   return user;
 }
 
-// "What Sift found" is now the `WorkspaceAppBar`'s "Findings" control, not
-// a disclosure row at all (ADR 0008: the one region promoted out of the
-// bottom-of-page stack in BOTH layout modes) -- tests that need to reach a
-// real evidence-card control open the sheet through it first.
+// "What Sift found" is reached from the Analysis stage, not from the app bar
+// and not from a disclosure row. ADR 0008 first promoted it out of the
+// bottom-of-page stack into a `WorkspaceAppBar` control; ADR 0016 then gave
+// it a conceptual home instead of global app-bar priority ("Findings and
+// references stop consuming global app-bar priority and gain an explicit
+// conceptual home" -- Analysis owns "findings, sources/citations, activity").
+// Tests that need a real evidence-card control open the sheet the way a
+// person does: from the Analysis stage.
 async function openFindingsSheet(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByTestId('workspace-app-bar-findings'));
+  // Findings have two real entry points, and which one exists depends on the
+  // rendered layout -- so this reaches the sheet the way a person at that
+  // width actually would, rather than assuming one of them.
+  //
+  // Expanded: the `WorkspaceAppBar` control ADR 0008 promoted out of the
+  // bottom-of-page stack. Narrow: the Analysis stage, where ADR 0016 gave
+  // findings a conceptual home instead of global app-bar priority. The
+  // guided stepper is narrow-only (`layout === 'narrow'` in `App.tsx`), so
+  // at expanded width there is no stage to navigate to at all.
+  const appBarControl = screen.queryByTestId('workspace-app-bar-findings');
+  if (appBarControl !== null) {
+    await user.click(appBarControl);
+  } else {
+    if (screen.queryByTestId('case-stage-analysis-open-findings') === null) {
+      await user.click(screen.getByTestId('case-workflow-stepper-toggle'));
+      await user.click(screen.getByTestId('case-workflow-step-analysis'));
+    }
+    await user.click(screen.getByTestId('case-stage-analysis-open-findings'));
+  }
   await waitFor(() => {
     expect(screen.getByTestId('findings-sheet')).toBeInTheDocument();
   });
@@ -1761,7 +1791,7 @@ describe('App', () => {
       // default label rather than staying stuck on a "requesting..." state,
       // not asserting a specific wording this file does not own.
       expect(screen.getByTestId('request-investigation')).toHaveTextContent(
-        'Ask Sift to look into this',
+        'Have Sift investigate',
       );
       expect(screen.getByTestId('request-investigation-error')).toBeInTheDocument();
     });
@@ -2177,7 +2207,7 @@ describe('App', () => {
       expect(screen.queryByTestId('disclosure-options')).not.toBeInTheDocument();
     });
 
-    it('shows a live finding count on the app bar\'s Findings control and the alert banner (ADR 0008: "What Sift found" is no longer a disclosure row)', async () => {
+    it('shows a live finding count on the Findings control for the rendered layout, and on the alert banner', async () => {
       const snapshot = buildFixtureCaseState({
         id: CASE_ID,
         sources: [
@@ -2209,8 +2239,15 @@ describe('App', () => {
       renderLiveWorkspace(snapshot);
       await startDemoAndWait();
 
+      // jsdom has no layout engine, so the width hook reports narrow and this
+      // renders the guided stage (ADR 0016), where findings live on the
+      // Analysis stage rather than the app bar. Asserted as the rendered
+      // sentence a person reads, so a count that stops agreeing with the
+      // evidence fails instead of quietly changing.
       await waitFor(() => {
-        expect(screen.getByTestId('workspace-app-bar-findings-count')).toHaveTextContent('1');
+        expect(screen.getByTestId('case-stage-analysis-open-findings')).toHaveTextContent(
+          'Review 1 flagged finding',
+        );
       });
       expect(screen.queryByTestId('disclosure-findings')).not.toBeInTheDocument();
       await waitFor(() => {
@@ -2287,6 +2324,8 @@ describe('App', () => {
       await waitFor(() => {
         expect(screen.getByTestId('workspace-view-switcher')).toBeInTheDocument();
       });
+      expect(screen.getByTestId('case-workflow-stepper')).toBeInTheDocument();
+      expect(screen.getByText(/Step \d of 5/)).toBeInTheDocument();
       // A real `<details>` disclosure would carry a `disclosure-*` testid
       // (per `DisclosureSection`'s own naming convention) -- the view
       // switcher deliberately carries none, because ADR 0004 item 5 makes
@@ -4404,6 +4443,65 @@ describe('App', () => {
       // `handle.disposeAll()` instead of committing the handle to state --
       // every tool it had just (really) registered is unregistered again.
       expect(adapter.registeredToolNames).toEqual([]);
+    });
+
+    it('keeps WebMCP tools registered when Strict Mode restarts an in-flight registration effect', async () => {
+      // The browser inserts a tool before registerTool() resolves and rejects
+      // a second registration under the same name. Delaying resolution makes
+      // React's development-only setup -> cleanup -> setup cycle deterministic
+      // and catches cleanup that becomes available only after the first async
+      // registration has already completed.
+      class BrowserLikeDelayedAdapter extends InMemoryModelContextAdapter {
+        readonly pendingReleases: (() => void)[] = [];
+
+        override registerTool(
+          definition: WebMcpToolDefinition,
+          options?: WebMcpRegisterOptions,
+        ): Promise<void> {
+          if (this.getRegisteredTool(definition.name) !== undefined) {
+            return Promise.reject(
+              new DOMException(
+                `Tool "${definition.name}" is already registered.`,
+                'InvalidStateError',
+              ),
+            );
+          }
+
+          void super.registerTool(definition, options);
+          return new Promise<void>((resolve, reject) => {
+            this.pendingReleases.push(resolve);
+            options?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('Registration aborted.', 'AbortError')),
+              { once: true },
+            );
+          });
+        }
+      }
+
+      const adapter = new BrowserLikeDelayedAdapter();
+      server.use(http.get('/api/packs', () => HttpResponse.json([])));
+
+      const { unmount } = render(
+        <StrictMode>
+          <AppProviders commandsClient={createFakeSiftCommands()} webMcpAdapter={adapter}>
+            <App />
+          </AppProviders>
+        </StrictMode>,
+      );
+      await waitFor(() => expect(adapter.pendingReleases.length).toBeGreaterThan(0));
+
+      let released = 0;
+      while (released < adapter.pendingReleases.length) {
+        adapter.pendingReleases[released]?.();
+        released += 1;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      await waitFor(() => {
+        expect([...adapter.registeredToolNames].sort()).toEqual([...GLOBAL_SIFT_TOOL_NAMES].sort());
+      });
+      unmount();
     });
 
     it('the "Request investigation" control does nothing if invoked while snapshot is still null (bypasses the disabled attribute to prove the callback\'s own defensive guard)', async () => {

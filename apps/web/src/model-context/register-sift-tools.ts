@@ -1414,6 +1414,8 @@ function buildListPacksTool(
 export interface SiftToolRegistrationOptions {
   adapter: ModelContextAdapter;
   commands: SiftCommands;
+  /** Cancels this entire registration generation, including any global tool whose asynchronous registration has not resolved yet. */
+  signal?: AbortSignal;
   /** Synchronous accessor for the currently active case's canonical state (or `null`). Read fresh on every `sift_get_case_context` call, not captured once at registration time. */
   getActiveCase: () => CaseState | null;
   /** Accessor for the installed compiled Decision Pack catalog; sync or async. */
@@ -1447,7 +1449,7 @@ export interface SiftToolRegistrationHandle {
 export async function registerSiftTools(
   options: SiftToolRegistrationOptions,
 ): Promise<SiftToolRegistrationHandle> {
-  const { adapter, commands, getActiveCase, listPacks } = options;
+  const { adapter, commands, getActiveCase, listPacks, signal } = options;
   const catalogAdapters =
     options.catalogAdapters ?? buildDefaultCatalogAdapters(options.catalogClientOptions);
 
@@ -1470,21 +1472,47 @@ export async function registerSiftTools(
 
   const globalController = new AbortController();
   let caseController: AbortController | null = null;
-
-  await adapter.registerTool(buildGetCaseContextTool(getActiveCase), {
-    signal: globalController.signal,
-  });
-  await adapter.registerTool(buildListPacksTool(listPacks), { signal: globalController.signal });
-  await adapter.registerTool(buildGetInteractionContextTool(getActiveCase, listPacks), {
-    signal: globalController.signal,
-  });
+  let disposed = false;
 
   function disposeCaseTools(): void {
     caseController?.abort();
     caseController = null;
   }
 
+  function disposeAll(): void {
+    if (disposed) return;
+    disposed = true;
+    signal?.removeEventListener('abort', disposeAll);
+    disposeCaseTools();
+    globalController.abort();
+  }
+
+  // Registration is asynchronous, but its ownership must be synchronous:
+  // React Strict Mode may run effect setup -> cleanup -> setup before the
+  // first registerTool() promise resolves. Wiring the caller's signal before
+  // that first await lets cleanup unregister the partially-created generation
+  // before the replacement attempts to reuse the same stable tool names.
+  signal?.addEventListener('abort', disposeAll, { once: true });
+  if (signal?.aborted) {
+    disposeAll();
+    throw signal.reason;
+  }
+
+  try {
+    await adapter.registerTool(buildGetCaseContextTool(getActiveCase), {
+      signal: globalController.signal,
+    });
+    await adapter.registerTool(buildListPacksTool(listPacks), { signal: globalController.signal });
+    await adapter.registerTool(buildGetInteractionContextTool(getActiveCase, listPacks), {
+      signal: globalController.signal,
+    });
+  } catch (error) {
+    disposeAll();
+    throw error;
+  }
+
   async function setActiveCase(caseId: string | null): Promise<void> {
+    if (disposed) return;
     disposeCaseTools();
     if (caseId === null) {
       return;
@@ -1495,11 +1523,6 @@ export async function registerSiftTools(
     for (const tool of tools) {
       await adapter.registerTool(tool, { signal: controller.signal });
     }
-  }
-
-  function disposeAll(): void {
-    disposeCaseTools();
-    globalController.abort();
   }
 
   return { disposeCaseTools, setActiveCase, disposeAll };

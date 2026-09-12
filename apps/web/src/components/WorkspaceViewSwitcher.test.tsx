@@ -91,12 +91,24 @@ function buildCaseExtension(overrides: Partial<CaseExtension> = {}): CaseExtensi
 }
 
 describe('WorkspaceViewSwitcher', () => {
-  it('renders all four view tabs with consumer-facing labels', () => {
+  it('renders compact icon-only view controls at narrow width with consumer-facing names', () => {
     render(<WorkspaceViewSwitcher {...buildProps()} />);
-    expect(screen.getByTestId('workspace-view-tab-quick_pick')).toHaveTextContent('Best Match');
-    expect(screen.getByTestId('workspace-view-tab-list')).toHaveTextContent('List');
-    expect(screen.getByTestId('workspace-view-tab-compare')).toHaveTextContent('Compare');
-    expect(screen.getByTestId('workspace-view-tab-board')).toHaveTextContent('Board');
+    expect(screen.getByTestId('workspace-view-tab-quick_pick')).toHaveAccessibleName('Best Match');
+    expect(screen.getByTestId('workspace-view-tab-list')).toHaveAccessibleName('List');
+    expect(screen.getByTestId('workspace-view-tab-compare')).toHaveAccessibleName('Compare');
+    expect(screen.getByTestId('workspace-view-tab-board')).toHaveAccessibleName('Board');
+    expect(screen.getByTestId('workspace-view-tab-quick_pick')).not.toHaveTextContent('Best Match');
+  });
+
+  it('places an optional compact toolbar control beside the view controls', () => {
+    render(
+      <WorkspaceViewSwitcher
+        {...buildProps({ toolbarLeading: <button type="button">Filter options</button> })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Filter options' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist')).toBeInTheDocument();
   });
 
   it('renders the real OptionCompareView when mode is compare', () => {

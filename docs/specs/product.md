@@ -139,6 +139,22 @@ At desktop/expanded width, the same primary-view-dominant structure applies, wit
 
 Change-set §33 requires that the consumer workspace and a developer/inspect surface project from the *same* underlying events — never two independently maintained truth sources. The consumer surface answers "what does this mean for my decision"; the developer surface answers "what exactly did the system do." `apps/web/src/components/activity-labels.ts` is the designated extension point for this mapping (internal event type → consumer copy), not a new mechanism to build. Content that moves off the consumer surface and stays developer-only: `commandId`, `runId`, the compiled pack hash, specialist ID, skill ID, the raw chronological activity ledger, and the E0–E3 evidence-level vocabulary.
 
+### Guided case workflow
+
+The primary consumer pane guides a case through five sequential stages:
+**Intake, Priorities, Analysis, Review, and Decide**. These stages are a
+workflow stepper, not peer tabs. At narrow width the persistent affordance
+names the current stage and ordinal progress without forcing all five labels
+into one row. Completed stages remain revisitable; unavailable future stages
+state their prerequisite; and an upstream change that invalidates analysis
+must make the stale state visible.
+
+Findings, Sources, and Activity belong to Analysis. Quick Pick, List,
+Compare, Board, filters, option profiles, and Keep / Unsure / Pass belong to
+Review. Consequential proposal controls belong to Decide. The stepper derives
+its status from canonical case state and never becomes a second persisted
+workflow engine. See ADR 0016.
+
 ### Lifecycle language
 
 The four-stage tracker (Started / Investigating / Pick ready / Decided) is retired. Consumer-facing progress uses task-shaped stages appropriate to the pack and the case's current point in the process — a generic shopping/comparison lifecycle is Find; Shortlist; Compare; Review; Decide, or a compact subset of it. This tracker must not dominate the page once a comparison is active: once inside an active workspace view, the view itself is more informative than a permanent process tracker (change-set §37).

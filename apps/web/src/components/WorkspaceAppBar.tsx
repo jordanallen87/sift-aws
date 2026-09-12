@@ -341,6 +341,8 @@ export interface WorkspaceAppBarProps {
   connectionState: WorkspaceAppBarConnectionState;
   /** Real, current count -- always rendered as a badge, including `0` (de-emphasised, never hidden; see header comment). */
   findingsCount: number;
+  /** When false, Analysis owns Findings and References so the app bar stays focused on case-level utilities. */
+  showAnalysisControls?: boolean;
   /** Opens the case's reference library. Optional: a caller that has not wired it renders no control rather than a dead one. */
   onOpenReferenceLibrary?: (() => void) | undefined;
   /** How many sources the case holds, shown so the control reports something real rather than an unexplained icon. */
@@ -514,6 +516,7 @@ export function WorkspaceAppBar({
   title,
   connectionState,
   findingsCount,
+  showAnalysisControls = true,
   onOpenReferenceLibrary,
   referenceCount = 0,
   optionCount,
@@ -752,45 +755,47 @@ export function WorkspaceAppBar({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <ControlTooltip
-            label={`Findings, ${String(findingsCount)}`}
-            description={FINDINGS_DESCRIPTION}
-          >
-            <Button
-              type="button"
-              data-testid="workspace-app-bar-findings"
-              // A single accessible name carrying the count in both layouts --
-              // the visible `Badge` count below is always `aria-hidden` (see
-              // its own comment) so the number is never announced twice.
-              aria-label={`Findings, ${findingsCount}`}
-              onClick={onReviewFindings}
-              variant="ghost"
-              // `size="sm"` at every width, not `isExpanded ? 'sm' : 'icon'` --
-              // see fix 1 in the header comment. The control is sized by its
-              // own inline content (icon, optional label, count chip) instead
-              // of a fixed square, so the count chip is always laid out
-              // touching the icon by construction; `TOUCH_TARGET` supplies
-              // the height floor `sm`'s own `h-8` doesn't reach on its own.
-              size="sm"
-              className={`gap-[var(--space-1)] ${TOUCH_TARGET} ${isExpanded ? '' : 'px-[var(--space-2)]'}`}
-              style={
-                hasFindings
-                  ? { color: findingsMeta.ink, backgroundColor: findingsMeta.bg }
-                  : undefined
-              }
+          {showAnalysisControls ? (
+            <ControlTooltip
+              label={`Findings, ${String(findingsCount)}`}
+              description={FINDINGS_DESCRIPTION}
             >
-              <SearchCheckIcon aria-hidden="true" className="size-4" />
-              {isExpanded ? 'Findings' : null}
-              <Badge
-                data-testid="workspace-app-bar-findings-count"
-                aria-hidden="true"
-                className="label-caps rounded-[var(--radius-pill)] px-[var(--space-1-5)] py-0"
-                style={{ color: findingsMeta.ink, backgroundColor: 'var(--color-surface)' }}
+              <Button
+                type="button"
+                data-testid="workspace-app-bar-findings"
+                // A single accessible name carrying the count in both layouts --
+                // the visible `Badge` count below is always `aria-hidden` (see
+                // its own comment) so the number is never announced twice.
+                aria-label={`Findings, ${findingsCount}`}
+                onClick={onReviewFindings}
+                variant="ghost"
+                // `size="sm"` at every width, not `isExpanded ? 'sm' : 'icon'` --
+                // see fix 1 in the header comment. The control is sized by its
+                // own inline content (icon, optional label, count chip) instead
+                // of a fixed square, so the count chip is always laid out
+                // touching the icon by construction; `TOUCH_TARGET` supplies
+                // the height floor `sm`'s own `h-8` doesn't reach on its own.
+                size="sm"
+                className={`gap-[var(--space-1)] ${TOUCH_TARGET} ${isExpanded ? '' : 'px-[var(--space-2)]'}`}
+                style={
+                  hasFindings
+                    ? { color: findingsMeta.ink, backgroundColor: findingsMeta.bg }
+                    : undefined
+                }
               >
-                {findingsCount}
-              </Badge>
-            </Button>
-          </ControlTooltip>
+                <SearchCheckIcon aria-hidden="true" className="size-4" />
+                {isExpanded ? 'Findings' : null}
+                <Badge
+                  data-testid="workspace-app-bar-findings-count"
+                  aria-hidden="true"
+                  className="label-caps rounded-[var(--radius-pill)] px-[var(--space-1-5)] py-0"
+                  style={{ color: findingsMeta.ink, backgroundColor: 'var(--color-surface)' }}
+                >
+                  {findingsCount}
+                </Badge>
+              </Button>
+            </ControlTooltip>
+          ) : null}
 
           {/* The reference library: the case's collected research, and the
               durable half of what the model remembers about this decision.
@@ -798,7 +803,7 @@ export function WorkspaceAppBar({
               "what did Sift conclude" and "what did Sift read" -- and both
               are global chrome, reachable identically in both layouts.
               Absent, not disabled, when no caller wired it. */}
-          {onOpenReferenceLibrary !== undefined ? (
+          {showAnalysisControls && onOpenReferenceLibrary !== undefined ? (
             <ControlTooltip
               label={`References, ${String(referenceCount)}`}
               description={REFERENCES_DESCRIPTION}

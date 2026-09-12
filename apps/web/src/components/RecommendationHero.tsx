@@ -56,6 +56,8 @@ export interface RecommendationHeroProps {
   withheld: RecommendationWithheld | null;
   sources: Record<string, Source>;
   proposal: DecisionProposal | null;
+  /** Resolved label for the proposal's favoured option, when available. */
+  approvalOptionLabel?: string | undefined;
   onReview: (review: ApprovalCardReview) => void;
   reviewPending: boolean;
   reviewError: string | null;
@@ -106,6 +108,7 @@ export function RecommendationHero({
   withheld,
   sources,
   proposal,
+  approvalOptionLabel,
   onReview,
   reviewPending,
   reviewError,
@@ -170,7 +173,7 @@ export function RecommendationHero({
           variant={status.phase === 'not_started' ? 'default' : 'secondary'}
           className="min-h-[var(--size-touch-target-min)]"
         >
-          {requestPending ? 'Asking…' : 'Ask Sift to look into this'}
+          {requestPending ? 'Starting investigation…' : 'Have Sift investigate'}
         </Button>
 
         {status.action?.kind === 'review_findings' ? (
@@ -247,6 +250,7 @@ export function RecommendationHero({
       {proposal !== null ? (
         <ApprovalCard
           proposal={proposal}
+          optionLabel={approvalOptionLabel}
           onReview={onReview}
           reviewPending={reviewPending}
           error={reviewError}

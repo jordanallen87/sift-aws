@@ -138,6 +138,14 @@ describe('FilterBar', () => {
       expect(screen.queryByTestId('workspace-filter-active-count')).not.toBeInTheDocument();
     });
 
+    it('can render a compact icon-only trigger while keeping its accessible name', () => {
+      render(<FilterBar {...baseProps()} compact />);
+
+      expect(screen.getByTestId('workspace-filter-open')).toHaveAccessibleName('Filter options');
+      expect(screen.getByTestId('workspace-filter-open')).not.toHaveTextContent('Filters');
+      expect(screen.getByTestId('workspace-filter-result-count')).toHaveTextContent('4 saved cars');
+    });
+
     it('shows how many filters are applied, once at least one is', () => {
       render(<FilterBar {...baseProps({ filters: [AWD_FILTER, COLOR_FILTER] })} />);
       expect(screen.getByTestId('workspace-filter-active-count')).toHaveTextContent('2');

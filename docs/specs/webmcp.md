@@ -36,6 +36,7 @@ When WebMCP is unavailable, the website remains fully usable through visible con
 - Register case tools only when an active case snapshot exists.
 - Register proposal-review context only while a proposal is pending; final approval remains a visible human UI action.
 - Abort the previous registration controller whenever the active case changes or the component unmounts.
+- Registration ownership must exist before the first asynchronous `registerTool()` call settles. Development hosts run React Strict Mode's setup → cleanup → setup cycle, so cleanup must be able to abort a partially registered generation before its replacement reuses the stable tool names; otherwise duplicate-name rejection can leave the page with no discoverable tools.
 - Tool names are stable across Decision Packs. Pack-specific meaning is expressed through current case context, declarative schemas, and labels, not dynamically invented tool names.
 
 ## Tool authority classes

@@ -84,15 +84,13 @@ function buildProps(overrides: Partial<RecommendationHeroProps> = {}): Recommend
 }
 
 describe('RecommendationHero', () => {
-  it('renders the not_started headline and a primary "Ask Sift to look into this" action for a fresh case', () => {
+  it('renders the not_started headline and a primary investigation action for a fresh case', () => {
     render(<RecommendationHero {...buildProps()} />);
 
     expect(screen.getByTestId('recommendation-hero-headline')).toHaveTextContent(
       "Nothing's been looked into yet.",
     );
-    expect(screen.getByTestId('request-investigation')).toHaveTextContent(
-      'Ask Sift to look into this',
-    );
+    expect(screen.getByTestId('request-investigation')).toHaveTextContent('Have Sift investigate');
   });
 
   // ADR 0004 decision item 1: this is the one machine-checkable proof that

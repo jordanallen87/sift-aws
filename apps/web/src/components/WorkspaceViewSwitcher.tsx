@@ -112,7 +112,8 @@
  * so `compareVisibleAttributeIds`/`comparePinnedAttributeIds` read the
  * top-level fields directly, unlike `compareOptionIds`.
  */
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
+import { BadgeCheckIcon, Columns3Icon, LayoutGridIcon, ListIcon } from 'lucide-react';
 import {
   WORKSPACE_VIEW_MODES,
   type WorkspaceViewMode,
@@ -132,6 +133,7 @@ import { OptionListView } from './OptionListView.js';
 import { OptionBoardView } from './OptionBoardView.js';
 import { useWidthMode } from '../hooks/use-width-mode.js';
 import type { WorkspaceScoreboard } from './case-scoreboard.js';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface WorkspaceViewSwitcherProps {
   mode: WorkspaceViewMode;
@@ -194,6 +196,8 @@ export interface WorkspaceViewSwitcherProps {
   // §12).
   boardPlacement: Record<string, string>;
   onMoveOption: (optionId: string, toColumnId: string) => void;
+  /** Optional compact control placed before the view selector in the narrow review toolbar. */
+  toolbarLeading?: ReactNode;
 }
 
 // `quick_pick`'s visible tab label is "Best Match" -- Cars.com's own sort-order label for its
@@ -204,6 +208,13 @@ const VIEW_TAB_LABEL: Record<WorkspaceViewMode, string> = {
   list: 'List',
   compare: 'Compare',
   board: 'Board',
+};
+
+const VIEW_TAB_ICON: Record<WorkspaceViewMode, React.ComponentType<{ className?: string }>> = {
+  quick_pick: BadgeCheckIcon,
+  list: ListIcon,
+  compare: Columns3Icon,
+  board: LayoutGridIcon,
 };
 
 /**
@@ -267,6 +278,7 @@ export function WorkspaceViewSwitcher({
   onQuickPickFocusChange,
   boardPlacement,
   onMoveOption,
+  toolbarLeading,
 }: WorkspaceViewSwitcherProps) {
   const rankedForQuickPick = useMemo(() => orderByRank(options, scoreboard), [options, scoreboard]);
 
@@ -284,17 +296,41 @@ export function WorkspaceViewSwitcher({
           onModeChange(value as WorkspaceViewMode);
         }}
       >
-        <TabsList aria-label="Choose how to view your options">
-          {WORKSPACE_VIEW_MODES.map((viewMode) => (
-            <TabsTrigger
-              key={viewMode}
-              data-testid={`workspace-view-tab-${viewMode}`}
-              value={viewMode}
-            >
-              {VIEW_TAB_LABEL[viewMode]}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="flex flex-wrap items-center gap-[var(--space-2)]">
+          {toolbarLeading}
+          <TabsList aria-label="Choose how to view your options">
+            {WORKSPACE_VIEW_MODES.map((viewMode) => {
+              const Icon = VIEW_TAB_ICON[viewMode];
+              const trigger = (
+                <TabsTrigger
+                  key={viewMode}
+                  data-testid={`workspace-view-tab-${viewMode}`}
+                  value={viewMode}
+                  aria-label={widthMode === 'narrow' ? VIEW_TAB_LABEL[viewMode] : undefined}
+                  className={
+                    widthMode === 'narrow'
+                      ? 'min-h-[var(--size-touch-target-min)] min-w-[var(--size-touch-target-min)] p-0'
+                      : undefined
+                  }
+                >
+                  {widthMode === 'narrow' ? (
+                    <Icon aria-hidden="true" className="size-4" />
+                  ) : (
+                    VIEW_TAB_LABEL[viewMode]
+                  )}
+                </TabsTrigger>
+              );
+              return widthMode === 'narrow' ? (
+                <Tooltip key={viewMode}>
+                  <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+                  <TooltipContent>{VIEW_TAB_LABEL[viewMode]}</TooltipContent>
+                </Tooltip>
+              ) : (
+                trigger
+              );
+            })}
+          </TabsList>
+        </div>
 
         <TabsContent data-testid="workspace-view-content-quick_pick" value="quick_pick">
           <QuickPickView

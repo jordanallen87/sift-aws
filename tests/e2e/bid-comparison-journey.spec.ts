@@ -397,6 +397,25 @@ test.describe('Bid Comparison -- full demo journey', () => {
     );
 
     await sift.openManageOptionsSheet();
+
+    // Regression lock for the reachability fix `OptionEditor.tsx`'s own
+    // header comment describes: on this exact seeded 12-bid case, at the
+    // canonical 430px pane width, the Save button used to sit 2,253px down a
+    // 2,329px scroll and the first field 1,458px below the fold. A unit test
+    // cannot see a scroll position or a viewport -- only a real, sized
+    // browser can -- so this asserts, in the sheet's own freshly-opened
+    // default "Add" state and BEFORE anything here scrolls the pane, that
+    // both the primary action and the first attribute field are already
+    // inside the viewport. `toBeInViewport()` checks the CURRENT scroll
+    // position; nothing above this line calls `scrollIntoView` or similar.
+    if (page.viewportSize()?.width === 430) {
+      await expect(page.getByTestId('option-editor-save')).toBeInViewport();
+      await expect(
+        page.locator('[data-testid^="dynamic-attribute-field-"]').first(),
+      ).toBeInViewport();
+    }
+
+    await page.getByTestId('option-editor-list-trigger').click();
     for (const entityId of BID_COMPARISON_ENTITY_IDS) {
       await expect(page.getByTestId(`option-editor-option-${entityId}`)).toBeVisible();
     }

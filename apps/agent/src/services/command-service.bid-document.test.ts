@@ -360,6 +360,71 @@ describe('CommandService.submitBidDocument', () => {
       expect(stored?.eventSequence).toBe(snapshot.eventSequence);
     });
 
+    // The gap between these two: the malformed case above never PARSES, and
+    // was already refused. This one parses perfectly and simply is not a bid
+    // this extractor recognises -- valid JSON under different key names, or
+    // the wrong file entirely. It used to report a successful import and
+    // leave behind a candidate named after the file holding five attributes
+    // and not one value, which then sat in the comparison being ranked
+    // (found by pasting `quoted_total`/`contractor` instead of
+    // `total`/`contractorName` into the real running app).
+    it('rejects a well-formed document that states nothing it can read, and persists nothing', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        filename: 'wrong-shape-bid.json',
+        format: 'application/json',
+        // Valid JSON, plausible-looking bid, every key under a name this
+        // extractor does not know.
+        text: JSON.stringify({
+          contractor: 'Harborline Mechanical',
+          quoted_total: { amount: 268400, currency: 'USD' },
+          deposit_percent: 20,
+          line_items: [{ description: 'Demo and haul-off', amount: 12000 }],
+        }),
+      });
+
+      expect(result.status).toBe('validation');
+      if (result.status !== 'validation') throw new Error('unreachable');
+      expect(result.message).toContain('Nothing in "wrong-shape-bid.json" could be read as a bid');
+      const stored = caseStore.load(snapshot.id);
+      expect(stored?.entities).toHaveLength(0);
+      expect(stored?.sources).toHaveLength(0);
+      expect(stored?.eventSequence).toBe(snapshot.eventSequence);
+    });
+
+    // The other side of that boundary, asserted here so the refusal above can
+    // never be widened into "refuse anything incomplete". A bid missing most
+    // of its required fields is a case Sift exists to carry: it records each
+    // gap as an explicit unknown and says so. Only reading NOTHING means the
+    // wrong document.
+    it('still accepts a document it can read only one field from, recording the rest as unknown', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        filename: 'thin-bid.json',
+        format: 'application/json',
+        text: JSON.stringify({
+          contractorName: 'Thin Bid Co',
+          total: { amount: 100, currency: 'USD' },
+        }),
+      });
+
+      expect(result.status).toBe('ok');
+      const stored = caseStore.load(snapshot.id);
+      expect(stored?.entities).toHaveLength(1);
+      const entity = stored?.entities[0];
+      expect(entity?.label).toBe('Thin Bid Co');
+      expect(entity?.attributes['bid.quoted_total']?.status).toBe('supported');
+      for (const unread of [
+        'bid.deposit_percent',
+        'bid.start_weeks',
+        'bid.duration_days',
+        'bid.warranty_months',
+      ]) {
+        expect(entity?.attributes[unread]?.status).toBe('unknown');
+        expect(entity?.attributes[unread]?.value).toBeUndefined();
+      }
+    });
+
     it('rejects a document above the byte cap at the schema boundary (validation)', () => {
       const snapshot = startCase();
       const result = submit(snapshot, {

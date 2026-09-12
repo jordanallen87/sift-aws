@@ -2857,7 +2857,24 @@ export function App() {
           moved.
         */}
 
-        {streamError ? <ErrorState message={streamError} /> : null}
+        {/*
+          Suppressed while the connection state already explains itself. A
+          dropped dev server put two banners on screen at once: the amber
+          "Connection lost. Sift will keep trying to reconnect." above, and
+          directly beneath it a red one reading, in full, "Failed to fetch"
+          -- the browser's own `TypeError` message for a refused request,
+          shown to a person as though it were a sentence, with no retry
+          control and nothing to do about it. The banner above is the true
+          and actionable one; this one only repeated it in developer
+          vocabulary. A stream error that is NOT a connection failure still
+          surfaces here, because then it is telling the person something the
+          connection badge does not.
+        */}
+        {streamError !== null &&
+        connectionState !== 'offline' &&
+        connectionState !== 'reconnecting' ? (
+          <ErrorState message={streamError} />
+        ) : null}
 
         {/*
           INTAKE owns "Pack identity, required setup, options, missing
@@ -3443,7 +3460,14 @@ export function App() {
           <SheetHeader>
             <SheetTitle>{`Add ${optionLabel}`}</SheetTitle>
           </SheetHeader>
-          <SheetBody>
+          {/*
+            `pb-0`, uniquely among the sheets here: `OptionEditor` ends in a
+            `sticky bottom-0` save bar, and `SheetBody`'s default 16px
+            bottom padding sits BELOW the scrollport edge that bar sticks
+            to -- so form text scrolled through a 16px strip underneath it.
+            The bar carries that bottom spacing itself instead.
+          */}
+          <SheetBody className="pb-0">
             <OptionEditor
               caseId={activeCaseId}
               resolveExpectedSequence={resolveExpectedSequence}

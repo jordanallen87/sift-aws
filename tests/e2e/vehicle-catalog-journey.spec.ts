@@ -113,6 +113,10 @@ test.describe('Compare vehicles -- normal, non-demo catalog journey', () => {
     // now lives in a modal Sheet reached from the app bar, in both
     // layouts, rather than an inline disclosure) ---
     await sift.openManageOptionsSheet();
+    // The roster is now a collapsed `<Collapsible>` (`OptionEditor.tsx`) --
+    // opening it is what puts `option-editor-list`/`option-editor-edit-*` in
+    // the DOM.
+    await page.getByTestId('option-editor-list-trigger').click();
     for (const entity of entities) {
       await expect(page.getByTestId('option-editor-list')).toContainText(entity.label);
     }
@@ -184,6 +188,7 @@ test.describe('Compare vehicles -- normal, non-demo catalog journey', () => {
     await page.reload();
     await expect(page.getByTestId('workspace-app-bar')).toBeVisible({ timeout: 15_000 });
     await sift.openManageOptionsSheet();
+    await page.getByTestId('option-editor-list-trigger').click();
     for (const entity of entities) {
       await expect(page.getByTestId('option-editor-list')).toContainText(entity.label);
     }

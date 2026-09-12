@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_BID_DOCUMENT_BYTES, MAX_CASE_ENTITIES } from '@sift/contracts';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import type { AttributeDefinition, EntityRecord } from '@sift/contracts';
@@ -83,8 +83,17 @@ describe('OptionEditor', () => {
     expect(screen.getByTestId('option-editor-empty')).toBeInTheDocument();
   });
 
-  it('lists existing options with an edit control for each', () => {
+  // The roster is now collapsed by default (docs comment in OptionEditor.tsx:
+  // the form is the task, the existing roster is reference material) --
+  // opening it is what makes `option-editor-option-*`/`option-editor-edit-*`
+  // exist in the DOM at all.
+  it('lists existing options with an edit control for each, once the roster is expanded', async () => {
+    const user = userEvent.setup();
     renderEditor({ options: [buildEntity()] });
+
+    expect(screen.queryByTestId('option-editor-option-candidate-rav4')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('option-editor-list-trigger'));
+
     expect(screen.getByTestId('option-editor-option-candidate-rav4')).toHaveTextContent(
       'Toyota RAV4',
     );
@@ -124,6 +133,7 @@ describe('OptionEditor', () => {
     const user = userEvent.setup();
     const { commands } = renderEditor({ options: [buildEntity()] });
 
+    await user.click(screen.getByTestId('option-editor-list-trigger'));
     await user.click(screen.getByTestId('option-editor-edit-candidate-rav4'));
     expect(screen.getByLabelText('Option label')).toHaveValue('Toyota RAV4');
 
@@ -140,6 +150,7 @@ describe('OptionEditor', () => {
     const user = userEvent.setup();
     renderEditor({ options: [buildEntity()] });
 
+    await user.click(screen.getByTestId('option-editor-list-trigger'));
     await user.click(screen.getByTestId('option-editor-edit-candidate-rav4'));
     expect(screen.getByLabelText('Option label')).toHaveValue('Toyota RAV4');
 
@@ -173,13 +184,41 @@ describe('OptionEditor', () => {
     });
   });
 
-  it("disables adding a new option only at the contract's own entity cap", () => {
+  // The old `option-editor-new` "Add {label}" button is gone -- adding is
+  // now the sheet's own default state -- but what it used to guarantee moved
+  // with it rather than being dropped: `option-editor-save` itself is now
+  // gated on `atCapacity` (which is `false` the moment `form.optionId` is
+  // set), so a full case blocks a new Save directly while leaving editing an
+  // EXISTING candidate fully live -- unlike the old layout, where the "Add"
+  // button being disabled left the form and its own Save underneath fully
+  // live regardless, so a full case only ever told you on submit.
+  it("disables Save while adding once the case is at the contract's own entity cap, but keeps it live for editing an existing candidate there", async () => {
+    const user = userEvent.setup();
     const options = Array.from({ length: MAX_CASE_ENTITIES }, (_, index) =>
       buildEntity({ id: `candidate-${index}`, label: `Candidate ${index}` }),
     );
-    renderEditor({ options });
-    expect(screen.getByTestId('option-editor-max-reached')).toBeInTheDocument();
-    expect(screen.getByTestId('option-editor-new')).toBeDisabled();
+    const { commands } = renderEditor(
+      { options },
+      { upsertOption: vi.fn().mockResolvedValue(buildFakeCommandReceipt()) },
+    );
+    expect(screen.getByTestId('option-editor-max-reached')).toHaveTextContent(
+      `${String(MAX_CASE_ENTITIES)}`,
+    );
+
+    await user.type(screen.getByLabelText('Option label'), 'One too many');
+    expect(screen.getByTestId('option-editor-save')).toBeDisabled();
+
+    await user.click(screen.getByTestId('option-editor-list-trigger'));
+    await user.click(screen.getByTestId('option-editor-edit-candidate-0'));
+    expect(screen.getByTestId('option-editor-save')).not.toBeDisabled();
+    await user.click(screen.getByTestId('option-editor-save'));
+
+    await waitFor(() => {
+      expect(commands.upsertOption).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(commands.upsertOption).mock.calls[0]?.[0]).toMatchObject({
+      optionId: 'candidate-0',
+    });
   });
 
   // The regression this pair exists for: the cap defaulted to a hardcoded 5
@@ -187,13 +226,27 @@ describe('OptionEditor', () => {
   // which seeds twelve bids -- rendered an Add form that refused every entry
   // on a case the engine accepted. A cap the rest of the system does not
   // share is a bug, not a limit.
-  it('still accepts a new option on a case holding more than the old hardcoded limit', () => {
+  it('still accepts a new option on a case holding more than the old hardcoded limit', async () => {
+    const user = userEvent.setup();
     const options = Array.from({ length: 12 }, (_, index) =>
       buildEntity({ id: `candidate-${index}`, label: `Candidate ${index}` }),
     );
-    renderEditor({ options });
+    const { commands } = renderEditor(
+      { options },
+      { upsertOption: vi.fn().mockResolvedValue(buildFakeCommandReceipt()) },
+    );
     expect(screen.queryByTestId('option-editor-max-reached')).not.toBeInTheDocument();
-    expect(screen.getByTestId('option-editor-new')).not.toBeDisabled();
+
+    await user.type(screen.getByLabelText('Option label'), 'Candidate 13');
+    expect(screen.getByTestId('option-editor-save')).not.toBeDisabled();
+    await user.click(screen.getByTestId('option-editor-save'));
+
+    await waitFor(() => {
+      expect(commands.upsertOption).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(commands.upsertOption).mock.calls[0]?.[0]).toMatchObject({
+      option: { label: 'Candidate 13' },
+    });
   });
 
   it('shows a recoverable error and preserves the entered label when upsertOption fails', async () => {
@@ -293,27 +346,53 @@ describe('OptionEditor', () => {
   });
 
   describe('touch targets (docs/specs/testing.md 44px minimum)', () => {
-    // `option-editor-new` uses the compact `size="sm"` variant (`h-8`, 32px
-    // tall) with no override; below tokens.css's
-    // `--size-touch-target-min: 44px`. Asserted via class presence -- jsdom
-    // does not run a real layout engine (see ../test/narrow-viewport.tsx's
-    // identical caveat) -- following the same `min-h-[var(--size-touch-
-    // target-min)]` override pattern already used elsewhere, e.g.
-    // CaseHeader.tsx's "Reset demo" button.
-    it('gives the "Add" option button the 44px touch-target override despite its compact "sm" size', () => {
-      renderEditor();
-      expect(screen.getByTestId('option-editor-new')).toHaveClass(
+    // The old `option-editor-new` "Add {label}" button (compact `size="sm"`,
+    // 32px tall, below the 44px minimum) is gone -- adding is now the
+    // sheet's own default state, so there is nothing left to click to reach
+    // it. Its replacement as the sheet's own new primary disclosure controls
+    // are the two `CollapsibleTrigger`s this redesign introduced: the
+    // existing-options roster and (on a bid-kind pack) the document import.
+    // Both carry an explicit override in `OptionEditor.tsx`'s own className,
+    // asserted here via class presence -- jsdom does not run a real layout
+    // engine (see ../test/narrow-viewport.tsx's identical caveat).
+    it('gives the existing-options roster disclosure trigger the 44px touch-target override', () => {
+      renderEditor({ options: [buildEntity()] });
+      expect(screen.getByTestId('option-editor-list-trigger')).toHaveClass(
+        'min-h-[var(--size-touch-target-min)]',
+      );
+    });
+
+    it('gives the bid-document-import disclosure trigger the 44px touch-target override', () => {
+      renderEditor({
+        optionKind: 'bid',
+        optionLabel: 'bid',
+        attributeDefinitions: [
+          {
+            id: 'bid.quoted_total',
+            label: 'Quoted total',
+            valueType: 'money',
+            required: true,
+            appliesTo: ['bid'],
+            evidenceExpectation: 'assertion',
+            comparison: 'lower_better',
+            sensitive: false,
+          },
+        ],
+      });
+      expect(screen.getByTestId('option-editor-import-trigger')).toHaveClass(
         'min-h-[var(--size-touch-target-min)]',
       );
     });
 
     // `option-editor-edit-*` uses the even more compact `size="xs"` variant
-    // (`h-6`, 24px tall) with no override, and `variant="ghost"`, whose only
-    // fill is `hover:bg-accent` -- fully transparent at rest. A touch-device
-    // user has no hover state, so this affordance was invisible until
-    // tapped, not just undersized.
-    it('gives each row\'s Edit button the 44px touch-target override despite its compact "xs" size, and a fill visible at rest (not only on hover)', () => {
+    // (`h-6`, 24px tall) with no override, and `variant="secondary"` overridden
+    // to `bg-card` -- fully opaque at rest, unlike the untouched default fill.
+    // Now sits behind the roster's own collapsed-by-default disclosure, so it
+    // must be opened first.
+    it('gives each row\'s Edit button the 44px touch-target override despite its compact "xs" size, and a fill visible at rest (not only on hover)', async () => {
+      const user = userEvent.setup();
       renderEditor({ options: [buildEntity()] });
+      await user.click(screen.getByTestId('option-editor-list-trigger'));
       const editButton = screen.getByTestId('option-editor-edit-candidate-rav4');
 
       expect(editButton).toHaveClass('min-h-[var(--size-touch-target-min)]');
@@ -444,11 +523,16 @@ describe('OptionEditor', () => {
       );
     }
 
+    // The import panel is now behind a collapsed-by-default disclosure
+    // (`option-editor-import-trigger`); none of its own `bid-document-import*`
+    // testids exist until it is opened. Opening it here once means every
+    // call site below can keep filling the same fields it always did.
     async function importDocument(
       user: ReturnType<typeof userEvent.setup>,
       text = DOCUMENT_TEXT,
       filename = 'bid-northgate.json',
     ) {
+      await user.click(screen.getByTestId('option-editor-import-trigger'));
       fireEvent.change(screen.getByTestId('bid-document-import-text'), { target: { value: text } });
       await user.type(screen.getByLabelText('Document name'), filename);
       await user.selectOptions(screen.getByLabelText('Document format'), 'application/json');
@@ -457,11 +541,16 @@ describe('OptionEditor', () => {
 
     it('is absent on a pack whose options are not bids', () => {
       renderEditor();
+      expect(screen.queryByTestId('bid-document-import-trigger')).not.toBeInTheDocument();
       expect(screen.queryByTestId('bid-document-import')).not.toBeInTheDocument();
     });
 
-    it('is offered on a pack whose declared option kind is the one the command writes', () => {
+    it('is offered (behind its own disclosure) on a pack whose declared option kind is the one the command writes', async () => {
+      const user = userEvent.setup();
       renderBidEditor();
+
+      expect(screen.queryByTestId('bid-document-import')).not.toBeInTheDocument();
+      await user.click(screen.getByTestId('option-editor-import-trigger'));
       expect(screen.getByTestId('bid-document-import')).toBeInTheDocument();
     });
 
@@ -469,6 +558,7 @@ describe('OptionEditor', () => {
       const user = userEvent.setup();
       const { commands } = renderBidEditor();
 
+      await user.click(screen.getByTestId('option-editor-import-trigger'));
       await user.upload(
         screen.getByTestId('bid-document-import-file'),
         new File([DOCUMENT_TEXT], 'bid-northgate.json', { type: 'application/json' }),
@@ -634,18 +724,64 @@ describe('OptionEditor', () => {
       expect(screen.queryByTestId('bid-document-import-summary')).not.toBeInTheDocument();
     });
 
-    // An import always ADDS an option, so offering it while some other
-    // option is open for editing would silently abandon that edit.
-    it('is withdrawn while a pre-existing option is being edited, and returns on Cancel', async () => {
+    // REGRESSION, not a redesign choice -- flagged explicitly in this task's
+    // final report rather than silently accepted.
+    //
+    // The intent, unchanged in `OptionEditor.tsx`'s own comment above
+    // `showDocumentImport`, is that an import always ADDS an option, so
+    // offering it while some other pre-existing option is open for editing
+    // would silently abandon that edit. Before this redesign that was
+    // enforced by a separate `imported` state, set ONLY by a completed
+    // import, so a plain `startEdit` on a never-imported option correctly
+    // left it `null` and `showDocumentImport`'s
+    // `form.optionId === imported?.optionId` clause false.
+    //
+    // This redesign folded that state into the shared `baseline` (needed
+    // for the provenance fix this task's own header comment describes:
+    // `formFromEntity` returning `{ form, baseline }`) -- and `startEdit`
+    // now sets `baseline.optionId = entity.id` for ANY edit, not just an
+    // import. Because that is exactly `form.optionId` right after any
+    // `startEdit`, `showDocumentImport`'s `form.optionId ===
+    // baseline?.optionId` clause is now trivially true the moment ANY
+    // pre-existing option is opened for editing -- so the affordance this
+    // test's own name used to describe is never actually withdrawn any
+    // more. Asserted here as it now truthfully behaves.
+    // An import always CREATES an option, so offering it while a
+    // pre-existing one is open for correction would silently abandon that
+    // edit. This briefly regressed: folding the import-only `ImportedState`
+    // into the general `BaselineState` made the "is this the option the
+    // import just made?" comparison true for every edit, because an ordinary
+    // edit populates a baseline too. Only an import-sourced baseline carries
+    // a `filename`, which is what the condition now keys on.
+    it('withdraws the import affordance while a pre-existing, never-imported option is being edited', async () => {
       const user = userEvent.setup();
       const existing = { ...buildEntity({ id: 'bid-existing', kind: 'bid' }) };
       renderBidEditor({ options: [existing] });
 
-      await user.click(screen.getByTestId('option-editor-edit-bid-existing'));
-      expect(screen.queryByTestId('bid-document-import')).not.toBeInTheDocument();
+      expect(screen.getByTestId('option-editor-import-trigger')).toBeInTheDocument();
 
+      await user.click(screen.getByTestId('option-editor-list-trigger'));
+      await user.click(screen.getByTestId('option-editor-edit-bid-existing'));
+
+      expect(screen.queryByTestId('option-editor-import-trigger')).not.toBeInTheDocument();
+
+      // ...and returns once the edit is abandoned, so the affordance is
+      // withdrawn for the duration of the edit rather than lost for good.
       await user.click(screen.getByTestId('option-editor-cancel'));
-      expect(screen.getByTestId('bid-document-import')).toBeInTheDocument();
+      expect(screen.getByTestId('option-editor-import-trigger')).toBeInTheDocument();
+    });
+
+    // The other side of that condition: correcting the option an import just
+    // created KEEPS the panel, because its summary of what was and was not
+    // read belongs on screen beside the fields it filled in.
+    it('keeps the import affordance while correcting the option an import just created', async () => {
+      const user = userEvent.setup();
+      renderBidEditor();
+
+      await importDocument(user);
+      await screen.findByTestId('option-editor-imported-bid.quoted_total');
+
+      expect(screen.getByTestId('option-editor-import-trigger')).toBeInTheDocument();
     });
 
     it('has no axe violations with an imported option open for correction', async () => {
@@ -656,6 +792,283 @@ describe('OptionEditor', () => {
       await screen.findByTestId('option-editor-imported-bid.quoted_total');
 
       expect(await axe(container)).toHaveNoViolations();
+    });
+  });
+
+  /**
+   * THE BUG THIS TASK FIXES (`OptionEditor.tsx`'s own `BaselineState` doc
+   * comment): `formFromEntity` used to keep only `record.value` and drop
+   * `origin`/`status`/`confidence`/`sourceIds` entirely, so pressing "Edit"
+   * on an existing option and then "Save" -- typing nothing at all --
+   * re-sent every attribute with no provenance, and `upsertOption`'s handler
+   * defaults an attribute carrying no provenance to the person's own
+   * `origin: 'user'`/`status: 'asserted'`. Verified live against a seeded
+   * Bid Comparison case: a no-op edit silently rewrote all ten of
+   * Northgate's `origin: 'pack'` records to `origin: 'user'` with
+   * `sourceIds: []`, destroying every link to the bid document, the licence
+   * registry, and the calculator's own working.
+   */
+  describe('editing provenance (regression: a no-op edit must not launder existing provenance)', () => {
+    const PROVENANCE_DEFINITIONS: AttributeDefinition[] = [
+      ...ATTRIBUTE_DEFINITIONS,
+      {
+        id: 'notes',
+        label: 'Notes',
+        valueType: 'string',
+        required: false,
+        appliesTo: ['car'],
+        evidenceExpectation: 'assertion',
+        comparison: 'none',
+        sensitive: false,
+      },
+    ];
+
+    function sourcedEntity(): EntityRecord {
+      return buildEntity({
+        attributes: {
+          price: {
+            definitionId: 'price',
+            label: 'Price',
+            value: { type: 'money', amount: 28500, currency: 'USD' },
+            origin: 'pack',
+            sourceIds: ['s1'],
+            status: 'asserted',
+            updatedAt: '2026-08-27T00:00:00.000Z',
+          },
+          mileage: {
+            definitionId: 'mileage',
+            label: 'Mileage',
+            value: { type: 'number', value: 42000, unit: 'mi' },
+            origin: 'pack',
+            sourceIds: ['s1'],
+            confidence: 0.6,
+            status: 'asserted',
+            updatedAt: '2026-08-27T00:00:00.000Z',
+          },
+          notes: {
+            definitionId: 'notes',
+            label: 'Notes',
+            origin: 'pack',
+            sourceIds: ['s1'],
+            status: 'unknown',
+            updatedAt: '2026-08-27T00:00:00.000Z',
+          },
+        },
+      });
+    }
+
+    async function openForEdit(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByTestId('option-editor-list-trigger'));
+      await user.click(screen.getByTestId('option-editor-edit-candidate-rav4'));
+    }
+
+    it("keeps every attribute's origin, status, sourceIds and confidence when Save is pressed WITHOUT TYPING anything", async () => {
+      const user = userEvent.setup();
+      const { commands } = renderEditor(
+        { attributeDefinitions: PROVENANCE_DEFINITIONS, options: [sourcedEntity()] },
+        { upsertOption: vi.fn().mockResolvedValue(buildFakeCommandReceipt()) },
+      );
+
+      await openForEdit(user);
+      expect(screen.getByLabelText('Option label')).toHaveValue('Toyota RAV4');
+      await user.click(screen.getByTestId('option-editor-save'));
+
+      await waitFor(() => {
+        expect(commands.upsertOption).toHaveBeenCalledTimes(1);
+      });
+      const calledWith = vi.mocked(commands.upsertOption).mock.calls[0]?.[0];
+      expect(calledWith).toMatchObject({ optionId: 'candidate-rav4' });
+      const attributes = calledWith?.option.attributes ?? [];
+
+      expect(attributes).toContainEqual({
+        definitionId: 'price',
+        value: { type: 'money', amount: 28500, currency: 'USD' },
+        origin: 'pack',
+        status: 'asserted',
+        sourceIds: ['s1'],
+      });
+      expect(attributes).toContainEqual({
+        definitionId: 'mileage',
+        value: { type: 'number', value: 42000, unit: 'mi' },
+        origin: 'pack',
+        status: 'asserted',
+        sourceIds: ['s1'],
+        confidence: 0.6,
+      });
+      // status:'unknown' stays unknown, with its own origin and sourceIds --
+      // never dropped or reassigned by an untouched save.
+      expect(attributes).toContainEqual({
+        definitionId: 'notes',
+        status: 'unknown',
+        origin: 'pack',
+        sourceIds: ['s1'],
+      });
+      // Nothing extra, nothing missing: exactly these three, exactly as
+      // they were before Edit/Save.
+      expect(attributes).toHaveLength(3);
+    });
+
+    it("sends only the ONE typed field with no provenance, and keeps every other field's original provenance intact", async () => {
+      const user = userEvent.setup();
+      const { commands } = renderEditor(
+        { attributeDefinitions: PROVENANCE_DEFINITIONS, options: [sourcedEntity()] },
+        { upsertOption: vi.fn().mockResolvedValue(buildFakeCommandReceipt()) },
+      );
+
+      await openForEdit(user);
+      await user.clear(screen.getByLabelText('Mileage'));
+      await user.type(screen.getByLabelText('Mileage'), '39000');
+      await user.click(screen.getByTestId('option-editor-save'));
+
+      await waitFor(() => {
+        expect(commands.upsertOption).toHaveBeenCalledTimes(1);
+      });
+      const attributes =
+        vi.mocked(commands.upsertOption).mock.calls[0]?.[0]?.option.attributes ?? [];
+
+      // Typed by the person: no provenance at all, which is what makes
+      // `upsertOption`'s handler default it to their own
+      // `origin: 'user'`/`status: 'asserted'` entry.
+      expect(attributes).toContainEqual({
+        definitionId: 'mileage',
+        value: { type: 'number', value: 39000, unit: 'mi' },
+      });
+      // Untouched -- still carrying the case's own provenance, exactly as
+      // it was before this edit.
+      expect(attributes).toContainEqual({
+        definitionId: 'price',
+        value: { type: 'money', amount: 28500, currency: 'USD' },
+        origin: 'pack',
+        status: 'asserted',
+        sourceIds: ['s1'],
+      });
+      expect(attributes).toContainEqual({
+        definitionId: 'notes',
+        status: 'unknown',
+        origin: 'pack',
+        sourceIds: ['s1'],
+      });
+      expect(attributes).toHaveLength(3);
+    });
+
+    // Item 6 of this task's UI changes: `InheritedValueNote`'s badge for an
+    // EXISTING option's value (`filename === null`) reads "Already on this
+    // case" (citing its real source count) for a recorded value, and
+    // "Recorded as unknown" for one the case never recorded at all --
+    // distinct from the import-path badges ("Read from the document"/"Not
+    // stated in the document"), which only apply when `filename !== null`.
+    it('marks an untouched existing value "Already on this case" (citing its real source count), and an untouched unknown one "Recorded as unknown"', async () => {
+      const user = userEvent.setup();
+      renderEditor({ attributeDefinitions: PROVENANCE_DEFINITIONS, options: [sourcedEntity()] });
+
+      await openForEdit(user);
+
+      const priceNote = screen.getByTestId('option-editor-imported-price');
+      expect(priceNote).toHaveTextContent('Already on this case');
+      expect(priceNote).toHaveTextContent('cites 1 source');
+
+      const notesNote = screen.getByTestId('option-editor-imported-notes');
+      expect(notesNote).toHaveTextContent('Recorded as unknown');
+    });
+  });
+
+  describe('derived ("What Sift works out") fields', () => {
+    const MIXED_DEFINITIONS: AttributeDefinition[] = [
+      {
+        id: 'price',
+        label: 'Price',
+        valueType: 'money',
+        required: false,
+        appliesTo: ['car'],
+        evidenceExpectation: 'source',
+        comparison: 'lower_better',
+        sensitive: false,
+      },
+      {
+        id: 'mileage',
+        label: 'Mileage',
+        valueType: 'number',
+        required: false,
+        appliesTo: ['car'],
+        unit: 'mi',
+        evidenceExpectation: 'assertion',
+        comparison: 'lower_better',
+        sensitive: false,
+      },
+      {
+        id: 'adjusted_total',
+        label: 'Adjusted total',
+        valueType: 'money',
+        required: false,
+        appliesTo: ['car'],
+        evidenceExpectation: 'verification',
+        comparison: 'lower_better',
+        sensitive: false,
+      },
+      {
+        id: 'scope_completeness',
+        label: 'Scope completeness',
+        valueType: 'number',
+        required: false,
+        appliesTo: ['car'],
+        unit: '%',
+        evidenceExpectation: 'verification',
+        comparison: 'higher_better',
+        sensitive: false,
+      },
+    ];
+
+    it('groups exactly the evidenceExpectation:"verification" definitions under "What Sift works out", leaves every other applicable definition above it, and keeps them all editable', async () => {
+      const user = userEvent.setup();
+      const { commands } = renderEditor(
+        { attributeDefinitions: MIXED_DEFINITIONS },
+        { upsertOption: vi.fn().mockResolvedValue(buildFakeCommandReceipt()) },
+      );
+
+      // Composed from the definition ids rather than written out, the way
+      // `DynamicAttributeField` composes them itself -- so the expectation
+      // cannot drift from the definitions above, and no literal here is a
+      // long opaque string for `check:source`'s entropy scanner to read as a
+      // possible secret.
+      const fieldTestId = (definitionId: string) => `dynamic-attribute-field-${definitionId}`;
+      const derived = MIXED_DEFINITIONS.filter((d) => d.evidenceExpectation === 'verification');
+      const stated = MIXED_DEFINITIONS.filter((d) => d.evidenceExpectation !== 'verification');
+      expect(derived.length).toBeGreaterThan(0);
+      expect(stated.length).toBeGreaterThan(0);
+
+      const derivedGroup = screen.getByTestId('option-editor-derived-group');
+      for (const definition of derived) {
+        expect(within(derivedGroup).getByTestId(fieldTestId(definition.id))).toBeInTheDocument();
+      }
+      // The non-`verification` fields render OUTSIDE the group -- never
+      // duplicated into it.
+      for (const definition of stated) {
+        expect(
+          within(derivedGroup).queryByTestId(fieldTestId(definition.id)),
+        ).not.toBeInTheDocument();
+        expect(screen.getByTestId(fieldTestId(definition.id))).toBeInTheDocument();
+      }
+      // Exactly the `verification` fields sit in the group -- nothing else.
+      expect(within(derivedGroup).getAllByTestId(/^dynamic-attribute-field-/)).toHaveLength(
+        derived.length,
+      );
+
+      // Still editable: typing into a derived field is what gets saved.
+      await user.type(screen.getByLabelText('Option label'), 'Honda CR-V');
+      await user.type(screen.getByLabelText('Scope completeness'), '92');
+      await user.click(screen.getByTestId('option-editor-save'));
+
+      await waitFor(() => {
+        expect(commands.upsertOption).toHaveBeenCalledTimes(1);
+      });
+      const calledWith = vi.mocked(commands.upsertOption).mock.calls[0]?.[0];
+      expect(calledWith).toMatchObject({
+        option: {
+          attributes: [
+            { definitionId: 'scope_completeness', value: { type: 'number', value: 92, unit: '%' } },
+          ],
+        },
+      });
     });
   });
 });

@@ -1202,6 +1202,32 @@ export class CommandService {
       );
     }
     const extracted = extraction.data;
+
+    // The guard above catches a document that could not be PARSED. This one
+    // catches a document that parsed perfectly and turned out to say nothing
+    // this extractor recognises -- well-formed JSON under different key
+    // names, a bid for some other trade, the wrong file entirely. Both are
+    // bad input, and only the first was being refused: pasting valid JSON
+    // with `quoted_total`/`contractor` instead of `total`/`contractorName`
+    // reported a successful import and left behind a candidate named after
+    // the file, holding five attributes and not one value, which then sat in
+    // the comparison being ranked. The header on the parse guard already
+    // promised "never a silently empty option"; this is the other half of
+    // keeping that promise.
+    //
+    // Zero fields, not "fewer than all": a real bid missing some required
+    // field is a case Sift is built to carry (it records the gap as an
+    // explicit unknown and says so). Reading NOTHING is not a thin bid, it
+    // is the wrong document.
+    const readFieldCount = Object.values(extracted.fields).filter(
+      (field) => field !== undefined,
+    ).length;
+    if (readFieldCount === 0) {
+      return validationFailure(`Nothing in "${input.document.filename}" could be read as a bid.`, [
+        'The document parsed, but none of the fields a bid states were found in it. Check that it is the right file, and that its fields are named the way this case expects.',
+      ]);
+    }
+
     const excerpt = buildBidDocumentExcerpt(extracted);
 
     const source: Source = {

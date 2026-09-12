@@ -1277,14 +1277,14 @@ describe('App', () => {
       // sheet (ADR 0008), and "Add option" is an item in the app bar's
       // create menu -- open both first.
       await openCreateMenuItem(user, 'workspace-app-bar-add-option', 'workspace-add-option-sheet');
+      // `OptionEditor`'s own `option-editor-new` "Add {label}" button is gone
+      // (adding is now the sheet's own default state); its sr-only
+      // `option-editor-heading` ("Add a {label}"/"Edit {label}") is
+      // `OptionEditor`'s own copy, owned by that component, not this file,
+      // and is what now carries the resolved `optionLabel` down.
       await waitFor(() => {
-        expect(screen.getByTestId('option-editor-new')).toHaveTextContent('Add car');
+        expect(screen.getByRole('heading', { name: 'Add a car' })).toBeInTheDocument();
       });
-      // `OptionEditor`'s own heading is `{optionLabel}s` (its own header
-      // comment: naive "+s" pluralization of whatever the pack declares,
-      // not a fixed "candidates" suffix) -- copy owned by that component,
-      // not this file.
-      expect(screen.getByRole('heading', { name: 'cars' })).toBeInTheDocument();
     });
 
     it('shows the WebMcpStatus "ready" confirmation when the injected adapter reports supported', async () => {
@@ -1295,7 +1295,15 @@ describe('App', () => {
       expect(screen.getByTestId('webmcp-status-supported')).toBeInTheDocument();
     });
 
-    it('shows a recoverable ErrorState while preserving the last valid WorkspaceAppBar title when the stream errors', async () => {
+    // The raw `ErrorState` this stream error would otherwise render is now
+    // suppressed while `connectionState` is `'offline'`/`'reconnecting'`:
+    // a dropped connection used to put TWO banners on screen at once, the
+    // app bar's own "reconnecting" connection badge above a second, red one
+    // whose entire text was the browser's raw "Failed to fetch" `TypeError`
+    // message -- a developer-vocabulary restatement of the same fact, with
+    // no retry control of its own. The connection badge is the one true,
+    // actionable signal here, and is asserted present in its place.
+    it('suppresses the raw ErrorState for a stream error that is really a dropped connection, while preserving the last valid WorkspaceAppBar title', async () => {
       const snapshot = buildFixtureCaseState({ id: CASE_ID, title: 'Resilient case' });
       renderLiveWorkspace(snapshot);
       await startDemoAndWait();
@@ -1304,13 +1312,13 @@ describe('App', () => {
       FakeEventSource.instances.at(-1)!.triggerError();
 
       await waitFor(() => {
-        expect(screen.getByTestId('error-state')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-app-bar-connection-status')).toHaveTextContent(
+          /reconnecting/i,
+        );
       });
+      expect(screen.queryByTestId('error-state')).not.toBeInTheDocument();
       // Last valid case state is preserved -- the header title never blanks.
       expect(screen.getByTestId('workspace-app-bar-title')).toHaveTextContent('Resilient case');
-      expect(screen.getByTestId('workspace-app-bar-connection-status')).toHaveTextContent(
-        /reconnecting/i,
-      );
     });
 
     // ADR 0004 decision item 5: `CaseState.activeFocus` is written only as
@@ -1879,9 +1887,11 @@ describe('App', () => {
         expect(screen.getByTestId('workspace-app-bar')).toBeInTheDocument();
       });
       // Falls back to the generic 'option' label rather than blocking.
+      // `option-editor-new` is gone (adding is now `OptionEditor`'s own
+      // default state) -- its sr-only heading is what now carries the label.
       await openCreateMenuItem(user, 'workspace-app-bar-add-option', 'workspace-add-option-sheet');
       await waitFor(() => {
-        expect(screen.getByTestId('option-editor-new')).toHaveTextContent('Add option');
+        expect(screen.getByRole('heading', { name: 'Add a option' })).toBeInTheDocument();
       });
     });
 
@@ -4553,9 +4563,11 @@ describe('App', () => {
 
       // Falls back to the generic 'option' label -- the malformed payload
       // never made it past `InstalledPacksResponseSchema.safeParse`.
+      // `option-editor-new` is gone (adding is now `OptionEditor`'s own
+      // default state) -- its sr-only heading is what now carries the label.
       await openCreateMenuItem(user, 'workspace-app-bar-add-option', 'workspace-add-option-sheet');
       await waitFor(() => {
-        expect(screen.getByTestId('option-editor-new')).toHaveTextContent('Add option');
+        expect(screen.getByRole('heading', { name: 'Add a option' })).toBeInTheDocument();
       });
     });
 

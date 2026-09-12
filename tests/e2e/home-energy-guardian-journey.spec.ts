@@ -306,18 +306,22 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
     // check and closed again immediately after (see
     // `car-purchase-journey.spec.ts` for the full rationale).
     await sift.openManageOptionsSheet();
+    // The existing-options roster now lives inside a collapsed
+    // `<Collapsible>` (`OptionEditor.tsx`) -- opening it is what puts
+    // `option-editor-option-*`/`option-editor-edit-*` in the DOM at all.
+    await page.getByTestId('option-editor-list-trigger').click();
     for (const optionId of HOME_ENERGY_RESPONSE_OPTION_IDS) {
       await expect(page.getByTestId(`option-editor-option-${optionId}`)).toBeVisible();
     }
 
-    // Option-editor edit/cancel row: real rendered geometry, not just
-    // className presence -- entering and leaving edit mode here is a pure
+    // Option-editor edit/cancel: real rendered geometry, not just className
+    // presence -- entering and leaving edit mode here is a pure
     // local-UI-state toggle (`OptionEditor.tsx`'s `startEdit`/`startNew`),
     // no `upsertOption` command fires, so it leaves no trace on the case and
-    // does not affect any later screenshot. This is also the only way to
-    // observe `option-editor-save` and `option-editor-cancel` rendered
-    // together in the same flex row, which is exactly the state that had
-    // the two buttons at mismatched heights before tonight's fix.
+    // does not affect any later screenshot. `option-editor-cancel` now
+    // lives in the editing banner shown only while editing;
+    // `option-editor-save` sits in the sheet's own sticky footer, reachable
+    // at every scroll position.
     await page.getByTestId(`option-editor-edit-${HOME_ENERGY_RESPONSE_OPTION_IDS[0]}`).click();
     await expect(page.getByTestId('option-editor-cancel')).toBeVisible();
     await assertPrimaryTouchTargets(page, ['option-editor-save', 'option-editor-cancel']);
@@ -344,9 +348,11 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
     // The Add option Sheet stays genuinely reachable and usable while a run
     // streams live -- see `car-purchase-journey.spec.ts` for the full
     // rationale for opening/closing it here rather than leaving it open.
+    // `option-editor-new` is gone: adding is the sheet's own default state
+    // now (`OptionEditor.tsx`).
     await sift.openManageOptionsSheet();
+    await page.getByTestId('option-editor-list-trigger').click();
     await assertPrimaryTouchTargets(page, [
-      'option-editor-new',
       'option-editor-save',
       `option-editor-edit-${HOME_ENERGY_RESPONSE_OPTION_IDS[0]}`,
     ]);
@@ -503,10 +509,11 @@ test.describe('Home Energy Guardian -- full demo journey', () => {
 
     // As above: the Add option Sheet stays reachable while a proposal is
     // pending, checked and closed again rather than left open through the
-    // screenshot below.
+    // screenshot below. `option-editor-new` is gone (see the
+    // mid-investigation step above).
     await sift.openManageOptionsSheet();
+    await page.getByTestId('option-editor-list-trigger').click();
     await assertPrimaryTouchTargets(page, [
-      'option-editor-new',
       'option-editor-save',
       `option-editor-edit-${HOME_ENERGY_RESPONSE_OPTION_IDS[0]}`,
     ]);

@@ -175,7 +175,9 @@ test.describe('generic decision workspace -- §61 journey', () => {
     await sift.openManageOptionsSheet();
     const beforeAddState = await getCaseState(page.request, caseId);
     const carKind = (beforeAddState['entities'] as { kind: string }[])[0]!.kind;
-    await page.getByTestId('option-editor-new').click();
+    // Adding is the sheet's own default state now (`OptionEditor.tsx`) --
+    // `option-editor-new` no longer exists, so there is no separate control
+    // to click before filling the label.
     await page.locator('#option-editor-label').fill(newOptionLabel);
     const upsertResponsePromise = page.waitForResponse(
       (res) => res.url().includes('/commands/upsertOption') && res.request().method() === 'POST',
@@ -188,6 +190,9 @@ test.describe('generic decision workspace -- §61 journey', () => {
     // check below: ADR 0008's "Add option" Sheet is a real modal, and its
     // own live option count (superseding the retired "Manage options"
     // disclosure meta) is the app bar's `workspace-app-bar-option-count`.
+    // The roster is now a collapsed `<Collapsible>` (`OptionEditor.tsx`) --
+    // opening it is what puts `option-editor-list` in the DOM.
+    await page.getByTestId('option-editor-list-trigger').click();
     await expect(page.getByTestId('option-editor-list')).toContainText(newOptionLabel);
     await sift.closeManageOptionsSheet();
     await expect(page.getByTestId('workspace-app-bar-option-count')).toHaveText('5 options');
@@ -534,6 +539,7 @@ test.describe('generic decision workspace -- §61 journey', () => {
     // value, the unpopulated option's honest unknown, the note, the last
     // selection, and the persisted view mode. ---
     await sift.openManageOptionsSheet();
+    await page.getByTestId('option-editor-list-trigger').click();
     await expect(page.getByTestId('option-editor-list')).toContainText(newOptionLabel);
     await sift.closeManageOptionsSheet();
     await assertNoHorizontalOverflow(page);

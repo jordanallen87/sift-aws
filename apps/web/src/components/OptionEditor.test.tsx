@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_CASE_ENTITIES } from '@sift/contracts';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
@@ -171,13 +172,27 @@ describe('OptionEditor', () => {
     });
   });
 
-  it('disables adding a new option once the 5-option demo limit is reached', () => {
-    const options = Array.from({ length: 5 }, (_, index) =>
+  it("disables adding a new option only at the contract's own entity cap", () => {
+    const options = Array.from({ length: MAX_CASE_ENTITIES }, (_, index) =>
       buildEntity({ id: `candidate-${index}`, label: `Candidate ${index}` }),
     );
     renderEditor({ options });
     expect(screen.getByTestId('option-editor-max-reached')).toBeInTheDocument();
     expect(screen.getByTestId('option-editor-new')).toBeDisabled();
+  });
+
+  // The regression this pair exists for: the cap defaulted to a hardcoded 5
+  // that no contract, command or store ever agreed with, so Bid Comparison --
+  // which seeds twelve bids -- rendered an Add form that refused every entry
+  // on a case the engine accepted. A cap the rest of the system does not
+  // share is a bug, not a limit.
+  it('still accepts a new option on a case holding more than the old hardcoded limit', () => {
+    const options = Array.from({ length: 12 }, (_, index) =>
+      buildEntity({ id: `candidate-${index}`, label: `Candidate ${index}` }),
+    );
+    renderEditor({ options });
+    expect(screen.queryByTestId('option-editor-max-reached')).not.toBeInTheDocument();
+    expect(screen.getByTestId('option-editor-new')).not.toBeDisabled();
   });
 
   it('shows a recoverable error and preserves the entered label when upsertOption fails', async () => {

@@ -159,6 +159,16 @@ export type Claim = z.infer<typeof ClaimSchema>;
 // `verification`/`createdAt` per "submitted sources remain unverified until
 // source challenge and retain provenance" (webmcp.md).
 
+/**
+ * The most options one case may hold. Exported because the UI must enforce
+ * the SAME number the contract does: `OptionEditor` previously hardcoded its
+ * own limit of 5, which no contract, command or store ever agreed with, so a
+ * pack seeding twelve options rendered an Add form that refused every entry
+ * ("You have reached the 5-Bid demo limit") on a case the engine was
+ * perfectly happy with. A cap belongs in one place, and this is it.
+ */
+export const MAX_CASE_ENTITIES = 50;
+
 export const SOURCE_ORIGINS = ['fixture', 'user_submitted', 'agent_discovered'] as const;
 export type SourceOrigin = (typeof SOURCE_ORIGINS)[number];
 
@@ -540,7 +550,7 @@ export const CaseStateSchema = z
     status: z.enum(CASE_STATUSES),
     pack: CasePackPinSchema,
     attributeDefinitions: z.array(AttributeDefinitionSchema).max(500),
-    entities: z.array(EntityRecordSchema).max(50),
+    entities: z.array(EntityRecordSchema).max(MAX_CASE_ENTITIES),
     criteria: z.array(CriterionSchema).max(200),
     obligations: z.array(ObligationStateSchema).max(200),
     // The durable record of every case-scoped concern this case has ever

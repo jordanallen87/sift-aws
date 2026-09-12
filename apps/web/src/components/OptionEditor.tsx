@@ -12,6 +12,7 @@
  * parallel save path.
  */
 import { useMemo, useState } from 'react';
+import { MAX_CASE_ENTITIES } from '@sift/contracts';
 import type { AttributeDefinition, AttributeValue, EntityRecord } from '@sift/contracts';
 import { useSiftCommands } from '../app/AppProviders.js';
 import { DynamicAttributeField } from './DynamicAttributeField.js';
@@ -42,6 +43,13 @@ export interface OptionEditorProps {
   optionLabel: string;
   attributeDefinitions: AttributeDefinition[];
   options: EntityRecord[];
+  /**
+   * How many options this case may hold. Defaults to the contract's own
+   * `MAX_CASE_ENTITIES`, never a number invented here: this prop used to
+   * default to 5, which nothing else in the system agreed with, so the Bid
+   * Comparison pack -- which seeds twelve -- rendered an Add form that
+   * refused every entry on a case the engine accepted without complaint.
+   */
   maxOptions?: number;
 }
 
@@ -70,7 +78,7 @@ export function OptionEditor({
   optionLabel,
   attributeDefinitions,
   options,
-  maxOptions = 5,
+  maxOptions = MAX_CASE_ENTITIES,
 }: OptionEditorProps) {
   const commands = useSiftCommands();
   const [form, setForm] = useState<FormState>(blankForm());

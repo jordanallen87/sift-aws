@@ -10,13 +10,47 @@
  * `sift_upsert_option` WebMCP tool calls (docs/engineering-principles.md "Visible UI controls and
  * WebMCP callbacks use the same command implementation") -- there is no
  * parallel save path.
+ *
+ * ## Typed values and read values, kept apart
+ *
+ * On a pack whose options are bids, this form also hosts
+ * `BidDocumentImport` -- a real document, read by the server's deterministic
+ * extractor, becomes an option the person then corrects here. That makes
+ * this the one place in the app where a value somebody TYPED and a value
+ * something READ sit in the same fields, so two rules hold throughout:
+ *
+ *  1. Every field still carrying an imported value is marked as such, and
+ *     the mark disappears the moment the person edits that field -- because
+ *     at that point it is their value, not the document's.
+ *  2. Saving does not launder a proposal into an assertion. An untouched
+ *     imported value is re-sent with the `origin`/`status`/`confidence`/
+ *     `sourceIds` the extraction gave it (`OptionAttributeInputSchema`
+ *     carries all four), and an attribute the document did not state is
+ *     re-sent as an explicit `status: 'unknown'` so the record of "this
+ *     document was searched and did not say" survives the save. Only what
+ *     the person actually typed goes up as their own `origin: 'user'`
+ *     assertion, which is the handler's default for an attribute carrying
+ *     no provenance.
  */
 import { useMemo, useState } from 'react';
 import { MAX_CASE_ENTITIES } from '@sift/contracts';
-import type { AttributeDefinition, AttributeValue, EntityRecord } from '@sift/contracts';
+import type {
+  AttributeDefinition,
+  AttributeRecord,
+  AttributeValue,
+  EntityRecord,
+  UpsertOptionInput,
+} from '@sift/contracts';
 import { useSiftCommands } from '../app/AppProviders.js';
+import { BidDocumentImport } from './BidDocumentImport.js';
+import {
+  formatConfidence,
+  supportsBidDocumentImport,
+  type BidDocumentImportSummary,
+} from './bid-document-import.js';
 import { DynamicAttributeField } from './DynamicAttributeField.js';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,8 +93,75 @@ interface FormState {
   values: Record<string, AttributeValue | undefined>;
 }
 
+/**
+ * What an import left in the form, for exactly as long as the person leaves
+ * it untouched.
+ *
+ * `records` holds every attribute the extraction wrote -- the ones it read
+ * AND the ones it explicitly could not -- keyed by `definitionId`. An entry
+ * is removed the instant the person edits that field, which is what makes
+ * both the on-screen mark and the provenance carried on save truthful
+ * rather than sticky.
+ */
+interface ImportedState {
+  optionId: string;
+  filename: string;
+  records: Record<string, AttributeRecord>;
+  /** The option's own label came off the document too (the contractor's name, or the file's name when it states none). */
+  labelFromDocument: boolean;
+}
+
+type OptionAttributeDraft = UpsertOptionInput['option']['attributes'][number];
+
 function blankForm(): FormState {
   return { optionId: null, label: '', values: {} };
+}
+
+/**
+ * The mark that keeps a READ value distinguishable from a TYPED one while
+ * both sit in the same form.
+ *
+ * It is attached to the field itself rather than shown once at the top,
+ * because "some of these came off a document" is not something a person can
+ * act on -- "this number came off the document, at 90% confidence, and
+ * nobody has checked it" is. It disappears as soon as the field is edited
+ * (`releaseImportedField`), since from that moment the value is the
+ * person's own.
+ *
+ * `record` is `undefined` for the option's label, which comes off the
+ * document too but is not an `AttributeRecord` and carries no confidence of
+ * its own.
+ */
+function ImportedValueNote({
+  testId,
+  filename,
+  record,
+}: {
+  testId: string;
+  filename: string;
+  record: AttributeRecord | undefined;
+}) {
+  const unread = record?.status === 'unknown';
+  const confidence =
+    record?.confidence === undefined ? '' : `, ${formatConfidence(record.confidence)}`;
+  return (
+    <p
+      data-testid={testId}
+      className="flex flex-wrap items-center gap-[var(--space-1)] text-[length:var(--font-size-sm)] text-[var(--color-ink-secondary)]"
+    >
+      {/* `outline` carries no status colour: a value read off an unverified
+          document must not borrow the tone the rest of the app uses for a
+          settled one. */}
+      <Badge variant="outline">
+        {unread ? 'Not stated in the document' : 'Read from the document'}
+      </Badge>
+      <span>
+        {unread
+          ? `"${filename}" did not state this. Nothing is recorded here; type it if you know it.`
+          : `Read from "${filename}"${confidence}. Not verified. Edit it to record it as your own.`}
+      </span>
+    </p>
+  );
 }
 
 function formFromEntity(entity: EntityRecord): FormState {
@@ -84,31 +185,120 @@ export function OptionEditor({
   const [form, setForm] = useState<FormState>(blankForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imported, setImported] = useState<ImportedState | null>(null);
+  /**
+   * Every option this editor has imported in this session, added to the
+   * `options` prop when telling the import which ids the case already had.
+   * The prop is a throttled snapshot and can legitimately still be missing
+   * an option imported moments ago -- without this, importing twice in quick
+   * succession would identify the first import's option as the second's.
+   */
+  const [importedOptionIds, setImportedOptionIds] = useState<string[]>([]);
 
   const applicableDefinitions = useMemo(
     () => attributeDefinitions.filter((definition) => definition.appliesTo.includes(optionKind)),
     [attributeDefinitions, optionKind],
   );
 
-  const atCapacity = form.optionId === null && options.length >= maxOptions;
+  const caseIsFull = options.length >= maxOptions;
+  const atCapacity = form.optionId === null && caseIsFull;
+
+  /**
+   * The import is offered while adding, and stays while the person corrects
+   * the option it just created (so its summary of what was and was not read
+   * is still on screen beside the fields). Editing some OTHER pre-existing
+   * option is a different job, and the affordance is gone there -- an import
+   * always creates a new option, so offering it mid-edit would silently
+   * abandon the edit in progress.
+   */
+  const showDocumentImport =
+    supportsBidDocumentImport(optionKind) &&
+    (form.optionId === null || form.optionId === imported?.optionId);
 
   function startNew() {
     setForm(blankForm());
     setError(null);
+    setImported(null);
   }
 
   function startEdit(entity: EntityRecord) {
     setForm(formFromEntity(entity));
     setError(null);
+    setImported(null);
+  }
+
+  /** Forgets the import's claim over one field: the person has now typed there, so the value is theirs. */
+  function releaseImportedField(definitionId: string) {
+    setImported((prev) => {
+      if (prev?.records[definitionId] === undefined) return prev;
+      const { [definitionId]: _released, ...rest } = prev.records;
+      return { ...prev, records: rest };
+    });
+  }
+
+  function handleImported(summary: BidDocumentImportSummary) {
+    // Straight into editing what the server actually wrote -- never a
+    // client-side reconstruction of it -- so the person is correcting the
+    // real record.
+    setForm(formFromEntity(summary.option));
+    setError(null);
+    setImportedOptionIds((prev) => [...prev, summary.option.id]);
+    setImported({
+      optionId: summary.option.id,
+      filename: summary.filename,
+      records: summary.option.attributes,
+      labelFromDocument: true,
+    });
+  }
+
+  /**
+   * One attribute of the option being saved.
+   *
+   * An untouched imported value keeps the provenance the extraction gave it,
+   * and an untouched unread field stays explicitly unknown. Anything else --
+   * including an imported value the person has since edited -- carries no
+   * provenance at all, which is what makes the handler record it as the
+   * person's own `origin: 'user'`/`status: 'asserted'` entry.
+   */
+  function draftAttribute(
+    definitionId: string,
+    value: AttributeValue | undefined,
+    record: AttributeRecord | undefined,
+  ): OptionAttributeDraft | null {
+    if (record === undefined) {
+      return value === undefined ? null : { definitionId, value };
+    }
+    if (record.status === 'unknown') {
+      // Re-sent, not dropped: `upsertOption` REPLACES the attribute map, so
+      // omitting this would erase the case's record that the document was
+      // read and did not state this field -- and leave nothing behind
+      // pointing at the document that was searched.
+      return value === undefined
+        ? { definitionId, status: 'unknown', origin: record.origin, sourceIds: record.sourceIds }
+        : { definitionId, value };
+    }
+    if (value === undefined) return null;
+    return {
+      definitionId,
+      value,
+      origin: record.origin,
+      status: record.status,
+      sourceIds: record.sourceIds,
+      ...(record.confidence !== undefined ? { confidence: record.confidence } : {}),
+    };
   }
 
   function handleSubmit() {
     if (form.label.trim().length === 0 || saving) return;
     setSaving(true);
     setError(null);
-    const attributes = Object.entries(form.values)
-      .filter((entry): entry is [string, AttributeValue] => entry[1] !== undefined)
-      .map(([definitionId, value]) => ({ definitionId, value }));
+    const records = imported?.records ?? {};
+    const definitionIds = new Set([...Object.keys(form.values), ...Object.keys(records)]);
+    const attributes: OptionAttributeDraft[] = [];
+    for (const definitionId of definitionIds) {
+      const draft = draftAttribute(definitionId, form.values[definitionId], records[definitionId]);
+      if (draft !== null) attributes.push(draft);
+    }
 
     resolveExpectedSequence()
       .then((expectedSequence) =>
@@ -122,6 +312,7 @@ export function OptionEditor({
       .then(() => {
         setSaving(false);
         setForm(blankForm());
+        setImported(null);
       })
       .catch((caught: unknown) => {
         setSaving(false);
@@ -226,6 +417,19 @@ export function OptionEditor({
         </p>
       ) : null}
 
+      {showDocumentImport ? (
+        <BidDocumentImport
+          caseId={caseId}
+          resolveExpectedSequence={resolveExpectedSequence}
+          optionLabel={optionLabel}
+          attributeDefinitions={attributeDefinitions}
+          knownOptionIds={[...options.map((entity) => entity.id), ...importedOptionIds]}
+          caseIsFull={caseIsFull}
+          maxOptions={maxOptions}
+          onImported={handleImported}
+        />
+      ) : null}
+
       <form
         data-testid="option-editor-form"
         // `form-measure`: inert at narrow width; at the widened desktop shell
@@ -250,26 +454,60 @@ export function OptionEditor({
             value={form.label}
             disabled={saving}
             onChange={(event) => {
-              setForm((prev) => ({ ...prev, label: event.target.value }));
+              const raw = event.target.value;
+              setForm((prev) => ({ ...prev, label: raw }));
+              setImported((prev) => (prev === null ? prev : { ...prev, labelFromDocument: false }));
             }}
             // border-0: see EvidenceCard.tsx's identical comment -- a real
             // native <input> user-agent border otherwise shows through
             // unsuppressed.
             className="border-0"
           />
+          {imported?.labelFromDocument === true ? (
+            <ImportedValueNote
+              testId="option-editor-imported-label"
+              filename={imported.filename}
+              record={undefined}
+            />
+          ) : null}
         </div>
 
-        {applicableDefinitions.map((definition) => (
-          <DynamicAttributeField
-            key={definition.id}
-            definition={definition}
-            value={form.values[definition.id]}
-            disabled={saving}
-            onChange={(value) => {
-              setForm((prev) => ({ ...prev, values: { ...prev.values, [definition.id]: value } }));
-            }}
-          />
-        ))}
+        {applicableDefinitions.map((definition) => {
+          const record = imported?.records[definition.id];
+          return (
+            <div key={definition.id} className="flex flex-col gap-[var(--space-1)]">
+              <DynamicAttributeField
+                definition={definition}
+                value={form.values[definition.id]}
+                disabled={saving}
+                onChange={(value) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    values: { ...prev.values, [definition.id]: value },
+                  }));
+                  releaseImportedField(definition.id);
+                }}
+              />
+              {record !== undefined && imported !== null ? (
+                <ImportedValueNote
+                  testId={`option-editor-imported-${definition.id}`}
+                  filename={imported.filename}
+                  record={record}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+
+        {imported !== null && Object.keys(imported.records).length > 0 ? (
+          <p
+            data-testid="option-editor-import-caution"
+            role="status"
+            className="text-[length:var(--font-size-sm)] text-[var(--color-ink-secondary)]"
+          >
+            {`Values still marked as read from "${imported.filename}" are saved as that document's proposal, with its confidence, and stay unverified. Anything you type here is saved as your own entry.`}
+          </p>
+        ) : null}
 
         {error ? (
           <Alert role="alert" data-testid="option-editor-error" variant="destructive">

@@ -1056,10 +1056,15 @@ export class SiftPage {
     // wait for it to hide then burns its whole timeout. Escape is the same
     // dismissal a person would use and settles it deterministically; the wait
     // below still guards the animation.
+    // Escape UNCONDITIONALLY, rather than checking visibility first. Radix
+    // returns focus to the menu trigger as the Sheet unmounts, and under full
+    // -suite load that can happen AFTER an `isVisible()` check has already
+    // read false -- so the check raced the thing it was meant to settle and
+    // the assertion below burned its timeout. With the Sheet closed, focus is
+    // on that trigger: Escape closes the menu if it opened and does nothing
+    // if it did not, which makes this deterministic either way.
     const createMenu = this.page.getByTestId('workspace-app-bar-create-menu-content');
-    if (await createMenu.isVisible().catch(() => false)) {
-      await this.page.keyboard.press('Escape');
-    }
+    await this.page.keyboard.press('Escape');
     await expect(createMenu).toBeHidden();
   }
 

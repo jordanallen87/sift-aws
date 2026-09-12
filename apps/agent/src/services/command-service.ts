@@ -100,9 +100,13 @@ import {
   CheckEnergyBillFeedInputSchema,
   StartCaseInputSchema,
   StartDemoInputSchema,
+  SubmitBidDocumentInputSchema,
   SubmitSourceInputSchema,
   UpdateCriteriaInputSchema,
   UpsertOptionInputSchema,
+  EntityRecordSchema,
+  MAX_CASE_ENTITIES,
+  SourceSchema,
   type AttributeRecord,
   type AttributeValue,
   type CaseEvent,
@@ -156,7 +160,13 @@ import {
   planDiscoveryResponse,
 } from '@sift/core';
 import type { PackRegistry } from '@sift/packs';
-import { loadAndEvaluateBillFeed } from '@sift/scenarios';
+import {
+  extractBidDocument,
+  loadAndEvaluateBillFeed,
+  type BidDocumentExtractionResult,
+  type ExtractedBidFields,
+  type ExtractedValue,
+} from '@sift/scenarios';
 import type { RunPlanRevisionCause } from '../runtime/run-plan.js';
 import type { ActivityStore } from '../store/activity-store.js';
 import type { AppendResult, CaseStore } from '../store/case-store.js';
@@ -287,6 +297,142 @@ function normalizeSourceTags(tags: readonly string[]): string[] {
     normalized.push(trimmed);
   }
   return normalized;
+}
+
+// --- submitBidDocument support ---
+
+/** The one entity kind `packages/packs/src/bid-comparison.ts` declares (`entities: [{ id: 'bid', ... }]`). */
+const BID_ENTITY_KIND = 'bid';
+
+/**
+ * One bid-comparison attribute a bid DOCUMENT states, and how to read it off
+ * an extraction.
+ *
+ * Deliberately exactly five. The pack declares ten attributes on its `bid`
+ * entity; the other five (`bid.adjusted_total`, `bid.scope_completeness`,
+ * `bid.license_status`, `bid.insurance_named_insured_match`,
+ * `bid.credentials_valid`) are derivations and registry lookups that no bid
+ * states about itself -- see `submitBidDocument`'s doc comment for why this
+ * command leaves them entirely alone rather than writing them as unknowns.
+ *
+ * Each `label`/`unit` pair matches `packages/packs/src/bid-comparison.ts`'s
+ * own declaration and `packages/scenarios/src/seeds.ts`'s existing records
+ * for the same attribute, so a bid imported from a document and a bid seeded
+ * from a fixture are described identically in the UI.
+ */
+interface BidDocumentAttributeMapping {
+  readonly definitionId: string;
+  readonly label: string;
+  /** The extracted value as an `AttributeValue`, with the extractor's own confidence -- or `undefined` when the document did not state this field. */
+  readonly read: (
+    fields: ExtractedBidFields,
+  ) => { value: AttributeValue; confidence: number } | undefined;
+}
+
+function numberAttributeMapping(
+  definitionId: string,
+  label: string,
+  unit: string,
+  select: (fields: ExtractedBidFields) => ExtractedValue<number> | undefined,
+): BidDocumentAttributeMapping {
+  return {
+    definitionId,
+    label,
+    read: (fields) => {
+      const extracted = select(fields);
+      return extracted === undefined
+        ? undefined
+        : {
+            value: { type: 'number', value: extracted.value, unit },
+            confidence: extracted.confidence,
+          };
+    },
+  };
+}
+
+const BID_DOCUMENT_ATTRIBUTE_MAP: readonly BidDocumentAttributeMapping[] = [
+  {
+    definitionId: 'bid.quoted_total',
+    label: 'Quoted total',
+    read: (fields) =>
+      fields.total === undefined
+        ? undefined
+        : {
+            value: {
+              type: 'money',
+              amount: fields.total.value.amount,
+              currency: fields.total.value.currency,
+            },
+            confidence: fields.total.confidence,
+          },
+  },
+  numberAttributeMapping(
+    'bid.deposit_percent',
+    'Deposit requested',
+    '%',
+    (fields) => fields.depositPercent,
+  ),
+  numberAttributeMapping(
+    'bid.start_weeks',
+    'Weeks until work can start',
+    'weeks',
+    (fields) => fields.startInWeeks,
+  ),
+  numberAttributeMapping(
+    'bid.duration_days',
+    'Estimated project duration',
+    'days',
+    (fields) => fields.durationWorkingDays,
+  ),
+  numberAttributeMapping(
+    'bid.warranty_months',
+    'Warranty term',
+    'months',
+    (fields) => fields.warrantyMonths,
+  ),
+];
+
+/** Line items rendered into `Source.excerpt` before the rest are summarised as a count. */
+const MAX_EXCERPT_LINE_ITEMS = 25;
+
+/** Kept under `SourceSchema.excerpt`'s own `safeString(5000)` bound with room for the truncation marker. */
+const MAX_EXCERPT_CHARS = 4_800;
+
+/**
+ * A bounded rendering of what the document itself said, stored as
+ * `Source.excerpt` -- which `SourceSchema` documents as "a quotation FROM
+ * the source", exactly what this is, as distinct from `summary` ("the
+ * submitter's OWN summary"), which this command has no right to write
+ * because no submitter wrote one.
+ *
+ * Carries the licence number and the priced line items: both are read off
+ * the document, neither has a pack attribute to live in yet, and losing
+ * them would mean the case held an option whose supporting document could
+ * no longer be inspected for the two things a credential check and a scope
+ * comparison will need next. Returns `undefined` when there was nothing to
+ * quote, so an empty `excerpt` key is never stored.
+ */
+function buildBidDocumentExcerpt(extracted: BidDocumentExtractionResult): string | undefined {
+  const lines: string[] = [];
+  if (extracted.fields.licenseNumber !== undefined) {
+    lines.push(`License number stated: ${extracted.fields.licenseNumber.value}`);
+  }
+  if (extracted.lineItems.length > 0) {
+    lines.push(`Line items (${extracted.lineItems.length}):`);
+    for (const item of extracted.lineItems.slice(0, MAX_EXCERPT_LINE_ITEMS)) {
+      const scope = item.scopeItemId !== undefined ? `${item.scopeItemId}: ` : '';
+      lines.push(`- ${scope}${item.label} -- ${item.amount.amount} ${item.amount.currency}`);
+    }
+    const remaining = extracted.lineItems.length - MAX_EXCERPT_LINE_ITEMS;
+    if (remaining > 0) {
+      lines.push(`(${remaining} more line item${remaining === 1 ? '' : 's'} not shown)`);
+    }
+  }
+  if (lines.length === 0) return undefined;
+  const excerpt = lines.join('\n');
+  return excerpt.length <= MAX_EXCERPT_CHARS
+    ? excerpt
+    : `${excerpt.slice(0, MAX_EXCERPT_CHARS)}...`;
 }
 
 /**
@@ -911,6 +1057,342 @@ export class CommandService {
       }
     }
     return this.toReceipt(commandId, result);
+  }
+
+  /**
+   * `submitBidDocument`: brings a person's OWN bid document into a case and
+   * applies what a deterministic extractor could read off it.
+   *
+   * Before this command, the only two ways an option reached a case were
+   * `upsertOption`/`setOptionAttribute` (one hand-typed scalar at a time)
+   * and the twelve bid fixtures checked into this repository. A real
+   * document had no way in at all. See `SubmitBidDocumentInputSchema`
+   * (`@sift/contracts`) for the input contract and the recorded decision on
+   * free text.
+   *
+   * --- The rule this method exists to enforce ---
+   *
+   * **Extraction proposes; it never asserts on the person's behalf.** Every
+   * attribute record written here is `origin: 'agent_proposed'` with a
+   * `confidence` the extractor assigned, and never `status: 'verified'` --
+   * `@sift/core`'s `attributeStatusOriginError` refuses that combination
+   * outright ("only origin 'user' (a human attestation) may claim
+   * 'verified'"), and this method reaches it through the same
+   * `createAttributeRecord` smart constructor `upsertOption` uses, so the
+   * rule is enforced by the domain layer rather than restated here. A value
+   * read off an unverified document is `'supported'`: it has exactly one
+   * source behind it, which is more than a bare assertion and less than a
+   * human attestation.
+   *
+   * A field the extractor could NOT read becomes `status: 'unknown'` with
+   * no value -- never a zero, never a default. That is the same rule
+   * `packages/packs/src/bid-comparison.ts` spells out for
+   * `bid.warranty_months` and `packages/scenarios/src/seeds.ts` applies to
+   * an unresolved `bid.adjusted_total`.
+   *
+   * --- Traceability ---
+   *
+   * The document becomes a real `Source` (`origin: 'user_submitted'`,
+   * `verification: 'unverified'`) BEFORE the entity that cites it is
+   * appended, and every attribute record this method writes -- valued or
+   * unknown -- carries that source's id in `sourceIds`. Carrying it on the
+   * unknowns too is a deliberate divergence from `seeds.ts`, which writes
+   * `sourceIds: []` for a value it never had a document for: here there IS
+   * a document, it WAS read, and the field was not in it. Recording which
+   * document was searched is strictly more traceable than recording
+   * nothing, and it asserts no value (the schema still forbids one).
+   *
+   * The extractor is handed the `Source.id` this method is about to persist
+   * (`BidDocumentExtractorInput.sourceId` is required for exactly this
+   * reason), so the tool's own evidence item and every record's `sourceIds`
+   * name the same real record rather than two ids that merely happen to
+   * agree.
+   *
+   * --- Two store calls, one command ---
+   *
+   * `sources` has no `CaseEvent` variant (see `case-store.ts`'s
+   * `SelectionPatch` doc comment), so the `Source` goes through
+   * `updateSelection()` -- which does not advance `eventSequence` -- and the
+   * entity goes through `append()` as an ordinary `option.upserted` event at
+   * `expectedSequence + 1`. Exactly the split `submitSource` already makes,
+   * including its derived-idempotency-key trick: the two calls cannot share
+   * the literal `commandId` or the second would see the first's own
+   * registration and answer `'duplicate'` without writing anything.
+   *
+   * Known, deliberately unchanged window, identical in shape to
+   * `submitSource`'s: if the source write lands and the event append is then
+   * refused by a competing writer, a retry of the same `commandId` is not
+   * caught by `checkIdempotent` (only the append registers that key), so it
+   * mints a fresh source id while the original stays on the case. The retry
+   * still succeeds and still produces a correct, fully-sourced option; the
+   * cost is one orphaned `Source` row. Closing it properly means one
+   * idempotency domain across both store calls, which is a `case-store.ts`
+   * change affecting `submitSource` too -- not something to fork a
+   * private scheme for here.
+   *
+   * --- What it deliberately does not touch ---
+   *
+   * Only the five attributes a bid DOCUMENT states are written.
+   * `bid.adjusted_total`, `bid.scope_completeness`, `bid.license_status`,
+   * `bid.insurance_named_insured_match` and `bid.credentials_valid` are
+   * left entirely alone: no bid states them, they are owned by
+   * `bid-calculator`/`scope-differ`/`license-lookup` and the
+   * credential-verification skill, and writing them as `'unknown'` here
+   * would be this command reporting on a search it never performed. For the
+   * same reason a re-read MERGES into an existing option's attribute map
+   * rather than replacing it the way `upsertOption` does -- a corrected
+   * document must never delete a derivation or a registry lookup it never
+   * looked at.
+   *
+   * The extracted contractor name becomes the option's label and the
+   * `Source.publisher`; the extracted licence number is recorded in the
+   * source's `excerpt` (content quoted FROM the document) and returned by
+   * the extractor for a later credential-verification increment. Neither
+   * reaches the activity stream: that summary names the option, the file,
+   * and the counts, and nothing read out of the document itself.
+   */
+  submitBidDocument(
+    commandId: string,
+    rawInput: unknown,
+    commandOrigin?: CommandOrigin,
+  ): ServiceResult<CommandReceipt> {
+    const parsed = SubmitBidDocumentInputSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      return validationFailure(
+        'Invalid submitBidDocument input.',
+        formatZodIssues(parsed.error.issues),
+      );
+    }
+    const input = parsed.data;
+
+    const duplicate = this.checkIdempotent(commandId);
+    if (duplicate !== undefined) return duplicate;
+
+    const loaded = this.loadForMutation(input.caseId, input.expectedSequence);
+    if (loaded.status !== 'ok') return loaded;
+    const snapshot = loaded.value;
+
+    const optionId = input.optionId ?? this.deps.idGenerator.next('option');
+    const existingEntity = snapshot.entities.find((entity) => entity.id === optionId);
+    // The same cap `CaseStateSchema.entities` enforces (`MAX_CASE_ENTITIES`),
+    // checked here so a full case refuses the submission with a sentence a
+    // person can act on rather than failing later inside snapshot validation.
+    if (existingEntity === undefined && snapshot.entities.length >= MAX_CASE_ENTITIES) {
+      return validationFailure(
+        `This case already holds the maximum of ${MAX_CASE_ENTITIES} options; remove one before adding another.`,
+      );
+    }
+
+    const now = this.deps.clock.now();
+    const sourceId = this.deps.idGenerator.next('source');
+
+    const extraction = extractBidDocument({
+      sourceId,
+      filename: input.document.filename,
+      format: input.document.format,
+      text: input.document.text,
+    });
+    if (extraction.status !== 'ok') {
+      // A document that resolves to no bid at all (unparseable, over a cap,
+      // a CSV with no usable header) is bad input, reported with the
+      // extractor's own reason -- never a silently empty option.
+      return validationFailure(
+        `The document "${input.document.filename}" could not be read as a bid.`,
+        [extraction.message],
+      );
+    }
+    const extracted = extraction.data;
+    const excerpt = buildBidDocumentExcerpt(extracted);
+
+    const source: Source = {
+      id: sourceId,
+      // A file a person hands over has no web address. Rather than inventing
+      // one (`SourceSchema.url` is required), this mints a non-network URI
+      // that names the stored document and nothing else.
+      url: input.document.sourceUrl ?? `sift://cases/${input.caseId}/documents/${sourceId}`,
+      title: input.document.filename,
+      ...(extracted.fields.contractorName !== undefined
+        ? { publisher: extracted.fields.contractorName.value }
+        : {}),
+      retrievedAt: now,
+      ...(excerpt !== undefined ? { excerpt } : {}),
+      tags: ['bid-document', input.document.format],
+      origin: 'user_submitted',
+      verification: 'unverified',
+      createdAt: now,
+    };
+
+    const attributeResult = this.buildExtractedBidAttributes(extracted, sourceId);
+    if (!attributeResult.ok) {
+      return validationFailure('Invalid extracted bid attributes.', attributeResult.errors);
+    }
+
+    const entity: EntityRecord = {
+      id: optionId,
+      // The `bid-comparison` pack manifest declares exactly one entity kind.
+      kind: BID_ENTITY_KIND,
+      // Never invented: the contractor's own name when the document states
+      // it, and otherwise the file's own name, which claims nothing about
+      // who wrote it.
+      label: extracted.fields.contractorName?.value ?? input.document.filename,
+      // MERGE, not replace -- see this method's doc comment.
+      attributes: { ...existingEntity?.attributes, ...attributeResult.attributes },
+      createdAt: existingEntity?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    // Defense in depth against a document whose own text cannot legally be
+    // stored: every string that will be RENDERED (the option label, the
+    // source title/publisher/excerpt) goes through `safeString` inside these
+    // schemas, so markup-shaped content from a submitted file is refused
+    // loudly here rather than silently rewritten, or discovered later when a
+    // snapshot fails to parse.
+    const sourceCheck = SourceSchema.safeParse(source);
+    if (!sourceCheck.success) {
+      return validationFailure(
+        `The document "${input.document.filename}" could not be stored as a source.`,
+        formatZodIssues(sourceCheck.error.issues),
+      );
+    }
+    const entityCheck = EntityRecordSchema.safeParse(entity);
+    if (!entityCheck.success) {
+      return validationFailure(
+        `The document "${input.document.filename}" could not be stored as an option.`,
+        formatZodIssues(entityCheck.error.issues),
+      );
+    }
+
+    // The source first, so nothing extracted can ever exist on the case
+    // without the document it came from already being there to point at.
+    // `updateSelection()` does not advance `eventSequence`, so the append
+    // below still starts at `expectedSequence + 1`.
+    const sourceWrite = this.deps.caseStore.updateSelection(
+      input.caseId,
+      { sources: [...snapshot.sources, source] },
+      input.expectedSequence,
+      now,
+      { commandId: `${commandId}:source`, commandName: 'submitBidDocument' },
+    );
+    if (sourceWrite.status === 'conflict' || sourceWrite.status === 'not_found') {
+      return this.toReceipt(commandId, sourceWrite);
+    }
+
+    const events: CaseEvent[] = [
+      {
+        eventId: this.deps.idGenerator.next('event'),
+        caseId: input.caseId,
+        sequence: input.expectedSequence + 1,
+        timestamp: now,
+        commandId,
+        type: 'option.upserted',
+        payload: { entity },
+      },
+    ];
+
+    // Identical rule to `upsertOption`'s: invalidate a `ready`
+    // recommendation only when this write touches a definitionId an ACTIVE
+    // criterion actually depends on.
+    const changedDefinitionIds = new Set(Object.keys(attributeResult.attributes));
+    const invalidatesRecommendation =
+      snapshot.recommendation !== null &&
+      snapshot.recommendation.status === 'ready' &&
+      this.criteriaDependOnAttributes(snapshot.criteria, changedDefinitionIds);
+    if (invalidatesRecommendation && snapshot.recommendation !== null) {
+      events.push({
+        eventId: this.deps.idGenerator.next('event'),
+        caseId: input.caseId,
+        sequence: input.expectedSequence + 2,
+        timestamp: now,
+        commandId,
+        type: 'recommendation.invalidated',
+        payload: {
+          recommendationId: snapshot.recommendation.id,
+          reason: 'A comparison attribute the recommendation depends on changed.',
+        },
+      });
+    }
+
+    const result = this.deps.caseStore.append(input.caseId, events, input.expectedSequence, {
+      idempotency: { commandId, commandName: 'submitBidDocument' },
+    });
+    if (result.status === 'applied') {
+      const readCount = Object.values(attributeResult.attributes).filter(
+        (record) => record.status !== 'unknown',
+      ).length;
+      const unknownCount = Object.keys(attributeResult.attributes).length - readCount;
+      this.emitActivity(
+        {
+          timestamp: now,
+          caseId: input.caseId,
+          commandId,
+          type: 'command.accepted',
+          phase: 'completed',
+          // Deliberately reports only counts and the file's own name --
+          // never a value, a licence number, or any other content read out
+          // of the submitted document. Same discipline `addNote`/
+          // `submitSource` keep with note bodies and source excerpts.
+          summary: `${existingEntity !== undefined ? 'Updated' : 'Added'} option "${entity.label}" from submitted document "${input.document.filename}": ${readCount} proposed value${readCount === 1 ? '' : 's'}, ${unknownCount} left unknown.`,
+        },
+        commandOrigin,
+      );
+      if (invalidatesRecommendation) {
+        this.emitActivity(
+          {
+            timestamp: now,
+            caseId: input.caseId,
+            commandId,
+            type: 'recommendation.invalidated',
+            phase: 'completed',
+            summary: 'Recommendation invalidated: a dependent option attribute changed.',
+          },
+          commandOrigin,
+        );
+      }
+    }
+    return this.toReceipt(commandId, result);
+  }
+
+  /**
+   * Turns one extraction into the `AttributeRecord`s for the five
+   * bid-comparison attributes a bid DOCUMENT states -- proposed when the
+   * extractor read a value, explicitly unknown when it did not. See
+   * `submitBidDocument`'s doc comment for why only these five, why
+   * `origin: 'agent_proposed'`/`status: 'supported'`, and why every record
+   * (unknown included) carries the document's source id.
+   */
+  private buildExtractedBidAttributes(
+    extracted: BidDocumentExtractionResult,
+    sourceId: string,
+  ): { ok: true; attributes: Record<string, AttributeRecord> } | { ok: false; errors: string[] } {
+    const attributes: Record<string, AttributeRecord> = {};
+    const errors: string[] = [];
+
+    for (const mapping of BID_DOCUMENT_ATTRIBUTE_MAP) {
+      const read = mapping.read(extracted.fields);
+      const recordResult = createAttributeRecord(
+        {
+          definitionId: mapping.definitionId,
+          label: mapping.label,
+          // Never `'user'`: this value was read off a document, not asserted
+          // by the person who submitted it.
+          origin: 'agent_proposed',
+          // Never `'verified'` -- `@sift/core` refuses that for this origin.
+          // `'supported'` is the strongest claim a single unverified
+          // document can carry; an unread field carries none at all.
+          status: read === undefined ? 'unknown' : 'supported',
+          sourceIds: [sourceId],
+          ...(read !== undefined ? { value: read.value, confidence: read.confidence } : {}),
+        },
+        this.deps.clock,
+      );
+      if (!recordResult.ok) {
+        errors.push(...recordResult.errors);
+        continue;
+      }
+      attributes[mapping.definitionId] = recordResult.value;
+    }
+
+    return errors.length > 0 ? { ok: false, errors } : { ok: true, attributes };
   }
 
   /**

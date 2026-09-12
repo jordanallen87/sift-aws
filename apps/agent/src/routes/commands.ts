@@ -46,6 +46,11 @@ export const COMMAND_NAMES = [
   'selectPack',
   'upsertOption',
   'setOptionAttribute',
+  // Brings a person's own bid document into a case (ADR-free: see
+  // `SubmitBidDocumentInputSchema` in `@sift/contracts` and
+  // `CommandService.submitBidDocument` for the contract and the
+  // extraction-proposes-never-asserts rule it enforces).
+  'submitBidDocument',
   'addNote',
   'focusOption',
   'setView',
@@ -87,6 +92,8 @@ export function dispatchCommand(
       return service.upsertOption(commandId, input, commandOrigin);
     case 'setOptionAttribute':
       return service.setOptionAttribute(commandId, input, commandOrigin);
+    case 'submitBidDocument':
+      return service.submitBidDocument(commandId, input, commandOrigin);
     case 'addNote':
       return service.addNote(commandId, input, commandOrigin);
     case 'focusOption':

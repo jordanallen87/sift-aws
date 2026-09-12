@@ -209,6 +209,25 @@ export type {
   BidReaderInput,
 } from './bid-reader.js';
 
+export {
+  BID_DOCUMENT_EXTRACTOR_TOOL_ID,
+  BID_DOCUMENT_FIELDS,
+  REQUIRED_BID_DOCUMENT_FIELDS,
+  MAX_EXTRACTED_LINE_ITEMS,
+  STATED_FIELD_CONFIDENCE,
+  QUALIFIED_FIELD_CONFIDENCE,
+  DERIVED_FIELD_CONFIDENCE,
+  extractBidDocument,
+} from './bid-document-extractor.js';
+export type {
+  BidDocumentField,
+  ExtractedValue,
+  ExtractedLineItem,
+  ExtractedBidFields,
+  BidDocumentExtractionResult,
+  BidDocumentExtractorInput,
+} from './bid-document-extractor.js';
+
 export { SCOPE_DIFFER_TOOL_ID, diffBidScope, compareBidScope } from './scope-differ.js';
 export type {
   ScopeItemStatus,

@@ -233,6 +233,149 @@ export type SetOptionAttributeInput = z.infer<typeof SetOptionAttributeInputSche
 /** Identical shape to `SetOptionAttributeInput`. */
 export const SiftSetOptionAttributeToolInputSchema = SetOptionAttributeInputSchema;
 
+// --- SubmitBidDocumentInput ---
+//
+// A person's own bid document, brought into a case so its details can be
+// read off it instead of retyped into a form of scalar fields. Until this
+// command existed the ONLY ways an option could reach a case were
+// `upsertOption`/`setOptionAttribute` (a field at a time, every value
+// hand-entered) and the checked-in bid fixtures
+// `packages/scenarios/src/tools/bid-reader.ts` loads. A real document had
+// no way in at all.
+//
+// This is a sibling of `upsertOption`, not an overload of it, for the same
+// reason `startCase` is a sibling of `startDemo`: the two commands differ
+// in WHO is asserting. `upsertOption` writes what a person typed
+// (`origin: 'user'`, `status: 'asserted'` by default); this command writes
+// what a deterministic extractor READ off a document, which is a proposal
+// about a fact, not the person's own assertion of it. Keeping them
+// separate is what makes "extraction proposes, it never asserts on the
+// person's behalf" true by construction rather than by convention -- a
+// caller cannot reach `origin: 'user'` through this schema at all, because
+// this schema carries no origin field to reach it with.
+
+/**
+ * The document formats the extractor can read *deterministically*, with no
+ * model and no network:
+ *
+ *  - `application/json` -- the bid shape the checked-in fixtures already
+ *    use (`packages/scenarios/fixtures/bids/bid-northgate.json`:
+ *    `contractorName`, `licenseNumber`, `total`, `lineItems[]`,
+ *    `allowances[]`, `warranty`, `depositPercent`, `startInWeeks`,
+ *    `durationWorkingDays`).
+ *  - `text/csv` -- a line-item table (a header row plus one row per priced
+ *    scope item), which is what a plan room, an estimating package, or a
+ *    spreadsheet export actually hands a person.
+ *
+ * **Decision on free text (`text/plain`): deliberately NOT accepted yet,
+ * and this enum is the clean seam for adding it.** A deterministic,
+ * model-free extractor cannot honestly read prose. Accepting free text now
+ * would leave exactly two outcomes, and both are worse than refusing it:
+ * pattern-match dollar figures out of a paragraph and assert them (a
+ * fabricated reading of a document nobody checked), or read nothing and
+ * return an all-unknown extraction (an import path that silently never
+ * imports anything). Adding it later is additive and touches nothing else:
+ * one more member here, one more branch in
+ * `extractBidDocument`'s format switch, and -- when a model is genuinely
+ * involved in the reading -- the *same* `origin: 'agent_proposed'` /
+ * never-`'verified'` rules this command already enforces for every value
+ * it writes. No shape in this file changes.
+ */
+export const BID_DOCUMENT_FORMATS = ['application/json', 'text/csv'] as const;
+export type BidDocumentFormat = (typeof BID_DOCUMENT_FORMATS)[number];
+
+/**
+ * Hard cap on one submitted document, measured in UTF-8 **bytes**, per
+ * architecture.md "Tool inputs, outputs, model responses, and persisted
+ * snapshots are size-bounded". 256 KiB: the largest checked-in bid fixture
+ * is under 4 KB and the fullest realistic CSV line-item table for a trade
+ * package is a few tens of KB, so this is roughly two orders of magnitude
+ * of headroom while still refusing an unbounded paste or a runaway upload
+ * before a single byte of it is parsed.
+ *
+ * Enforced twice on purpose: here, so an over-size document is a clean
+ * schema-level rejection the caller sees before any work is done, and again
+ * inside the extractor itself (`MAX_BID_DOCUMENT_BYTES` is imported there,
+ * never re-declared), so the tool is safe when called directly by a
+ * specialist rather than through this command.
+ */
+export const MAX_BID_DOCUMENT_BYTES = 262_144;
+
+/**
+ * UTF-8 byte length. `String.prototype.length` counts UTF-16 code units, so
+ * it under-counts every non-ASCII character -- a cap expressed in "bytes"
+ * but checked against `.length` would accept a document up to four times
+ * the stated size. `TextEncoder` is available in both Node and the browser,
+ * which matters because this package is shared by `apps/agent` and
+ * `apps/web`.
+ */
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+const SubmittedBidDocumentSchema = z
+  .object({
+    /** The document's own name, used as the `Source.title` and, when the contractor's name cannot be read, as the option's label. Never invented. */
+    filename: safeString(200),
+    format: z.enum(BID_DOCUMENT_FORMATS),
+    /**
+     * The document itself, as text.
+     *
+     * Deliberately a plain bounded `z.string()` rather than `safeString`.
+     * `safeString`'s HTML/executable guard exists for strings that are
+     * *rendered*; this one never is. It is parsed, and every value derived
+     * from it re-enters these contracts through `AttributeRecordSchema`,
+     * `SourceSchema`, and `EntityRecordSchema` -- all of which apply
+     * `safeString` themselves, so a document carrying markup-shaped text in
+     * a field that would be rendered is refused at that boundary, loudly,
+     * rather than being silently rewritten here. Applying the guard to the
+     * raw document instead would reject perfectly ordinary bid content (a
+     * scope label reading `clearance < 24"`, say) while protecting nothing
+     * that is not already protected.
+     *
+     * `.max()` on length is a cheap pre-filter that can never reject
+     * anything the byte check would accept (UTF-8 byte length is always
+     * >= UTF-16 code-unit count); the `.refine` below is the real cap.
+     */
+    text: z
+      .string()
+      .min(1)
+      .max(MAX_BID_DOCUMENT_BYTES)
+      .refine((text) => utf8ByteLength(text) <= MAX_BID_DOCUMENT_BYTES, {
+        message: `document must not exceed ${MAX_BID_DOCUMENT_BYTES} bytes encoded as UTF-8`,
+      }),
+    /**
+     * Where the document came from, when it came from somewhere addressable
+     * (a plan-room link, a shared drive URL). Optional because the case this
+     * command exists for -- a person handing over a file -- has no URL at
+     * all; `command-service.ts` then mints a non-network `sift://` URI
+     * naming the stored document, so `SourceSchema.url` (required) stays
+     * honest instead of being filled with a fabricated web address.
+     */
+    sourceUrl: z.url().max(2000).optional(),
+  })
+  .strict();
+
+export const SubmitBidDocumentInputSchema = z
+  .object({
+    caseId: idString(),
+    expectedSequence,
+    /**
+     * Re-reading a corrected document onto the option it already produced,
+     * rather than adding a second one. Optional exactly as it is on
+     * `UpsertOptionInput`; absent means "create a new option".
+     */
+    optionId: idString().optional(),
+    document: SubmittedBidDocumentSchema,
+  })
+  .strict();
+export type SubmitBidDocumentInput = z.infer<typeof SubmitBidDocumentInputSchema>;
+
+// No `Sift*ToolInputSchema` alias is exported for this command, unlike its
+// neighbours above: webmcp.md's tool catalog declares no bid-document tool,
+// and inventing one here would put a tool name in the contracts that no
+// spec, registration, or handler backs.
+
 // --- AddNoteInput (webmcp.md `sift_add_note` -- docs/change-sets/2026-08-30-
 // generic-decision-workspace.md §28 "Notes" / §29 "WebMCP should be able to
 // add research and notes") ---

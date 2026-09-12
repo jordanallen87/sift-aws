@@ -72,6 +72,7 @@ import {
   SetViewInputSchema,
   StartCaseInputSchema,
   StartDemoInputSchema,
+  SubmitBidDocumentInputSchema,
   SubmitSourceInputSchema,
   UpdateCriteriaInputSchema,
   UpsertOptionInputSchema,
@@ -100,6 +101,7 @@ import {
   type SetViewInput,
   type StartCaseInput,
   type StartDemoInput,
+  type SubmitBidDocumentInput,
   type SubmitSourceInput,
   type ToolErrorCode,
   type UpdateCriteriaInput,
@@ -232,6 +234,28 @@ export interface SiftCommands {
    */
   setOptionAttribute: (
     input: SetOptionAttributeInput,
+    options?: CommandCallOptions,
+  ) => Promise<CommandReceipt>;
+  /**
+   * A person's own bid document, brought into the case so a deterministic
+   * extractor can read it (`CommandService.submitBidDocument`).
+   *
+   * A sibling of `upsertOption`, never an overload of it, for the reason
+   * `SubmitBidDocumentInputSchema` states at length: the two differ in WHO
+   * is asserting. `upsertOption` writes what a person typed (`origin:
+   * 'user'`); this writes what an extractor READ off a document, which the
+   * handler records as `origin: 'agent_proposed'` with the extractor's own
+   * confidence, and a field the document did not state as `status:
+   * 'unknown'` with no value at all. No caller can reach `origin: 'user'`
+   * through this command, because its input carries no origin field.
+   *
+   * The document travels as `document.text`, not as a multipart upload:
+   * both accepted formats are text, so the browser reads the file with
+   * `FileReader` and this stays one ordinary JSON command over the same
+   * transport, with the same idempotency key, as every other method here.
+   */
+  submitBidDocument: (
+    input: SubmitBidDocumentInput,
     options?: CommandCallOptions,
   ) => Promise<CommandReceipt>;
   /**
@@ -580,6 +604,11 @@ export function createSiftClient(options: CreateSiftClientOptions = {}): SiftCom
     setOptionAttribute: genericCommand<SetOptionAttributeInput, CommandReceipt>(
       'setOptionAttribute',
       SetOptionAttributeInputSchema,
+      CommandReceiptSchema,
+    ),
+    submitBidDocument: genericCommand<SubmitBidDocumentInput, CommandReceipt>(
+      'submitBidDocument',
+      SubmitBidDocumentInputSchema,
       CommandReceiptSchema,
     ),
     addNote: genericCommand<AddNoteInput, CommandReceipt>(

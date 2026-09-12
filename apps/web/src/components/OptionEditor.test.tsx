@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MAX_CASE_ENTITIES } from '@sift/contracts';
+import { MAX_BID_DOCUMENT_BYTES, MAX_CASE_ENTITIES } from '@sift/contracts';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
@@ -7,6 +7,7 @@ import type { AttributeDefinition, EntityRecord } from '@sift/contracts';
 import { OptionEditor } from './OptionEditor.js';
 import { AppProviders } from '../app/AppProviders.js';
 import { createFakeSiftCommands, buildFakeCommandReceipt } from '../test/fake-sift-commands.js';
+import { buildFixtureCaseState } from '../test/fixtures.js';
 import { renderAtNarrowWidth } from '../test/narrow-viewport.js';
 
 const ATTRIBUTE_DEFINITIONS: AttributeDefinition[] = [
@@ -334,6 +335,327 @@ describe('OptionEditor', () => {
       expect(screen.getByTestId('option-editor-save')).toHaveClass(
         'min-h-[var(--size-touch-target-min)]',
       );
+    });
+  });
+
+  /**
+   * The document-import half. `submitBidDocument` is bid-specific, so the
+   * affordance is gated on the case's own pack-declared option kind -- and
+   * everything it writes is a PROPOSAL, which is what most of these assert:
+   * an extracted value must stay distinguishable from a typed one, on screen
+   * and on the wire.
+   */
+  describe('bid document import', () => {
+    const BID_DEFINITIONS: AttributeDefinition[] = [
+      {
+        id: 'bid.quoted_total',
+        label: 'Quoted total',
+        valueType: 'money',
+        required: true,
+        appliesTo: ['bid'],
+        evidenceExpectation: 'assertion',
+        comparison: 'lower_better',
+        sensitive: false,
+      },
+      {
+        id: 'bid.deposit_percent',
+        label: 'Deposit requested',
+        valueType: 'number',
+        required: true,
+        appliesTo: ['bid'],
+        unit: '%',
+        evidenceExpectation: 'assertion',
+        comparison: 'lower_better',
+        sensitive: false,
+      },
+      {
+        id: 'bid.warranty_months',
+        label: 'Warranty term',
+        valueType: 'number',
+        required: false,
+        appliesTo: ['bid'],
+        unit: 'months',
+        evidenceExpectation: 'assertion',
+        comparison: 'higher_better',
+        sensitive: false,
+      },
+    ];
+
+    const DOCUMENT_TEXT = '{"contractorName":"Northgate Builders","total":{"amount":48200}}';
+
+    function importedBid(): EntityRecord {
+      return {
+        id: 'option-imported',
+        kind: 'bid',
+        label: 'Northgate Builders',
+        attributes: {
+          'bid.quoted_total': {
+            definitionId: 'bid.quoted_total',
+            label: 'Quoted total',
+            value: { type: 'money', amount: 48200, currency: 'USD' },
+            origin: 'agent_proposed',
+            sourceIds: ['source-doc-1'],
+            confidence: 0.9,
+            status: 'supported',
+            updatedAt: '2026-09-01T00:00:00.000Z',
+          },
+          'bid.deposit_percent': {
+            definitionId: 'bid.deposit_percent',
+            label: 'Deposit requested',
+            origin: 'agent_proposed',
+            sourceIds: ['source-doc-1'],
+            status: 'unknown',
+            updatedAt: '2026-09-01T00:00:00.000Z',
+          },
+          'bid.warranty_months': {
+            definitionId: 'bid.warranty_months',
+            label: 'Warranty term',
+            origin: 'agent_proposed',
+            sourceIds: ['source-doc-1'],
+            status: 'unknown',
+            updatedAt: '2026-09-01T00:00:00.000Z',
+          },
+        },
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      };
+    }
+
+    function renderBidEditor(
+      overrides: Partial<React.ComponentProps<typeof OptionEditor>> = {},
+      commandsOverrides: Parameters<typeof createFakeSiftCommands>[0] = {},
+    ) {
+      return renderEditor(
+        {
+          optionKind: 'bid',
+          optionLabel: 'bid',
+          attributeDefinitions: BID_DEFINITIONS,
+          ...overrides,
+        },
+        {
+          submitBidDocument: vi.fn().mockResolvedValue(
+            buildFakeCommandReceipt({
+              caseId: 'case-1',
+              snapshot: buildFixtureCaseState({ entities: [importedBid()] }),
+            }),
+          ),
+          ...commandsOverrides,
+        },
+      );
+    }
+
+    async function importDocument(
+      user: ReturnType<typeof userEvent.setup>,
+      text = DOCUMENT_TEXT,
+      filename = 'bid-northgate.json',
+    ) {
+      fireEvent.change(screen.getByTestId('bid-document-import-text'), { target: { value: text } });
+      await user.type(screen.getByLabelText('Document name'), filename);
+      await user.selectOptions(screen.getByLabelText('Document format'), 'application/json');
+      await user.click(screen.getByTestId('bid-document-import-submit'));
+    }
+
+    it('is absent on a pack whose options are not bids', () => {
+      renderEditor();
+      expect(screen.queryByTestId('bid-document-import')).not.toBeInTheDocument();
+    });
+
+    it('is offered on a pack whose declared option kind is the one the command writes', () => {
+      renderBidEditor();
+      expect(screen.getByTestId('bid-document-import')).toBeInTheDocument();
+    });
+
+    it('sends a chosen JSON file through submitBidDocument as document text', async () => {
+      const user = userEvent.setup();
+      const { commands } = renderBidEditor();
+
+      await user.upload(
+        screen.getByTestId('bid-document-import-file'),
+        new File([DOCUMENT_TEXT], 'bid-northgate.json', { type: 'application/json' }),
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('bid-document-import-text')).toHaveValue(DOCUMENT_TEXT);
+      });
+      await user.click(screen.getByTestId('bid-document-import-submit'));
+
+      await waitFor(() => {
+        expect(commands.submitBidDocument).toHaveBeenCalledTimes(1);
+      });
+      const calledWith = vi.mocked(commands.submitBidDocument).mock.calls[0]?.[0];
+      expect(calledWith).toMatchObject({
+        caseId: 'case-1',
+        expectedSequence: 4,
+        document: {
+          filename: 'bid-northgate.json',
+          format: 'application/json',
+          text: DOCUMENT_TEXT,
+        },
+      });
+    });
+
+    it('summarises what was read and what was not, then puts the person into editing the new option', async () => {
+      const user = userEvent.setup();
+      renderBidEditor();
+
+      await importDocument(user);
+
+      const read = await screen.findByTestId('bid-document-import-read-bid.quoted_total');
+      expect(read).toHaveTextContent('Confidence 90%');
+      expect(
+        screen.getByTestId('bid-document-import-unread-bid.deposit_percent'),
+      ).toHaveTextContent('Required');
+
+      // The form is now editing the option the server actually wrote.
+      expect(screen.getByLabelText('Option label')).toHaveValue('Northgate Builders');
+      expect(screen.getByLabelText('Quoted total amount')).toHaveValue(48200);
+      expect(screen.getByTestId('option-editor-save')).toHaveTextContent('Save changes');
+    });
+
+    it('marks every field still holding a value the document supplied, and says it is unverified', async () => {
+      const user = userEvent.setup();
+      renderBidEditor();
+
+      await importDocument(user);
+
+      const marked = await screen.findByTestId('option-editor-imported-bid.quoted_total');
+      expect(marked).toHaveTextContent('Read from the document');
+      expect(marked).toHaveTextContent('Confidence 90%');
+      expect(marked).toHaveTextContent('Not verified');
+      expect(screen.getByTestId('option-editor-imported-label')).toHaveTextContent(
+        'Read from the document',
+      );
+      expect(screen.getByTestId('option-editor-import-caution')).toHaveTextContent(
+        'Anything you type here is saved as your own entry.',
+      );
+    });
+
+    it('leaves a field the document never stated empty, and says so rather than showing a value', async () => {
+      const user = userEvent.setup();
+      renderBidEditor();
+
+      await importDocument(user);
+
+      expect(await screen.findByLabelText('Deposit requested')).toHaveValue(null);
+      const unread = screen.getByTestId('option-editor-imported-bid.deposit_percent');
+      expect(unread).toHaveTextContent('did not state this');
+      expect(unread).toHaveTextContent('Nothing is recorded here');
+    });
+
+    it('drops the mark from a field once the person edits it -- that value is now theirs', async () => {
+      const user = userEvent.setup();
+      renderBidEditor();
+
+      await importDocument(user);
+      await screen.findByTestId('option-editor-imported-bid.quoted_total');
+
+      await user.clear(screen.getByLabelText('Quoted total amount'));
+      await user.type(screen.getByLabelText('Quoted total amount'), '47000');
+
+      expect(
+        screen.queryByTestId('option-editor-imported-bid.quoted_total'),
+      ).not.toBeInTheDocument();
+    });
+
+    // The rule this protects: saving must not launder a proposal into the
+    // person's own assertion. `upsertOption` defaults an attribute carrying
+    // no provenance to `origin: 'user'`/`status: 'asserted'`, so an untouched
+    // extracted value has to carry its own provenance back up.
+    it("keeps the extraction's provenance on untouched values, and records an edited one as the person's own", async () => {
+      const user = userEvent.setup();
+      const { commands } = renderBidEditor();
+
+      await importDocument(user);
+      await screen.findByTestId('option-editor-imported-bid.quoted_total');
+
+      await user.type(screen.getByLabelText('Warranty term'), '24');
+      await user.click(screen.getByTestId('option-editor-save'));
+
+      await waitFor(() => {
+        expect(commands.upsertOption).toHaveBeenCalledTimes(1);
+      });
+      const calledWith = vi.mocked(commands.upsertOption).mock.calls[0]?.[0];
+      expect(calledWith).toMatchObject({ optionId: 'option-imported' });
+      const attributes = calledWith?.option.attributes ?? [];
+
+      expect(attributes).toContainEqual({
+        definitionId: 'bid.quoted_total',
+        value: { type: 'money', amount: 48200, currency: 'USD' },
+        origin: 'agent_proposed',
+        status: 'supported',
+        sourceIds: ['source-doc-1'],
+        confidence: 0.9,
+      });
+      // Still explicitly unknown, still pointing at the document that was
+      // searched -- never dropped by a save that replaces the map.
+      expect(attributes).toContainEqual({
+        definitionId: 'bid.deposit_percent',
+        status: 'unknown',
+        origin: 'agent_proposed',
+        sourceIds: ['source-doc-1'],
+      });
+      // Typed by the person: no provenance, so the handler records it as
+      // theirs.
+      expect(attributes).toContainEqual({
+        definitionId: 'bid.warranty_months',
+        value: { type: 'number', value: 24, unit: 'months' },
+      });
+    });
+
+    it('refuses an over-size document client-side, with a real message and no command call', async () => {
+      const user = userEvent.setup();
+      const { commands } = renderBidEditor();
+
+      await importDocument(user, 'a'.repeat(MAX_BID_DOCUMENT_BYTES + 1));
+
+      const error = await screen.findByTestId('bid-document-import-error');
+      expect(error).toHaveTextContent('256 KB');
+      expect(error).toHaveTextContent('Nothing was sent.');
+      expect(commands.submitBidDocument).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the server error for a document that could not be read as a bid', async () => {
+      const user = userEvent.setup();
+      renderBidEditor(
+        {},
+        {
+          submitBidDocument: vi
+            .fn()
+            .mockRejectedValue(
+              new Error('The document "bid-northgate.json" could not be read as a bid.'),
+            ),
+        },
+      );
+
+      await importDocument(user, '{not json');
+
+      expect(await screen.findByTestId('bid-document-import-error')).toHaveTextContent(
+        'could not be read as a bid',
+      );
+      expect(screen.queryByTestId('bid-document-import-summary')).not.toBeInTheDocument();
+    });
+
+    // An import always ADDS an option, so offering it while some other
+    // option is open for editing would silently abandon that edit.
+    it('is withdrawn while a pre-existing option is being edited, and returns on Cancel', async () => {
+      const user = userEvent.setup();
+      const existing = { ...buildEntity({ id: 'bid-existing', kind: 'bid' }) };
+      renderBidEditor({ options: [existing] });
+
+      await user.click(screen.getByTestId('option-editor-edit-bid-existing'));
+      expect(screen.queryByTestId('bid-document-import')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('option-editor-cancel'));
+      expect(screen.getByTestId('bid-document-import')).toBeInTheDocument();
+    });
+
+    it('has no axe violations with an imported option open for correction', async () => {
+      const user = userEvent.setup();
+      const { container } = renderBidEditor();
+
+      await importDocument(user);
+      await screen.findByTestId('option-editor-imported-bid.quoted_total');
+
+      expect(await axe(container)).toHaveNoViolations();
     });
   });
 });

@@ -19,6 +19,9 @@ import {
   SetEvidenceDispositionInputSchema,
   SetOptionAttributeInputSchema,
   SetViewInputSchema,
+  SubmitBidDocumentInputSchema,
+  BID_DOCUMENT_FORMATS,
+  MAX_BID_DOCUMENT_BYTES,
   StartCaseInputSchema,
   StartDemoInputSchema,
   SubmitSourceInputSchema,
@@ -436,6 +439,130 @@ describe('SetOptionAttributeInputSchema (ADR 0006 decision 4)', () => {
         extra: true,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('SubmitBidDocumentInputSchema', () => {
+  const document = {
+    filename: 'northgate-bid.json',
+    format: 'application/json',
+    text: '{"contractorName":"Northgate Plumbing"}',
+  };
+
+  it('parses a minimal submission (optionId and sourceUrl both optional)', () => {
+    const result = SubmitBidDocumentInputSchema.safeParse({
+      caseId: 'case-1',
+      expectedSequence: 3,
+      document,
+    });
+    expect(result.success, JSON.stringify('error' in result ? result.error : null)).toBe(true);
+  });
+
+  it('parses a re-read onto an existing option, with a real source URL', () => {
+    const result = SubmitBidDocumentInputSchema.safeParse({
+      caseId: 'case-1',
+      optionId: 'bid-northgate',
+      expectedSequence: 3,
+      document: { ...document, sourceUrl: 'https://planroom.example/bids/northgate.json' },
+    });
+    expect(result.success, JSON.stringify('error' in result ? result.error : null)).toBe(true);
+  });
+
+  it('accepts exactly the two formats a deterministic extractor can read', () => {
+    expect(BID_DOCUMENT_FORMATS).toEqual(['application/json', 'text/csv']);
+    for (const format of BID_DOCUMENT_FORMATS) {
+      expect(
+        SubmitBidDocumentInputSchema.safeParse({
+          caseId: 'case-1',
+          expectedSequence: 0,
+          document: { ...document, format },
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it('rejects free text, which is deliberately not a format yet (see the schema comment)', () => {
+    expect(
+      SubmitBidDocumentInputSchema.safeParse({
+        caseId: 'case-1',
+        expectedSequence: 0,
+        document: { ...document, format: 'text/plain' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an empty document', () => {
+    expect(
+      SubmitBidDocumentInputSchema.safeParse({
+        caseId: 'case-1',
+        expectedSequence: 0,
+        document: { ...document, text: '' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a document exactly at the byte cap and rejects one above it', () => {
+    const atCap = 'a'.repeat(MAX_BID_DOCUMENT_BYTES);
+    expect(
+      SubmitBidDocumentInputSchema.safeParse({
+        caseId: 'case-1',
+        expectedSequence: 0,
+        document: { ...document, text: atCap },
+      }).success,
+    ).toBe(true);
+    expect(
+      SubmitBidDocumentInputSchema.safeParse({
+        caseId: 'case-1',
+        expectedSequence: 0,
+        document: { ...document, text: `${atCap}a` },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('measures the cap in UTF-8 bytes, not UTF-16 code units', () => {
+    // Half the cap in `\u20ac` characters is under the cap by `.length` and
+    // 1.5x over it in real bytes. A `.max()`-only cap would accept this.
+    const text = '\u20ac'.repeat(MAX_BID_DOCUMENT_BYTES / 2);
+    expect(text.length).toBeLessThan(MAX_BID_DOCUMENT_BYTES);
+    expect(
+      SubmitBidDocumentInputSchema.safeParse({
+        caseId: 'case-1',
+        expectedSequence: 0,
+        document: { ...document, text },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('carries no origin/status field at all, so extraction can never claim a human assertion', () => {
+    for (const smuggled of [{ origin: 'user' }, { status: 'verified' }]) {
+      expect(
+        SubmitBidDocumentInputSchema.safeParse({
+          caseId: 'case-1',
+          expectedSequence: 0,
+          document,
+          ...smuggled,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it('rejects an unknown field on the document (strict)', () => {
+    expect(
+      SubmitBidDocumentInputSchema.safeParse({
+        caseId: 'case-1',
+        expectedSequence: 0,
+        document: { ...document, extra: true },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a missing caseId or expectedSequence', () => {
+    expect(SubmitBidDocumentInputSchema.safeParse({ expectedSequence: 0, document }).success).toBe(
+      false,
+    );
+    expect(SubmitBidDocumentInputSchema.safeParse({ caseId: 'case-1', document }).success).toBe(
+      false,
+    );
   });
 });
 

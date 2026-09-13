@@ -12,7 +12,7 @@
  * case underneath? A first-time user's whole experience is that loop, and
  * it is the loop no other harness watches.
  */
-import { bindCase, type Journey, type TurnContext } from '../harness.js';
+import { bindCase, openWorkflowStage, type Journey, type TurnContext } from '../harness.js';
 
 interface DiscoveryTopic {
   topicId?: string;
@@ -55,6 +55,45 @@ async function answerNextQuestion(ctx: TurnContext): Promise<boolean> {
   const submit = ctx.page.getByTestId('interaction-submit');
   if ((await submit.count()) === 0) return false;
   await submit.click();
+  return true;
+}
+
+/**
+ * Completes the blind-spot review sheet if the dock's primary action just
+ * opened it, rather than a `discovery-interaction` question
+ * (`BlindSpotReviewSheet.tsx` — "the one required challenge pass before
+ * model discovery", reached from the dock's `review_blind_spots` move once
+ * every required topic is confirmed).
+ *
+ * A real person facing it with nothing else to add ticks nothing and
+ * submits: `CompleteBlindSpotReviewInputSchema` treats an empty selection as
+ * a real, complete answer ("Nothing else to add" — see the sheet's own
+ * "Selecting nothing is a real answer" doc), not a dead end. Leaving the
+ * sheet open instead — which is what happened before this fix, because
+ * `answerNextQuestion` clicks `dock-action-primary` regardless of which move
+ * it triggers — blocks every click after it: Radix mounts the sheet's own
+ * overlay over the rest of the page, and `request-investigation` timed out
+ * with "blind-spot-review-sheet subtree intercepts pointer events" as a
+ * direct result.
+ */
+async function completeBlindSpotReviewIfOpen(ctx: TurnContext): Promise<boolean> {
+  const sheet = ctx.page.getByTestId('blind-spot-review-sheet');
+  if (
+    (await sheet.count()) === 0 ||
+    !(await sheet
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    return false;
+  }
+  const submit = ctx.page.getByTestId('blind-spot-review-submit');
+  if ((await submit.count()) === 0) return false;
+  await submit.first().click();
+  await sheet
+    .first()
+    .waitFor({ state: 'hidden', timeout: 10_000 })
+    .catch(() => undefined);
   return true;
 }
 
@@ -205,8 +244,19 @@ export const familyNovice: Journey = {
         for (let attempt = 0; attempt < 12; attempt += 1) {
           const next = await ctx.text('orientation-next-step');
           if (next === null || next.trim() === '') break;
-          if (!(await answerNextQuestion(ctx))) break;
-          await ctx.page.waitForTimeout(1_200);
+          if (await answerNextQuestion(ctx)) {
+            await ctx.page.waitForTimeout(1_200);
+            continue;
+          }
+          // The dock's primary action can also be the last discovery gate
+          // rather than another answerable question -- `answerNextQuestion`
+          // already clicked it. Finish what it opened, exactly as a person
+          // would, instead of concluding there is nothing left to do.
+          if (await completeBlindSpotReviewIfOpen(ctx)) {
+            await ctx.page.waitForTimeout(1_200);
+            continue;
+          }
+          break;
         }
       },
       async checks(ctx, check) {
@@ -253,9 +303,33 @@ export const familyNovice: Journey = {
       actor: 'person',
       intent: 'Makes a call on one of the cars',
       async act(ctx) {
+        // A real person leaves nothing open before moving on.
+        await completeBlindSpotReviewIfOpen(ctx);
+
         const keep = ctx.page.getByTestId('quick-pick-keep');
-        if ((await keep.count()) > 0 && (await keep.first().isEnabled())) {
-          await keep.first().click();
+        if (
+          (await keep.count()) === 0 ||
+          !(await keep
+            .first()
+            .isVisible()
+            .catch(() => false))
+        ) {
+          // Review owns Quick Pick (ADR 0016 / case-workflow.ts's stage-
+          // ownership table) -- a real person opens the guided stepper and
+          // moves to Review to see it, exactly as the dock's own
+          // `quick_pick` move would send them there.
+          await openWorkflowStage(ctx, 'review');
+        }
+
+        const keepAfterNav = ctx.page.getByTestId('quick-pick-keep');
+        if (
+          (await keepAfterNav.count()) > 0 &&
+          (await keepAfterNav
+            .first()
+            .isEnabled()
+            .catch(() => false))
+        ) {
+          await keepAfterNav.first().click();
         }
       },
       async checks(ctx, check) {
@@ -296,6 +370,12 @@ export const familyNovice: Journey = {
       actor: 'person',
       intent: 'Asks Sift to look into it properly now',
       async act(ctx) {
+        // Belt and suspenders: the previous turn already closes the sheet
+        // if the discovery loop opened it, but a real person would never
+        // click through an open sheet's overlay to reach the hero
+        // underneath, so this guards the click site itself too.
+        await completeBlindSpotReviewIfOpen(ctx);
+
         const button = ctx.page.getByTestId('request-investigation');
         if ((await button.count()) > 0 && (await button.first().isEnabled())) {
           await button.first().click();

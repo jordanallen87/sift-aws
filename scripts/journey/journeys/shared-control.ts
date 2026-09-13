@@ -33,7 +33,7 @@
  * 4. A person can confirm or reject what the assistant proposed, and the
  *    result carries whose judgment it was.
  */
-import { bindCase, type Journey } from '../harness.js';
+import { bindCase, openWorkflowStage, type Journey } from '../harness.js';
 
 interface DiscoveryTopic {
   topicId?: string;
@@ -257,12 +257,22 @@ export const sharedControl: Journey = {
         // only the expanded control reported the pane as having no review
         // surface at all, which was this journey's bug, not the product's.
         const expanded = ctx.page.getByTestId('workspace-expanded-open-decision-profile');
+        const summary = ctx.page.getByTestId('disclosure-decision-profile-summary');
+
+        // Priorities owns "Your priorities" / the Decision Profile (ADR
+        // 0016; case-workflow.ts's stage-ownership table). By this point in
+        // the journey the case has usually moved the recommended stage on
+        // to Analysis, so neither trigger is on screen until a person steps
+        // back to Priorities -- exactly what the guided stepper is for.
+        if ((await expanded.count()) === 0 && (await summary.count()) === 0) {
+          await openWorkflowStage(ctx, 'priorities');
+        }
+
         if ((await expanded.count()) > 0) {
           await expanded.first().click();
           await ctx.page.waitForTimeout(1_500);
           return;
         }
-        const summary = ctx.page.getByTestId('disclosure-decision-profile-summary');
         if ((await summary.count()) > 0) {
           await summary.first().click();
           await ctx.page.waitForTimeout(1_500);

@@ -216,6 +216,63 @@ export async function bindCase(ctx: TurnContext, timeoutMs = 30_000): Promise<vo
 }
 
 /**
+ * Opens the guided-stage stepper and moves the case to `stageId`, exactly as
+ * a person clicking through `CaseWorkflowStepper` would
+ * (`apps/web/src/app/case-workflow.ts`'s stage-ownership table, ADR 0016).
+ *
+ * Since `ab75200` ("the guided stages now apply at every width, and
+ * actually gate content"), each stage's regions render only while that
+ * stage is active (or, per the ADR's escape hatch, while the stage is
+ * altogether unreachable) — so a region owned by a stage the case has
+ * already moved past, like Review's Quick Pick or Priorities' Decision
+ * Profile, is not on screen until a person actually steps back to it.
+ *
+ * The stepper renders two ways depending on viewport
+ * (`CaseWorkflowStepper.tsx`): at the journey's narrow width
+ * (`host-session.ts`, 430px) it is a collapsed toggle with no step buttons
+ * in the DOM until opened; at a wide viewport every step is already a
+ * button in one row. This tries the step button directly first and only
+ * reaches for the toggle when it is not already on screen, so it works
+ * unmodified at either width.
+ *
+ * A stage a person cannot yet reach (`state: 'unavailable'`) renders its
+ * button disabled. Clicking a disabled button would hang on Playwright's
+ * actionability wait, so this checks `isEnabled` first and returns `false`
+ * rather than doing that — a caller can tell "nothing to click" apart from
+ * "clicked it".
+ */
+export async function openWorkflowStage(ctx: TurnContext, stageId: string): Promise<boolean> {
+  const step = ctx.page.getByTestId(`case-workflow-step-${stageId}`);
+  if (
+    (await step.count()) === 0 ||
+    !(await step
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    const toggle = ctx.page.getByTestId('case-workflow-stepper-toggle');
+    if ((await toggle.count()) > 0) {
+      await toggle.first().click();
+      await step
+        .first()
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .catch(() => undefined);
+    }
+  }
+  if (
+    (await step.count()) === 0 ||
+    !(await step
+      .first()
+      .isEnabled()
+      .catch(() => false))
+  ) {
+    return false;
+  }
+  await step.first().click();
+  return true;
+}
+
+/**
  * Runs one journey to completion.
  *
  * A failing check does **not** stop the journey. A turn that leaves the

@@ -13,7 +13,14 @@
 %%   4. The compiled Decision Pack vs. the mutable case / run plan
 %%   5. Strands AgentSkills, Graph/Swarm, interventions, Context Injector,
 %%      GoalLoop, sessions, hooks
-%%   6. Local vs. AgentCore execution targets
+%%   6. Local vs. AgentCore execution targets -- SIFT_EXECUTION_TARGET is
+%%      validated to exactly these two values (apps/agent/src/config.ts) but
+%%      is NOT currently read anywhere to branch a request (grep confirms its
+%%      only runtime use is one startup log line in server.ts); both HTTP
+%%      surfaces below are simultaneously and unconditionally live on every
+%%      deployment regardless of its value. The diagram draws them as two
+%%      concurrently-mounted entry points into the same command layer, not
+%%      as a live runtime switch.
 %%   7. Sift-minted trace/correlation ids linking lifecycle-hook events to the
 %%      Runtime Inspector, PLUS the real OpenTelemetry span path added
 %%      2026-09-04 (apps/agent/src/runtime/otel-span-recorder.ts):
@@ -32,6 +39,15 @@
 %%      see docs/submissions/webmcp/claim-evidence-matrix.md rows E8/E9.
 %%   8. The human-only approval boundary (styled distinctly, not just another
 %%      box in the flow)
+%%   9. Run/tool budget enforcement and steering (BudgetGuard, RetrySteering,
+%%      EvidenceQualitySteering -- apps/agent/src/runtime/interventions.ts)
+%%      live inside the Strands runtime adapter, NOT packages/core: they
+%%      extend the Strands SDK's own InterventionHandler and import
+%%      @strands-agents/sdk directly, so they are excluded from "pure
+%%      functions: no model, no I/O." Moved out of CORE and folded into
+%%      STRANDS's Interventions node on 2026-09-13 after this was verified
+%%      against the actual imports (packages/core has no budget/steering
+%%      module at all -- grep confirms it).
 %% Also folds in the instrumentation pipeline from
 %% docs/specs/debugging-and-observability.md (hooks/domain events ->
 %% TelemetryNormalizer -> Redactor -> runtime_events -> Inspector/bundle).
@@ -71,9 +87,8 @@ flowchart TD
     OBLIG["deriveObligations /<br/>selectNextObligation"]
     EVID["Evidence validity<br/>and source links"]
     READY["evaluateReadiness"]
-    BUDGET["Run/tool budgets<br/>and steering policy"]
     AUTHGATE{{"reviewProposal()<br/>rejects any actor != human"}}
-    ROUTE --> OBLIG --> EVID --> READY --> BUDGET
+    ROUTE --> OBLIG --> EVID --> READY
   end
 
   subgraph PACKCASE["Compiled Decision Pack vs. Mutable Case / Run Plan"]
@@ -83,20 +98,20 @@ flowchart TD
     PACK -->|"adapter compiles a bounded<br/>run plan; never rewrites the pack"| CASEPLAN
   end
 
-  subgraph TARGETS["Execution Targets (SIFT_EXECUTION_TARGET)"]
+  subgraph TARGETS["Execution Targets (SIFT_EXECUTION_TARGET;<br/>both surfaces always live, not env-selected)"]
     direction TB
-    LOCALEXEC["local: in-process Strands adapter"]
-    AGENTCOREEXEC["agentcore: Bedrock AgentCore runtime<br/>port 8080, /ping + /invocations"]
+    LOCALEXEC["local: in-process Strands adapter<br/>reached via /api/cases/*"]
+    AGENTCOREEXEC["agentcore: AgentCore-compatible contract<br/>port 8080, /ping + /invocations<br/>(built and live; not yet deployed to Bedrock)"]
   end
 
   subgraph STRANDS["Strands TypeScript Runtime Adapter"]
     direction TB
     SKILLS["AgentSkills<br/>progressive activation"]
-    GRAPHSWARM["Strands Graph (Car Pack) /<br/>bounded Strands Swarm (Energy Pack)"]
+    GRAPHSWARM["Strands Graph (Car Pack) /<br/>bounded Strands Swarm<br/>(Energy Pack, Bid Comparison Pack)"]
     CTXINJ["Context Injector<br/>current case projection, evidence, budgets"]
     GOALLOOP["GoalLoop<br/>recommendation validator, maxAttempts: 2"]
-    INTERVENE{{"Interventions<br/>Guide / Confirm / Deny"}}
-    SESS[("Sessions and snapshots<br/>LocalFileStorage / S3Storage")]
+    INTERVENE{{"Interventions: ScopeAuthorization,<br/>ConsequenceGuard, BudgetGuard,<br/>RetrySteering, EvidenceQualitySteering<br/>(Guide / Confirm / Deny)"}}
+    SESS[("Sessions and snapshots<br/>LocalFileStorage")]
     HOOKS["Lifecycle hooks"]
     CTXINJ --> SKILLS --> GRAPHSWARM
     GRAPHSWARM --> GOALLOOP
@@ -150,14 +165,13 @@ flowchart TD
   OBLIG -->|"selected obligation +<br/>read-only case snapshot"| CASEPLAN
   CASEPLAN --> CTXINJ
 
-  CMDHANDLER -->|"local"| LOCALEXEC
-  CMDHANDLER -->|"agentcore"| AGENTCOREEXEC
+  CMDHANDLER -->|"/api/cases/* path"| LOCALEXEC
+  CMDHANDLER -->|"/invocations path"| AGENTCOREEXEC
   LOCALEXEC --> STRANDS
   AGENTCOREEXEC --> STRANDS
-  AGENTCOREEXEC -.->|"trace/session/request IDs"| CW
+  AGENTCOREEXEC -.->|"trace/session/request IDs<br/>(only once actually deployed)"| CW
 
   INTERVENE -->|"candidate evidence /<br/>candidate recommendation only"| EVID
-  BUDGET -.->|"Deny on budget breach"| INTERVENE
   READY -->|"recommendation<br/>(a proposal, not a decision)"| HUMAN
   INTERVENE -->|"Confirm required"| HUMAN
   HUMANACTOR -->|"reviewProposal(actor: 'human')"| AUTHGATE

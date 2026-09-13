@@ -11,14 +11,14 @@
     "source": "docs/architecture.mmd",
     "export": "docs/architecture.png",
     "exportFormat": "PNG",
-    "exportBytes": 748580,
-    "exportMiB": 0.7139,
-    "exportSha256": "cbc50b4892289d8b7a8223109dadfd60450172d373c5f3818deb03d434380562",
-    "sourceSha256": "1fbd60e5bb8c3fda94719663b67ba568e5d560dc00d0993e6a0dd7a9d820ffbc",
+    "exportBytes": 892149,
+    "exportMiB": 0.8508,
+    "exportSha256": "52291758a15efc483e78bb9eb8863cb982cbac01df9ca030c700822f57e8c538",
+    "sourceSha256": "e4f3115d5bbdc82da2a2519155c03a1a8282d8c88846c7f6fd111196c724c478",
     "withinDevpost35MiBLimit": true,
-    "regeneratedAt": "2026-09-05",
+    "regeneratedAt": "2026-09-13",
     "showsOtelSpanPath": true,
-    "note": "Regenerated after the real OpenTelemetry span path (installSiftTracing -> NodeTracerProvider -> SiftSpanRecorder, conditional OTLP export) was added on 2026-09-04. Deliberately shows no CloudWatch/AgentCore correlation, no OTEL metrics and no W3C traceparent propagation, none of which are implemented."
+    "note": "Re-derived and regenerated 2026-09-13 after an independent line-by-line audit against the real code (not on the strength of the prior audit's claim). The 2026-09-05 OTel span path remains accurate and unchanged. Four inaccuracies found and fixed: (1) a BUDGET node was drawn inside the deterministic core subgraph as if run/tool budget and steering enforcement were pure, model-free functions, when BudgetGuard/RetrySteering/EvidenceQualitySteering (apps/agent/src/runtime/interventions.ts) import @strands-agents/sdk directly and extend its InterventionHandler -- moved to the Strands runtime adapter's Interventions node, where the code actually lives; (2) the Sessions node named S3Storage as a session backend, but grep confirms zero production callers construct it anywhere in apps/agent/src -- only LocalFileStorage is wired, so S3Storage was removed from the label; (3) the Strands Graph/Swarm node omitted the bid-comparison pack (apps/agent/src/runtime/bid-comparison-swarm.ts), which is now the Agents for Humans hero -- added; (4) the Execution Targets subgraph drew SIFT_EXECUTION_TARGET as a live runtime switch between two paths, but grep confirms the config value is validated and logged once (server.ts) and never read to branch a request -- both HTTP surfaces are simply always mounted together -- relabeled to say so. No background loop, watcher, or scheduler (Standing Watch) is depicted; none exists in the runtime (docs/hackathon-enhancements.md's own audit: 'No background loop exists anywhere in the runtime')."
   },
   "reportPaths": {
     "completionReport": "docs/completion-report.md",

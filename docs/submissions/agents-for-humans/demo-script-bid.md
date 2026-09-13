@@ -16,9 +16,9 @@ Target: **no longer than 5 minutes.** Beats below sum to exactly 300 seconds; la
 
 ## Provenance of every claim in this script
 
-Written 2026-09-07 and re-measured 2026-09-10 against a product that was actually driven, not against source alone. Every score, count and dollar figure below was read off a live run on the second date, after the case grew from three bids to twelve. Specifically:
+Written 2026-09-07 and re-measured 2026-09-10, then re-measured again 2026-09-13 against HEAD `1fec60d` (five commits after the 09-10 measurement, none of which touched the seeded fixtures, the scripted beats, or the scoring engine) — against a product that was actually driven, not against source alone. Every score, count and dollar figure below was read off a live run on the latest of those dates, after the case grew from three bids to twelve. Specifically:
 
-- A **real local run** on 2026-09-10, re-measured after the case scaled to twelve bids: case seeded with 12 options, `run-a7348a98-…`, **433 runtime events**, 4 skill activations, 6 swarm nodes, 5 handoffs, 28 context injections, and one `goal.validation_failed` followed by one `goal.validated` — all four Strands beats in a single round-1 run. Across both rounds the case carries **117 public activity events**.
+- A **real local run** on 2026-09-13, re-measured after the case scaled to twelve bids: case seeded with 12 options, `run-f40f81dd-7387-479a-b264-7ed146dd725d`, **433 runtime events**, 4 skill activations, 6 swarm nodes, 5 handoffs, 28 context injections, and one `goal.validation_failed` followed by one `goal.validated` — all four Strands beats in a single round-1 run. Across both rounds the case carries **117 public activity events**.
 - The **e2e journey** (`tests/e2e/bid-comparison-journey.spec.ts`), which asserts each beat below at six viewports and holds 42 baseline images.
 - The **scenario trajectory** (`tests/scenarios/bid-comparison.scenario.ts`).
 

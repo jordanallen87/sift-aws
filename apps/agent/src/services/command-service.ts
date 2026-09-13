@@ -161,9 +161,13 @@ import {
 } from '@sift/core';
 import type { PackRegistry } from '@sift/packs';
 import {
+  diffBidScope,
   extractBidDocument,
   loadAndEvaluateBillFeed,
+  loadFixture,
+  lookupLicense,
   type BidDocumentExtractionResult,
+  type BidJob,
   type ExtractedBidFields,
   type ExtractedValue,
 } from '@sift/scenarios';
@@ -412,6 +416,39 @@ const MAX_EXCERPT_CHARS = 4_800;
  * comparison will need next. Returns `undefined` when there was nothing to
  * quote, so an empty `excerpt` key is never stored.
  */
+/**
+ * Drops any freshly-derived record that would land on top of a value the
+ * PERSON put there.
+ *
+ * Re-reading a corrected document deliberately re-runs this command's own
+ * checks, so a second import refreshes its own earlier proposal rather than
+ * leaving a stale one behind. But `origin: 'user'` is not a stale proposal:
+ * somebody looked at that field and answered it, and an automatic check
+ * quietly overwriting that answer is the same defect in the other direction
+ * as a save laundering a sourced value into a user assertion. A check may
+ * refresh its own earlier proposal, and the pack's seed. It may not run
+ * over a person.
+ *
+ * Applied to the CHECKS only, not to the document's own read values. Those
+ * are exempt on purpose: handing over a corrected document for this option
+ * is the person choosing that document's reading, so its values replacing
+ * one they typed earlier is their own action taking effect. The checks are
+ * something the import does on its own initiative, which is exactly why
+ * they must yield.
+ */
+function keepingUserValues(
+  derived: Record<string, AttributeRecord>,
+  existing: Record<string, AttributeRecord> | undefined,
+): Record<string, AttributeRecord> {
+  if (existing === undefined) return derived;
+  const kept: Record<string, AttributeRecord> = {};
+  for (const [definitionId, record] of Object.entries(derived)) {
+    if (existing[definitionId]?.origin === 'user') continue;
+    kept[definitionId] = record;
+  }
+  return kept;
+}
+
 function buildBidDocumentExcerpt(extracted: BidDocumentExtractionResult): string | undefined {
   const lines: string[] = [];
   if (extracted.fields.licenseNumber !== undefined) {
@@ -1253,6 +1290,16 @@ export class CommandService {
       return validationFailure('Invalid extracted bid attributes.', attributeResult.errors);
     }
 
+    const derived = this.buildDerivedBidAttributes(
+      extracted,
+      input.caseId,
+      new Set(snapshot.sources.map((existing) => existing.id)),
+      now,
+    );
+    if (derived.errors.length > 0) {
+      return validationFailure('Invalid derived bid attributes.', derived.errors);
+    }
+
     const entity: EntityRecord = {
       id: optionId,
       // The `bid-comparison` pack manifest declares exactly one entity kind.
@@ -1261,8 +1308,15 @@ export class CommandService {
       // it, and otherwise the file's own name, which claims nothing about
       // who wrote it.
       label: extracted.fields.contractorName?.value ?? input.document.filename,
-      // MERGE, not replace -- see this method's doc comment.
-      attributes: { ...existingEntity?.attributes, ...attributeResult.attributes },
+      // MERGE, not replace -- see this method's doc comment. The derived
+      // records go on last: on a re-read of a corrected document they are
+      // the freshly-run check, not the previous run's. `keepingUserValues`
+      // is what stops that refresh from running over a person.
+      attributes: {
+        ...existingEntity?.attributes,
+        ...attributeResult.attributes,
+        ...keepingUserValues(derived.attributes, existingEntity?.attributes),
+      },
       createdAt: existingEntity?.createdAt ?? now,
       updatedAt: now,
     };
@@ -1292,9 +1346,22 @@ export class CommandService {
     // without the document it came from already being there to point at.
     // `updateSelection()` does not advance `eventSequence`, so the append
     // below still starts at `expectedSequence + 1`.
+    // The registry/scope-schedule rows the checks above cited go down in the
+    // same write as the document itself, so no attribute ever points at a
+    // source the case does not hold.
+    for (const derivedSource of derived.sources) {
+      const derivedCheck = SourceSchema.safeParse(derivedSource);
+      if (!derivedCheck.success) {
+        return validationFailure(
+          `A check run on "${input.document.filename}" could not be stored as a source.`,
+          formatZodIssues(derivedCheck.error.issues),
+        );
+      }
+    }
+
     const sourceWrite = this.deps.caseStore.updateSelection(
       input.caseId,
-      { sources: [...snapshot.sources, source] },
+      { sources: [...snapshot.sources, source, ...derived.sources] },
       input.expectedSequence,
       now,
       { commandId: `${commandId}:source`, commandName: 'submitBidDocument' },
@@ -1346,6 +1413,7 @@ export class CommandService {
         (record) => record.status !== 'unknown',
       ).length;
       const unknownCount = Object.keys(attributeResult.attributes).length - readCount;
+      const derivedCount = Object.keys(derived.attributes).length;
       this.emitActivity(
         {
           timestamp: now,
@@ -1357,7 +1425,11 @@ export class CommandService {
           // never a value, a licence number, or any other content read out
           // of the submitted document. Same discipline `addNote`/
           // `submitSource` keep with note bodies and source excerpts.
-          summary: `${existingEntity !== undefined ? 'Updated' : 'Added'} option "${entity.label}" from submitted document "${input.document.filename}": ${readCount} proposed value${readCount === 1 ? '' : 's'}, ${unknownCount} left unknown.`,
+          // The trailing clause counts the attributes the import's OWN
+          // checks filled in (the registry lookup, the scope diff) -- a
+          // count, never which check or what it found, for the same reason
+          // the rest of this line carries no values.
+          summary: `${existingEntity !== undefined ? 'Updated' : 'Added'} option "${entity.label}" from submitted document "${input.document.filename}": ${readCount} proposed value${readCount === 1 ? '' : 's'}, ${unknownCount} left unknown${derivedCount > 0 ? `, ${derivedCount} filled in by automatic checks` : ''}.`,
         },
         commandOrigin,
       );
@@ -1419,6 +1491,245 @@ export class CommandService {
     }
 
     return errors.length > 0 ? { ok: false, errors } : { ok: true, attributes };
+  }
+
+  /**
+   * The two checks this command performs ITSELF on an imported bid, and the
+   * `Source` rows they cite.
+   *
+   * This method's own header explains why the five derived/looked-up
+   * attributes were once "left entirely alone": writing them would have been
+   * "this command reporting on a search it never performed". That reasoning
+   * is unchanged -- it is the *premise* that changed. Both checks below are
+   * deterministic, fixture-backed functions this package already imports
+   * (`extractBidDocument` sits in this very method), so the command can
+   * genuinely perform the search and is then entitled to report it. Anything
+   * it still does not search for, it still does not write.
+   *
+   * What it deliberately still leaves alone:
+   *
+   *  - `bid.adjusted_total`, always. Normalizing a total means supplying a
+   *    plug number for every scope item the bid does not price, and choosing
+   *    a plug number is a person's judgment, not a lookup. It stays the
+   *    pack's own beat.
+   *  - `bid.scope_completeness`, unless the document speaks the job's scope
+   *    vocabulary (see `buildScopeCompleteness`).
+   *  - Everything credential-shaped, unless the document states a licence
+   *    number to look up.
+   *
+   * Every record produced here is `origin: 'agent_proposed'` and never
+   * `'verified'`, exactly like the read values: a tool proposed it, and no
+   * human has checked it.
+   */
+  private buildDerivedBidAttributes(
+    extracted: BidDocumentExtractionResult,
+    caseId: string,
+    knownSourceIds: ReadonlySet<string>,
+    now: string,
+  ): { attributes: Record<string, AttributeRecord>; sources: Source[]; errors: string[] } {
+    const attributes: Record<string, AttributeRecord> = {};
+    const sources: Source[] = [];
+    const errors: string[] = [];
+
+    const add = (
+      definitionId: string,
+      label: string,
+      sourceIds: string[],
+      value?: AttributeValue,
+    ): void => {
+      const result = createAttributeRecord(
+        {
+          definitionId,
+          label,
+          origin: 'agent_proposed',
+          status: value === undefined ? 'unknown' : 'supported',
+          sourceIds,
+          ...(value !== undefined ? { value } : {}),
+        },
+        this.deps.clock,
+      );
+      if (!result.ok) {
+        errors.push(...result.errors);
+        return;
+      }
+      attributes[definitionId] = result.value;
+    };
+
+    // A source row is minted only for an id the case does not already hold,
+    // so re-importing a bid on the same licence does not accumulate
+    // duplicates of the same registry record.
+    const seen = new Set(knownSourceIds);
+    const addSource = (id: string, title: string, excerpt: string): void => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      sources.push({
+        id,
+        // The registry and the job schedule are bundled fixtures, not web
+        // pages: the same non-network URI shape the submitted document's own
+        // source uses.
+        url: `sift://cases/${caseId}/checks/${id}`,
+        title,
+        retrievedAt: now,
+        excerpt,
+        tags: ['import-check'],
+        origin: 'fixture',
+        verification: 'unverified',
+        createdAt: now,
+      });
+    };
+
+    this.buildCredentialAttributes(extracted, add, addSource);
+    this.buildScopeCompleteness(extracted, add, addSource);
+
+    return { attributes, sources, errors };
+  }
+
+  /**
+   * Runs `license-lookup` for the licence number the document states, and
+   * records what the registry says.
+   *
+   * A MISS is a real answer, not a failure: `bid.license_status` already
+   * declares `'not_found'` among its allowed values, and a bid whose licence
+   * is in no registry is exactly the case a person needs to see. But a miss
+   * answers only that one question -- the registry holds no insurance record
+   * to compare either, so `bid.insurance_named_insured_match` and the
+   * combined `bid.credentials_valid` gate stay unwritten rather than being
+   * asserted `false`. "We could not find this licence" and "we checked and
+   * these credentials are bad" are different findings, and only the second
+   * would be fair to score against a contractor.
+   */
+  private buildCredentialAttributes(
+    extracted: BidDocumentExtractionResult,
+    add: (definitionId: string, label: string, sourceIds: string[], value?: AttributeValue) => void,
+    addSource: (id: string, title: string, excerpt: string) => void,
+  ): void {
+    const licenseNumber = extracted.fields.licenseNumber?.value;
+    if (licenseNumber === undefined) return;
+
+    const lookup = lookupLicense({ licenseNumber });
+    if (lookup.status !== 'ok') {
+      const missSourceId = `source-license-${licenseNumber.toLowerCase()}`;
+      addSource(
+        missSourceId,
+        'Contractor licence registry',
+        `No entry in the contractor licence registry matches licence "${licenseNumber}".`,
+      );
+      add('bid.license_status', 'License status', [missSourceId], {
+        type: 'enum',
+        value: 'not_found',
+      });
+      return;
+    }
+
+    const { license, evidence } = lookup.data;
+    // The tool's own two evidence items name the two source ids and carry
+    // the sentences that justify them -- used verbatim rather than
+    // paraphrased here, so what the case cites is what the tool actually
+    // said.
+    const [standing, namedInsured] = evidence;
+    if (standing === undefined || namedInsured === undefined) return;
+    addSource(standing.sourceId, 'Contractor licence registry', standing.summary);
+    addSource(namedInsured.sourceId, 'Certificate of insurance', namedInsured.summary);
+
+    add('bid.license_status', 'License status', [standing.sourceId], {
+      type: 'enum',
+      value: license.status,
+    });
+    add(
+      'bid.insurance_named_insured_match',
+      'Insurance named insured matches license holder',
+      [namedInsured.sourceId],
+      { type: 'boolean', value: license.insurance.matchesLicenseHolder },
+    );
+    // The identical four-way derivation `seeds.ts` uses for the seeded
+    // twelve, so an imported bid and a seeded one mean the same thing by
+    // this gate.
+    add(
+      'bid.credentials_valid',
+      'License and insurance credentials fully valid',
+      [standing.sourceId, namedInsured.sourceId],
+      {
+        type: 'boolean',
+        value:
+          license.isActive &&
+          license.classCoversScope &&
+          license.insurance.isActive &&
+          license.insurance.matchesLicenseHolder,
+      },
+    );
+  }
+
+  /**
+   * Computes `bid.scope_completeness` ONLY when the document prices its line
+   * items against the job's own scope ids.
+   *
+   * `scope-differ` joins a bid's line items to the job's required scope
+   * items on `scopeItemId`, and those ids are this job's private vocabulary
+   * -- `demo-existing`, `permits-inspections` -- not an industry standard. A
+   * document that states its own line items in prose ("Set toilets and lavs
+   * in restrooms") carries no id to join on, and the extractor never invents
+   * one. Running the diff anyway would find every required item absent and
+   * report a confident near-zero completeness for a bid that may well price
+   * the entire job: a fabricated reading, which is the one outcome this
+   * import path exists to avoid.
+   *
+   * So the test is whether the document speaks the vocabulary at all -- at
+   * least one line item carrying an id the job actually requires. Below that
+   * bar nothing is written, and the attribute stays as absent as it was
+   * before, which is the honest report of a check that could not be run.
+   * Mapping prose to scope ids is the same problem `commands.ts` describes
+   * for free-text documents, with the same answer: not without a model, and
+   * not silently.
+   */
+  private buildScopeCompleteness(
+    extracted: BidDocumentExtractionResult,
+    add: (definitionId: string, label: string, sourceIds: string[], value?: AttributeValue) => void,
+    addSource: (id: string, title: string, excerpt: string) => void,
+  ): void {
+    const identified = extracted.lineItems.filter(
+      (item): item is typeof item & { scopeItemId: string } => item.scopeItemId !== undefined,
+    );
+    if (identified.length === 0) return;
+
+    let job: BidJob;
+    try {
+      job = loadFixture('job');
+    } catch {
+      // A missing or unreadable job schedule is not this command's problem
+      // to report: the import itself is still valid, and the attribute stays
+      // unwritten exactly as if the document had named no scope ids.
+      return;
+    }
+
+    const required = new Set(job.requiredScopeLineItems.map((item) => item.scopeItemId));
+    if (!identified.some((item) => required.has(item.scopeItemId))) return;
+
+    const diff = diffBidScope(
+      { requiredScopeLineItems: job.requiredScopeLineItems },
+      {
+        bidId: extracted.sourceId,
+        contractorName: extracted.fields.contractorName?.value ?? extracted.filename,
+        lineItems: identified.map((item) => ({
+          scopeItemId: item.scopeItemId,
+          amount: item.amount,
+        })),
+      },
+    );
+    if (diff.requiredItemCount === 0) return;
+
+    const sourceId = `source-scope-check-${extracted.sourceId}`;
+    addSource(
+      sourceId,
+      'Job scope schedule',
+      `"${extracted.filename}" prices ${String(diff.pricedItemCount)} of the job's ${String(diff.requiredItemCount)} required scope items.`,
+    );
+    add('bid.scope_completeness', 'Scope completeness', [sourceId], {
+      type: 'number',
+      // A percentage NUMBER (62.5, not 0.625) -- the convention `seeds.ts`
+      // and the pack's own `unit: '%'` already use for this attribute.
+      value: (diff.pricedItemCount / diff.requiredItemCount) * 100,
+      unit: '%',
+    });
   }
 
   /**

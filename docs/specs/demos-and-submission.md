@@ -143,13 +143,19 @@ The submissions use separate edits. The complete scripts and live official requi
 
 ### Agents for Humans video — no longer than five minutes
 
-1. Establish the household energy problem and background anomaly trigger.
-2. Show real AgentSkills, rate/weather work, and Swarm activity.
-3. Show the premature monitoring draft rejected as `Draft withheld`.
-4. Show no-progress steering, specialist handoff, skill switch, thermostat evidence, and source challenge.
-5. Show confirmation, snapshot restoration, and human-only proposal approval.
-6. Show AgentCore/CloudWatch correlation when available, Runtime Inspector evidence, and the release report.
-7. Close with Sift as an agent designed to know when it has not earned the right to answer.
+Hero: `bid-comparison`, Professional Agents track. The complete shot list, exact UI strings, and
+measured timings are `docs/submissions/agents-for-humans/demo-script-bid.md`; this is the
+required-beats list this spec holds the film to, not a second shot list.
+
+1. Establish the twelve-bid problem: the low bid is tens of thousands under the eventual winner, for a small GC with no full-time estimator.
+2. Show a real Strands Swarm across six specialists, with a visible `Guide` redirect and a `Deny` refusal.
+3. Show `GoalLoop` reject the obvious cheap-bid ranking and recover with a supported one.
+4. Show the on-screen arithmetic that reverses the apparent low bid into the more expensive one.
+5. Show fail-closed findings: obligations that stay open even after a winner is recommended.
+6. Show a criteria reweight and a hard credential constraint that flags, rather than removes, a top-scoring bid.
+7. Show `Confirm`-gated human award: the agent recommends, a person approves on camera.
+8. Show proof of a real Strands runtime — an inspectable run's event, swarm, handoff, and span counts.
+9. Close with Sift as an agent designed to know when it has not earned the right to answer.
 
 ## Capture and render toolchain
 
@@ -212,6 +218,6 @@ Lead with the shared browser workspace: ChatGPT discovers page tools, acts on th
 
 ### AWS Agents for Humans
 
-Lead with quiet background investigation, dynamic Strands skills and specialists, typed interventions, session persistence, AgentCore deployment, and escalation only for a real decision. Enter the Everyday Agents track.
+Lead with the refused ranking, dynamic Strands skills and specialists, typed interventions, session persistence, AgentCore deployment, and escalation only for a real decision. Enter the Professional Agents track.
 
 The two submissions describe one project honestly; neither claims features that exist only in documentation or deterministic test doubles.

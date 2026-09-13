@@ -202,7 +202,14 @@ async function main(): Promise<void> {
   try {
     context = await chromium.launchPersistentContext(profileDir, {
       executablePath: chromePath,
-      headless: false,
+      // Headless by default, for the same reason as `journey/host-session.ts`:
+      // an acceptance run should not take over the screen. `findChrome` still
+      // refuses Playwright's bundled Chromium, and every check here asserts a
+      // real WebMCP tool call, so a headless Chrome without WebMCP fails this
+      // gate loudly instead of passing on nothing.
+      //
+      // Set `SIFT_JOURNEY_HEADED=1` to watch the run.
+      headless: process.env['SIFT_JOURNEY_HEADED'] !== '1',
       args: [
         '--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport',
         '--no-first-run',

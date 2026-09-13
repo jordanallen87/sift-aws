@@ -128,7 +128,17 @@ export class HostSession {
     const profileDir = mkdtempSync(join(tmpdir(), 'sift-host-'));
     const context = await chromium.launchPersistentContext(profileDir, {
       executablePath: chromePath,
-      headless: false,
+      // Headless by default so a run does not seize the developer's screen
+      // with a browser window per journey. This is safe precisely because
+      // this harness refuses to pass an empty run: `findChrome` still
+      // insists on a real Chrome (never Playwright's bundled Chromium,
+      // which has no WebMCP), and every turn asserts against real WebMCP
+      // tool calls -- so if headless ever stopped exposing WebMCP, these
+      // gates fail loudly rather than going quietly green.
+      //
+      // Set `SIFT_JOURNEY_HEADED=1` to watch a run, which is what you want
+      // when a turn fails and you need to see where the pane actually was.
+      headless: process.env['SIFT_JOURNEY_HEADED'] !== '1',
       args: [
         '--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport',
         '--no-first-run',

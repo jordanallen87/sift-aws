@@ -11,6 +11,13 @@ Sift must be completed quickly, work inside ChatGPT's narrow browser pane, produ
 
 1. **WebMCP hero:** Replace the repair demo with **Choose Our Next Car**, a household shortlist and dealer-offer diligence workspace that supports manually entered real candidates and a deterministic fictional fixture.
 2. **AWS hero:** Retain **Home Energy Guardian** as the background adaptive Strands Swarm demo.
+
+   > **Superseded on 2026-09-07 by [ADR 0017](./0017-bid-comparison-professional-agents-hero.md).**
+   > The Agents for Humans hero changed to **Bid Comparison**, and the recommended competition
+   > track changed from Everyday Agents to Professional Agents. Home Energy Guardian was not
+   > removed -- it stays registered, tested, and shipped as a second demo -- but it is no longer
+   > the submission hero. This decision is recorded as written because it is what was decided on
+   > 2026-08-26; see ADR 0017 for the reasoning behind the change.
 3. **Canonical storage:** Use SQLite with `better-sqlite3` and Drizzle migrations. Persist canonical case events/snapshots, replayable sanitized public activity, runs, idempotency records, and sanitized runtime events. Use JSONL only for exported verification bundles.
 4. **Railway:** The autonomous build must create and deploy a new project/service through the authenticated CLI, attach `/data`, create a public domain, and verify SQLite persistence across restart.
 5. **Observability:** Build a first-class right-pane Runtime Inspector from native Strands hooks and OpenTelemetry plus Sift domain events. Keep it detailed, correlated, filterable, and exportable while redacting secrets, private notes, and private reasoning.

@@ -10,7 +10,7 @@ Start with the [shared release checklist](./shared-release-checklist.md), then c
 | Competition | Sift hero | Official deadline | Video | Packet | Exhaustive checklist |
 | --- | --- | --- | --- | --- | --- |
 | The WebMCP Challenge | Choose Our Next Car: ChatGPT uses the live page as a shared control surface and steers a Strands investigation mid-run | September 3, 2026 at 1:00 p.m. PT / 4:00 p.m. ET | Public YouTube, under 3 minutes, audio required | [Submission details](./webmcp/submission-details.md) | [Requirements checklist](./webmcp/requirements-checklist.md) |
-| Agents for Humans Hackathon | Home Energy Guardian: a background Strands Swarm rejects a premature answer, redirects itself, and asks the human only at a real decision | September 14, 2026 at 5:00 p.m. PT / 8:00 p.m. ET | Maximum 5 minutes | [Submission details](./agents-for-humans/submission-details.md) | [Requirements checklist](./agents-for-humans/requirements-checklist.md) |
+| Agents for Humans Hackathon | Bid Comparison: a bounded Strands Swarm refuses to rank twelve subcontractor bids until their scope is normalized, then leaves the award decision to the human | September 14, 2026 at 5:00 p.m. PT / 8:00 p.m. ET | Maximum 5 minutes | [Submission details](./agents-for-humans/submission-details.md) | [Requirements checklist](./agents-for-humans/requirements-checklist.md) |
 
 ## Shared facts to fill after implementation
 

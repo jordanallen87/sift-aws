@@ -14,13 +14,15 @@ itself. Every number attached to a recommendation is computed from your criteria
 actually gathered, not asserted in prose. The model can research, propose, and explain. It cannot
 approve a decision, and [none of the 26 WebMCP tools it is given can either](#no-tool-can-approve-a-decision).
 
-Sift ships two versioned **Decision Packs**, each pinned by ID/version/compiled hash on the case
+Sift ships three versioned **Decision Packs**, each pinned by ID/version/compiled hash on the case
 that uses it:
 
 - **Choose Our Next Car** — compare shortlisted vehicles and dealer offers before buying. The
   WebMCP-first hero, built on a real Strands Graph.
-- **Home Energy Guardian** — investigate why a utility bill changed. The AWS/Strands-first hero,
-  built on a bounded Strands Swarm with specialist handoffs.
+- **Bid Comparison** — compare subcontractor bids for one job before awarding it. The
+  AWS/Strands-first hero, built on a bounded Strands Swarm with specialist handoffs.
+- **Home Energy Guardian** — investigate why a utility bill changed. A second bounded Strands
+  Swarm demo; no longer this build's Agents for Humans hero.
 
 This is a dual-hackathon submission (the OpenAI WebMCP Challenge and the AWS Agents for Humans
 Hackathon).

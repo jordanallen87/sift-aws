@@ -24,6 +24,14 @@ artifacts/demo/*
 # face. Re-voice it (see rec/energy/REVOICE.md), rename it to the name below,
 # and it becomes committable without touching this file.
 !artifacts/demo/sift-aws-energy-demo-FINAL.mp4
+# The Agents for Humans hero changed to bid-comparison on 2026-09-07
+# (docs/decisions/0017-bid-comparison-professional-agents-hero.md). No video
+# has been recorded for it yet, draft or final -- this allowlists the FINAL
+# name in advance, following the same <track>-<hero>-demo-<STATUS>.mp4
+# convention as the two entries above, so the recorded cut can actually be
+# committed once it exists. Record from
+# docs/submissions/agents-for-humans/demo-script-bid.md.
+!artifacts/demo/sift-aws-bid-demo-FINAL.mp4
 !artifacts/demo/screenshots/
 coverage/
 playwright-report/

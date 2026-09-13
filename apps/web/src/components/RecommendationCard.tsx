@@ -330,8 +330,18 @@ export function RecommendationCard({
                           {source.title}
                         </a>
                       ) : (
+                        // Distinct testid from the resolved branch above --
+                        // both used to share `recommendation-card-source-*`,
+                        // so a test asserting only `li` count could not
+                        // distinguish a citation that resolved to a real
+                        // Source from one that dangled. A real 60-dangling-
+                        // citation bug shipped past every existing test
+                        // because of exactly that collision; this testid
+                        // exists so a future one cannot repeat it. Visual
+                        // rendering (markup, classes, `[id]` text) is
+                        // unchanged -- only this attribute is new.
                         <span
-                          data-testid={`recommendation-card-source-${sourceId}`}
+                          data-testid={`recommendation-card-unresolved-source-${sourceId}`}
                           className="font-[family-name:var(--font-mono)] text-[length:var(--font-size-2xs)] text-[var(--color-ink-muted)]"
                         >
                           [{sourceId}]

@@ -59,7 +59,10 @@ import {
   emptyScenarioTrajectory,
   type ScenarioTrajectory,
 } from '../../packages/scenarios/src/trajectory.js';
-import { buildBidComparisonEntities } from '../../packages/scenarios/src/seeds.js';
+import {
+  buildBidComparisonEntities,
+  buildBidComparisonSources,
+} from '../../packages/scenarios/src/seeds.js';
 import { compileBidComparisonPack } from '../../packages/packs/src/bid-comparison.js';
 import { PackRegistry } from '../../packages/packs/src/registry.js';
 import { CommandService } from '../../apps/agent/src/services/command-service.js';
@@ -223,6 +226,15 @@ describe('Bid Comparison scenario: real causal trajectory', () => {
       clock: FIXED_CLOCK,
       idGenerator,
       demoSeedEntities: { 'bid-comparison': buildBidComparisonEntities },
+      // Mirrors server.ts's own `CommandService` wiring exactly (that file's
+      // comment: "bid-comparison's seeded entities cite sourceIds on their
+      // attributes, but nothing wrote the Source rows those citations point
+      // at"). Without this, this harness -- which exists to prove the real
+      // production trajectory -- would itself seed sixty cited sourceIds
+      // onto entity attributes with zero backing Source rows, reproducing
+      // inside the harness the exact defect commit e63eb4b fixed in
+      // production, and testing a case shape production never produces.
+      demoSeedSources: { 'bid-comparison': buildBidComparisonSources },
     });
     const runService = new RunService({
       caseStore,
@@ -301,6 +313,33 @@ describe('Bid Comparison scenario: real causal trajectory', () => {
     const report = checkAssertions(trajectory, BID_COMPARISON_DEMO_SCENARIO.assertions);
     const failures = report.results.filter((entry) => !entry.passed);
     expect(failures, JSON.stringify(failures, null, 2)).toEqual([]);
+
+    // --- Every sourceId any entity attribute cites on the final case state
+    // resolves to a real Source on that case, and the cited set is
+    // non-empty. This is the invariant `demoSeedSources` above exists to
+    // protect: without it, every attribute claims a citation while the case
+    // holds no sources at all. `assertions.ts`'s declarative
+    // `ScenarioAssertion` DSL has no kind for "every citation resolves", so,
+    // mirroring this file's own established pattern for checks the DSL does
+    // not support (the deny/guide/confirm/goal blocks below, and
+    // bid-comparison.scenario.ts's own header comment on the same subject),
+    // this is checked directly here against the real trajectory's final
+    // case state -- an invariant over whatever was actually cited, never a
+    // hardcoded list of ids.
+    const citedSourceIds = new Set<string>();
+    for (const entity of snapshot.entities) {
+      for (const attribute of Object.values(entity.attributes)) {
+        for (const sourceId of attribute.sourceIds) {
+          citedSourceIds.add(sourceId);
+        }
+      }
+    }
+    expect(citedSourceIds.size).toBeGreaterThan(0);
+    const knownSourceIds = new Set(snapshot.sources.map((source) => source.id));
+    const unresolvedSourceIds = [...citedSourceIds].filter(
+      (sourceId) => !knownSourceIds.has(sourceId),
+    );
+    expect(unresolvedSourceIds, JSON.stringify(unresolvedSourceIds)).toEqual([]);
 
     // --- Structural facts: six real Swarm nodes, five real handoffs, four
     // real skill activations, at least one real context injection. Derived

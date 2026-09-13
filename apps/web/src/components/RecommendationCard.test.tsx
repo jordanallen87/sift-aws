@@ -125,9 +125,41 @@ describe('RecommendationCard', () => {
 
   it('falls back to a plain reference chip when no joined Source is supplied', () => {
     render(<RecommendationCard recommendation={buildRecommendation()} />);
-    const chip = screen.getByTestId('recommendation-card-source-source-1');
+    // Distinct testid from the resolved-link branch (`recommendation-card-
+    // source-*`) -- see the regression test below for why the two must
+    // never collide.
+    const chip = screen.getByTestId('recommendation-card-unresolved-source-source-1');
     expect(chip.tagName).not.toBe('A');
     expect(chip).toHaveTextContent('[source-1]');
+  });
+
+  it('gives a dangling source id its own testid, distinct from a resolved one, so a test cannot mistake one for the other', () => {
+    // A real 60-dangling-citation bug shipped past every existing test
+    // because the resolved `<a>` and the unresolved `<span>` shared one
+    // testid (`recommendation-card-source-${sourceId}`) -- a suite that
+    // only counted `li` elements saw the same number either way. This
+    // asserts the two branches are independently locatable: the resolved
+    // id renders as a link under `recommendation-card-source-*`, and the
+    // dangling id renders under the distinct `recommendation-card-
+    // unresolved-source-*` testid, not the resolved one.
+    render(
+      <RecommendationCard
+        recommendation={buildRecommendation({ sourceIds: ['source-1', 'source-missing'] })}
+        sources={{ 'source-1': buildSource() }}
+      />,
+    );
+
+    const link = screen.getByTestId('recommendation-card-source-source-1');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', 'https://dealer.example.com/quote/123');
+    expect(link).toHaveTextContent('Dealer A written quote');
+
+    const dangling = screen.getByTestId('recommendation-card-unresolved-source-source-missing');
+    expect(dangling.tagName).not.toBe('A');
+    expect(dangling).toHaveTextContent('[source-missing]');
+    expect(
+      screen.queryByTestId('recommendation-card-source-source-missing'),
+    ).not.toBeInTheDocument();
   });
 
   // See `RecommendationHero.test.tsx`'s companion regression for the

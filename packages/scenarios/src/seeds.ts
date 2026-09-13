@@ -1,7 +1,19 @@
 /**
  * Loads the real car-purchase fixture data into the four candidate
  * `EntityRecord`s the "Choose Our Next Car" demo compares, plus the full
- * seed `CaseEvent` sequence a fresh demo case needs.
+ * seed `CaseEvent` sequence a fresh demo case needs. Also builds the
+ * matching `Source` record for every `sourceIds` entry those entities'
+ * attributes cite (`buildCarPurchaseSources`) -- and the Home Energy
+ * Guardian analog, `buildHomeEnergySources`, for the four response-option
+ * `EntityRecord`s further below -- closing the defect
+ * `apps/agent/src/server.ts`'s `demoSeedSources` map used to describe as
+ * "the same defect [as car-purchase and home-energy-guardian had] but no
+ * builder yet": a freshly started demo case held real cited `sourceIds` on
+ * its seeded entities but zero matching `Source` rows, so the UI rendered
+ * an unresolved citation as a raw mono id (e.g.
+ * `[source-listing-candidate-rav4]`) instead of a titled link. Mirrors
+ * `buildBidComparisonSources`, the same fix already shipped for the third
+ * pack.
  *
  * `instantiateCase` (`@sift/core`) alone only ever seeds pack-declared state
  * (`pack`, `criteria`, `obligations`, `attributeDefinitions`) -- it always
@@ -78,12 +90,114 @@ import {
   type BidReaderResult,
   type CandidateDealerOfferFacts,
   type CandidateListingFacts,
+  type CandidateListingResult,
+  type HouseholdFitResult,
   type LicenseLookupFacts,
   type LicenseLookupResult,
   type OwnershipCostResult,
   type ResponseOption,
   type ToolEvidenceItem,
 } from './tools/index.js';
+
+// --- Shared fixture Source publisher labels (car-purchase AND home-energy) ---
+//
+// Moved here from `apps/agent/src/runtime/car-purchase-scenario.ts` (which
+// still re-exports `publisherForFixtureSource` under its own historical name
+// `publisherFor`, unchanged, so every existing caller/test there keeps
+// working). That file's own `ensureSourcesExist` -- the live-run backfill
+// that gives a `Source` to a sourceId an `ExecutionResult` cited but no seed
+// builder pre-built -- is reused UNMODIFIED across all three packs' engines
+// (car-purchase, home-energy, bid-comparison each import it from
+// `car-purchase-scenario.ts`, despite that file's car-purchase-specific
+// name), so this mapping was already a cross-pack utility in practice, just
+// living one layer too high in the workspace's dependency graph for this
+// module's OWN seed-time source builders (`buildCarPurchaseSources`,
+// `buildHomeEnergySources` below) to reuse without an apps -> packages
+// import inversion (architecture.md's layering: `packages/scenarios` may
+// never depend on `apps/agent`). Moving the mapping down here, and having
+// `car-purchase-scenario.ts` import it back, is the only way both the
+// seed-time path (this file) and the live-run backfill path
+// (`ensureSourcesExist`) can agree that one sourceId always means one
+// `Source` -- title, publisher, and url alike -- regardless of which path
+// happens to build it first for a given case.
+//
+// bid-comparison deliberately keeps its OWN, separately-reasoned
+// `sift://.../unverified` Source convention (`bidComparisonSourceUrl`/
+// `bidComparisonSource` below) rather than this one: `ensureSourcesExist`
+// never actually backfills a bid-comparison source in practice, because
+// `buildBidComparisonSources` already seeds every sourceId a fresh
+// bid-comparison case cites, so there is no second path for that pack's
+// sources to ever disagree with.
+const FIXTURE_SOURCE_PUBLISHERS: Readonly<Record<string, string>> = {
+  'source-national-crash-safety-consortium': 'National Crash Safety Consortium (fictional)',
+  'source-northfield-vehicle-safety-lab': 'Northfield Vehicle Safety Lab (fictional)',
+  'source-consumer-drive-index': 'Consumer Drive Index (fictional)',
+  'source-autotrust-reliability-survey': 'AutoTrust Annual Reliability Survey (fictional)',
+};
+
+/**
+ * Human-readable, plainly fictional publisher label for a car-purchase or
+ * home-energy fixture `sourceId` -- exported for `car-purchase-scenario.ts`
+ * to re-export as `publisherFor` (see this section's own header) and for
+ * this module's own `buildCarPurchaseSources`/`buildHomeEnergySources`
+ * below. Every returned label already carries "(fictional)" or otherwise
+ * plainly names a fixture-only construct (docs/engineering-principles.md's
+ * demo-data honesty posture; see every `_provenance` field under
+ * `packages/scenarios/fixtures/`) -- never a real publication, dealer, or
+ * organization name standing alone.
+ */
+export function publisherForFixtureSource(sourceId: string): string {
+  const known = FIXTURE_SOURCE_PUBLISHERS[sourceId];
+  if (known !== undefined) return known;
+  if (sourceId.startsWith('source-listing-'))
+    return 'Example vehicle listing aggregator (fictional)';
+  if (sourceId.startsWith('source-dealer-offer-')) return 'Dealer written offer (fictional)';
+  if (sourceId.startsWith('source-ownership-calculator-')) return 'Sift ownership cost calculator';
+  if (sourceId.startsWith('source-household-fit-'))
+    return 'Manufacturer specification sheet (fictional)';
+  if (sourceId.startsWith('source-response-option-'))
+    return 'Home Energy Guardian response-option catalog (fictional)';
+  return 'Fixture source (fictional)';
+}
+
+/**
+ * Non-network URL for a `Source` built by this module's car-purchase/
+ * home-energy seed builders below, OR by `car-purchase-scenario.ts`'s
+ * `ensureSourcesExist` -- the SAME shape both paths use (see this section's
+ * own header), so a citation resolves to the identical `Source` regardless
+ * of which path built it first.
+ */
+function fixtureBackedSourceUrl(sourceId: string): string {
+  return `https://fixtures.example.com/sources/${sourceId}`;
+}
+
+/**
+ * Builds one car-purchase or home-energy `Source` from a real fixture-
+ * derived `summary` sentence (never invented -- every call site below passes
+ * either a real `ToolEvidenceItem.summary`, a real fixture field, or a join
+ * of several real per-field summaries) and `sourceId` (always the same id
+ * this module's own attribute-building code already cited, never a second,
+ * independently recomputed copy of it). `verification: 'verified'` and
+ * `origin: 'fixture'` mirror `ensureSourcesExist`'s own choice there
+ * (deterministic fixture-mode sources are pre-vetted for this demo, which
+ * also keeps E1->E2 evidence synthesis deterministic -- see that function's
+ * own doc comment for the full reasoning this does not repeat).
+ */
+function fixtureBackedSource(clock: Clock, sourceId: string, summary: string): Source {
+  const now = clock.now();
+  const publisher = publisherForFixtureSource(sourceId);
+  return {
+    id: sourceId,
+    url: fixtureBackedSourceUrl(sourceId),
+    title: publisher,
+    publisher,
+    retrievedAt: now,
+    summary,
+    origin: 'fixture',
+    verification: 'verified',
+    createdAt: now,
+  };
+}
 
 // --- Home Energy Guardian response-option seeding ---
 //
@@ -195,26 +309,76 @@ function homeEnergyResponseOptionAttributes(
   return attributes;
 }
 
+interface HomeEnergySeedData {
+  readonly entities: EntityRecord[];
+  readonly sources: Source[];
+}
+
 /**
  * Builds the four Home Energy Guardian response-option `EntityRecord`s
  * (`monitor-one-cycle`/`change-rate-plan`/`request-energy-audit`/
  * `request-hvac-inspection`) directly from the real `response-options.json`
- * fixture. See this module's own header comment above for the full
- * grounding and the documented, deliberately deferred `billing_cycle`
- * seeding gap this does not attempt to close.
+ * fixture, AND the `Source` record for the one `sourceId` each option's
+ * attributes cite (`homeEnergyResponseOptionAttributes` above) -- both from
+ * the same fixture read, so a freshly seeded case's entities and sources can
+ * never disagree about which id names which source. Mirrors
+ * `buildBidComparisonSeedData`'s own "same underlying build, split into two
+ * return shapes" discipline (see that function's doc comment); this and
+ * `buildCarPurchaseSeedData` below are the same pattern applied to the other
+ * two packs, closing the defect `apps/agent/src/server.ts`'s
+ * `demoSeedSources` map used to document ("have the same defect but no
+ * builder yet") for both of them.
+ *
+ * Each option's `Source.summary` is that option's own real
+ * `response-options.json` `description` field verbatim -- never a
+ * paraphrase or an invented sentence -- so the citation can never say
+ * anything the seeded attributes themselves do not already say.
+ *
+ * See this module's own header comment above for the full grounding and the
+ * documented, deliberately deferred `billing_cycle` seeding gap this does
+ * not attempt to close.
  */
-export function buildHomeEnergyResponseOptionEntities(clock: Clock): EntityRecord[] {
+function buildHomeEnergySeedData(clock: Clock): HomeEnergySeedData {
   const now = clock.now();
   const fixture = loadFixture('response-options');
 
-  return fixture.options.map((option): EntityRecord => ({
-    id: option.optionId,
-    kind: 'response_option',
-    label: option.label,
-    attributes: homeEnergyResponseOptionAttributes(clock, option),
-    createdAt: now,
-    updatedAt: now,
-  }));
+  const entities: EntityRecord[] = [];
+  const sources: Source[] = [];
+  for (const option of fixture.options) {
+    const sourceId = `source-response-option-${option.optionId}`;
+    entities.push({
+      id: option.optionId,
+      kind: 'response_option',
+      label: option.label,
+      attributes: homeEnergyResponseOptionAttributes(clock, option),
+      createdAt: now,
+      updatedAt: now,
+    });
+    sources.push(fixtureBackedSource(clock, sourceId, option.description));
+  }
+
+  return { entities, sources };
+}
+
+/**
+ * Builds the four Home Energy Guardian response-option `EntityRecord`s. See
+ * `buildHomeEnergySeedData` above for the full grounding; this and
+ * `buildHomeEnergySources` below are the same underlying build, split into
+ * the two return shapes their existing/new callers each need.
+ */
+export function buildHomeEnergyResponseOptionEntities(clock: Clock): EntityRecord[] {
+  return buildHomeEnergySeedData(clock).entities;
+}
+
+/**
+ * Builds the `Source` record for every `sourceIds` entry the four Home
+ * Energy Guardian response-option `EntityRecord`s' attributes cite -- so a
+ * freshly seeded `home-energy-guardian` case can hold these on
+ * `CaseState.sources` and every one of those citations resolves. See
+ * `buildHomeEnergySeedData` above for the full grounding.
+ */
+export function buildHomeEnergySources(clock: Clock): Source[] {
+  return buildHomeEnergySeedData(clock).sources;
 }
 
 export const CAR_PURCHASE_CANDIDATE_IDS = [
@@ -586,26 +750,87 @@ export function householdFitAttributes(
   return attributes;
 }
 
+interface CarPurchaseSeedData {
+  readonly entities: EntityRecord[];
+  readonly sources: Source[];
+}
+
 /**
  * Builds the four car-purchase candidate `EntityRecord`s from the real
- * fixture tools. See module header for the full grounding and the two
- * documented read-only id mismatches this works around.
+ * fixture tools, AND the `Source` record for every `sourceIds` entry those
+ * entities' attributes cite -- both from the SAME fixture-tool calls (one
+ * call per tool per candidate; never called twice), so a freshly seeded
+ * case's entities and sources can never disagree about which id names which
+ * source. Mirrors `buildBidComparisonSeedData`'s own "same underlying
+ * build, split into two return shapes" discipline. See module header for
+ * the full grounding and the two documented read-only id mismatches this
+ * works around.
+ *
+ * Rather than resolving each of the four fixture tools' own `evidence`
+ * shape into a `Source` independently (bid-comparison's approach, viable
+ * there because every bid-comparison sourceId is 1:1 with one
+ * `ToolEvidenceItem`), this walks the sourceIds the JUST-BUILT `attributes`
+ * object actually cites for this candidate, and resolves EACH one against
+ * whichever real fixture data produced it:
+ *
+ * - `source-listing-*`/`source-dealer-offer-*`: `readListing`'s own
+ *   `evidence[].summary` (one traceable document each, per that tool's own
+ *   module header).
+ * - `source-ownership-calculator-*`: `calculateOwnershipCost`'s own
+ *   `evidence[0].summary` (the E3 "shows its work" arithmetic summary).
+ * - The four safety/reliability report ids (e.g.
+ *   `source-national-crash-safety-consortium`) are shared across all four
+ *   candidates -- `safety-reliability-sources.json`'s own top-level
+ *   `sources[]` array (the exact join `lookupSafetyReliability` itself
+ *   performs internally) is the one canonical record per id, so this reads
+ *   that array directly (the same "read the fixture directly for data the
+ *   tool doesn't expose at the right granularity" precedent module header
+ *   mismatch #1 already establishes) rather than picking one arbitrary
+ *   candidate's per-finding note to stand in for the whole report.
+ * - `source-household-fit-*`: `lookupHouseholdFit`'s own `evidence[]` (seven
+ *   per-field summaries sharing ONE sourceId, because household-fit.json
+ *   documents all seven fields come from one manufacturer specification
+ *   sheet per candidate) joined into one summary -- the same
+ *   `summaryParts.join(' ')` convention `command-service.ts` already uses to
+ *   combine several real sentences into one `Source.summary`.
+ *
+ * Driving this resolution off `citedIds` (rather than off each tool's raw
+ * `evidence` unconditionally) means a category/translation this candidate's
+ * own attribute builders skip (`safetyAttributes`'/`householdFitAttributes`'
+ * own defensive skip branches) can never leave a cited id unresolved OR
+ * build an orphan `Source` nothing cites -- the same invariant
+ * `seeds.test.ts` proves for bid-comparison, proved here structurally
+ * instead of by (correct, but happenstance) fixture content.
  */
-export function buildCarPurchaseCandidateEntities(clock: Clock): EntityRecord[] {
+function buildCarPurchaseSeedData(clock: Clock): CarPurchaseSeedData {
   const now = clock.now();
   const rawListings = loadFixture('candidate-listings');
   const standardFeaturesByCandidateId = new Map(
     rawListings.candidates.map((candidate) => [candidate.candidateId, candidate.standardFeatures]),
   );
+  const safetySourcesById = new Map(
+    loadFixture('safety-reliability-sources').sources.map(
+      (source) => [source.sourceId, source] as const,
+    ),
+  );
 
-  return CAR_PURCHASE_CANDIDATE_IDS.map((candidateId): EntityRecord => {
-    const listingResult = unwrapOk<{
-      listing: CandidateListingFacts;
-      dealerOffer: CandidateDealerOfferFacts;
-    }>(readListing({ candidateId }), `reading the listing for "${candidateId}"`);
+  const entities: EntityRecord[] = [];
+  const sourcesById = new Map<string, Source>();
+
+  for (const candidateId of CAR_PURCHASE_CANDIDATE_IDS) {
+    const listingResult = unwrapOk<CandidateListingResult>(
+      readListing({ candidateId }),
+      `reading the listing for "${candidateId}"`,
+    );
     const ownershipResult = unwrapOk<OwnershipCostResult>(
       calculateOwnershipCost({ candidateId }),
       `calculating ownership cost for "${candidateId}"`,
+    );
+    const safetyResult = lookupSafetyReliability({ candidateId });
+    const householdFitResult = lookupHouseholdFit({ candidateId });
+    const householdFitData = unwrapOk<HouseholdFitResult>(
+      householdFitResult,
+      `looking up household fit for "${candidateId}"`,
     );
     // The `?? []` fallback has no reachable real-data trigger: `readListing`
     // above (which must already have succeeded to reach this line -- see
@@ -623,19 +848,105 @@ export function buildCarPurchaseCandidateEntities(clock: Clock): EntityRecord[] 
         standardFeatures,
       ),
       ...ownershipAttributes(clock, ownershipResult),
-      ...safetyAttributes(clock, candidateId, lookupSafetyReliability({ candidateId })),
-      ...householdFitAttributes(clock, candidateId, lookupHouseholdFit({ candidateId })),
+      ...safetyAttributes(clock, candidateId, safetyResult),
+      ...householdFitAttributes(clock, candidateId, householdFitResult),
     };
 
-    return {
+    entities.push({
       id: candidateId,
       kind: 'candidate',
       label: candidateLabel(listingResult.listing),
       attributes,
       createdAt: now,
       updatedAt: now,
-    };
-  });
+    });
+
+    // Every sourceId this candidate's own attributes actually cite --
+    // see this function's own doc comment for why resolution is driven
+    // off this set rather than off each tool's raw evidence unconditionally.
+    const citedIds = new Set<string>();
+    for (const attribute of Object.values(attributes)) {
+      for (const sourceId of attribute.sourceIds) citedIds.add(sourceId);
+    }
+
+    const evidenceSummaryBySourceId = new Map<string, string>();
+    for (const evidence of listingResult.evidence) {
+      evidenceSummaryBySourceId.set(evidence.sourceId, evidence.summary);
+    }
+    for (const evidence of ownershipResult.evidence) {
+      evidenceSummaryBySourceId.set(evidence.sourceId, evidence.summary);
+    }
+    // Real, verbatim per-field summaries from the tool's own evidence,
+    // joined -- never a hand-composed sentence standing in for the seven
+    // real ones (see this function's own doc comment).
+    const householdFitSourceId = householdFitData.evidence[0]?.sourceId;
+    const householdFitSummary =
+      householdFitData.evidence.length > 0
+        ? householdFitData.evidence.map((item) => item.summary).join(' ')
+        : undefined;
+
+    for (const sourceId of citedIds) {
+      if (sourcesById.has(sourceId)) continue;
+
+      const toolEvidenceSummary = evidenceSummaryBySourceId.get(sourceId);
+      if (toolEvidenceSummary !== undefined) {
+        sourcesById.set(sourceId, fixtureBackedSource(clock, sourceId, toolEvidenceSummary));
+        continue;
+      }
+
+      const safetySource = safetySourcesById.get(sourceId);
+      if (safetySource !== undefined) {
+        const summary =
+          safetySource.methodologyNote ??
+          `${safetySource.reportTitle} (${safetySource.publisherName}).`;
+        sourcesById.set(sourceId, fixtureBackedSource(clock, sourceId, summary));
+        continue;
+      }
+
+      if (
+        householdFitSourceId !== undefined &&
+        householdFitSummary !== undefined &&
+        sourceId === householdFitSourceId
+      ) {
+        sourcesById.set(sourceId, fixtureBackedSource(clock, sourceId, householdFitSummary));
+        continue;
+      }
+
+      // Unreachable for the real fixture set (every cited id above resolves
+      // against one of the three real fixture-tool results this candidate's
+      // own attributes were just built from) -- never silently skipped if a
+      // future attribute ever cites an id none of them can explain, the same
+      // "no reachable real-data trigger, exercised as a loud defensive
+      // check" discipline `unwrapOk`/`evidenceFor` document above.
+      throw new Error(
+        `seeds.ts: cited sourceId "${sourceId}" for candidate "${candidateId}" has no known car-purchase Source-building path`,
+      );
+    }
+  }
+
+  return { entities, sources: [...sourcesById.values()] };
+}
+
+/**
+ * Builds the four car-purchase candidate `EntityRecord`s. See
+ * `buildCarPurchaseSeedData` above for the full grounding; this and
+ * `buildCarPurchaseSources` below are the same underlying build, split into
+ * the two return shapes their existing/new callers each need.
+ */
+export function buildCarPurchaseCandidateEntities(clock: Clock): EntityRecord[] {
+  return buildCarPurchaseSeedData(clock).entities;
+}
+
+/**
+ * Builds the `Source` record for every `sourceIds` entry the four car-
+ * purchase candidate `EntityRecord`s' attributes cite (deduplicated by id --
+ * the four safety/reliability report sources are shared across all four
+ * candidates) -- so a freshly seeded `car-purchase` case can hold these on
+ * `CaseState.sources` and every one of those citations resolves. See
+ * `buildCarPurchaseSeedData` above for the full grounding.
+ */
+export function buildCarPurchaseSources(clock: Clock): Source[] {
+  return buildCarPurchaseSeedData(clock).sources;
 }
 
 export interface CarPurchaseSeedResult {

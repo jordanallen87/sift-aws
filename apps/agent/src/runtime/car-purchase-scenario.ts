@@ -90,6 +90,7 @@ import type {
 import {
   buildCarPurchaseSeedEvents,
   emptyScenarioTrajectory,
+  publisherForFixtureSource as publisherFor,
   type ScenarioTrajectory,
 } from '@sift/scenarios';
 import { CommandService } from '../services/command-service.js';
@@ -153,25 +154,20 @@ export function carPurchaseCapabilityCatalog() {
 }
 
 // --- Publisher labels for constructed Source records ---
-
-const SOURCE_PUBLISHERS: Readonly<Record<string, string>> = {
-  'source-national-crash-safety-consortium': 'National Crash Safety Consortium (fictional)',
-  'source-northfield-vehicle-safety-lab': 'Northfield Vehicle Safety Lab (fictional)',
-  'source-consumer-drive-index': 'Consumer Drive Index (fictional)',
-  'source-autotrust-reliability-survey': 'AutoTrust Annual Reliability Survey (fictional)',
-};
-
-export function publisherFor(sourceId: string): string {
-  const known = SOURCE_PUBLISHERS[sourceId];
-  if (known !== undefined) return known;
-  if (sourceId.startsWith('source-listing-'))
-    return 'Example vehicle listing aggregator (fictional)';
-  if (sourceId.startsWith('source-dealer-offer-')) return 'Dealer written offer (fictional)';
-  if (sourceId.startsWith('source-ownership-calculator-')) return 'Sift ownership cost calculator';
-  if (sourceId.startsWith('source-household-fit-'))
-    return 'Manufacturer specification sheet (fictional)';
-  return 'Fixture source (fictional)';
-}
+//
+// `publisherFor` (imported above, aliased from `@sift/scenarios`'s
+// `publisherForFixtureSource`) used to be defined locally here. It moved
+// down into `packages/scenarios/src/seeds.ts` so that package's own
+// `buildCarPurchaseSources`/`buildHomeEnergySources` seed-time builders
+// could reuse the SAME mapping `ensureSourcesExist` below already uses for
+// its live-run backfill, without `packages/scenarios` importing from
+// `apps/agent` (a layering inversion architecture.md forbids) and without a
+// second, copy-pasted table drifting from this one. Re-exported here,
+// unchanged, under its original name so every existing caller/test in this
+// file (and `humanizeDecisionText` below) keeps working untouched. See
+// `seeds.ts`'s own "Shared fixture Source publisher labels" section header
+// for the full reasoning.
+export { publisherFor };
 
 /**
  * Ensures every `sourceId` an `ExecutionResult` cited has a matching

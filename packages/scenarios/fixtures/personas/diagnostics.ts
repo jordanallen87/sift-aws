@@ -265,7 +265,16 @@ const KNOWN_LISTING: DiagnosticScore[] = [
   },
 ];
 
-export const DIAGNOSTIC_PASS: Readonly<Record<PersonaId, readonly DiagnosticScore[]>> = {
+// `Partial`, not a total `Record`: `PERSONA_IDS` also names
+// `school-facilities-manager` (the `bid-comparison` persona), and this pass
+// has no entry for it. Nobody -- model or person -- has read that persona's
+// turn artifacts and scored them; writing an entry down, even a borrowed
+// one, would be exactly the fabricated judgment this module's own header
+// forbids. `scripts/test-persona.ts` reads `DIAGNOSTIC_PASS[persona.id]`,
+// gets `undefined` for that persona, and passes no `scores` to `runPersona`
+// -- which is `summarizeDiagnostics`'s own "unmeasured, not acceptable" path
+// (`packages/scenarios/src/persona-diagnostics.ts`), not a silent pass.
+export const DIAGNOSTIC_PASS: Readonly<Partial<Record<PersonaId, readonly DiagnosticScore[]>>> = {
   'family-novice': FAMILY,
   'landscaping-owner': LANDSCAPING,
   'known-listing-shopper': KNOWN_LISTING,

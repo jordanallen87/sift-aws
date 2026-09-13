@@ -13,8 +13,10 @@ import { instantiateCase } from '@sift/core';
 import {
   BID_COMPARISON_MANIFEST,
   CAR_PURCHASE_MANIFEST,
+  HOME_ENERGY_GUARDIAN_MANIFEST,
   compileBidComparisonPack,
   compileCarPurchasePack,
+  compileHomeEnergyGuardianPack,
   createCapabilityCatalog,
 } from '@sift/packs';
 import { SourceSchema, type DecisionPackManifest } from '@sift/contracts';
@@ -30,8 +32,12 @@ import {
   buildBidComparisonSources,
   buildCarPurchaseCandidateEntities,
   buildCarPurchaseSeedEvents,
+  buildCarPurchaseSources,
+  buildHomeEnergyResponseOptionEntities,
+  buildHomeEnergySources,
   CAR_PURCHASE_CANDIDATE_IDS,
   householdFitAttributes,
+  publisherForFixtureSource,
   record,
   safetyAttributes,
   unwrapOk,
@@ -72,6 +78,10 @@ function bidComparisonCatalog() {
   return catalogFor(BID_COMPARISON_MANIFEST);
 }
 
+function homeEnergyGuardianCatalog() {
+  return catalogFor(HOME_ENERGY_GUARDIAN_MANIFEST);
+}
+
 /**
  * Assembles the same seeded `bid-comparison` `CaseState.entities`/`.sources`
  * a fresh demo case would hold, for the invariant tests below: `instantiateCase`
@@ -91,6 +101,38 @@ function seededBidComparisonCase() {
     ...caseState,
     entities: buildBidComparisonEntities(FIXED_CLOCK),
     sources: buildBidComparisonSources(FIXED_CLOCK),
+  };
+}
+
+/** Same as `seededBidComparisonCase` above, for a freshly seeded car-purchase demo case. */
+function seededCarPurchaseCase() {
+  const pack = compileCarPurchasePack(carPurchaseCatalog(), FIXED_CLOCK);
+  const caseState = instantiateCase(
+    pack,
+    { selectedBy: 'router', reasons: ['test: seeded car-purchase case'] },
+    FIXED_CLOCK,
+    fixedIdGenerator(),
+  );
+  return {
+    ...caseState,
+    entities: buildCarPurchaseCandidateEntities(FIXED_CLOCK),
+    sources: buildCarPurchaseSources(FIXED_CLOCK),
+  };
+}
+
+/** Same as `seededBidComparisonCase` above, for a freshly seeded home-energy-guardian demo case. */
+function seededHomeEnergyCase() {
+  const pack = compileHomeEnergyGuardianPack(homeEnergyGuardianCatalog(), FIXED_CLOCK);
+  const caseState = instantiateCase(
+    pack,
+    { selectedBy: 'router', reasons: ['test: seeded home-energy-guardian case'] },
+    FIXED_CLOCK,
+    fixedIdGenerator(),
+  );
+  return {
+    ...caseState,
+    entities: buildHomeEnergyResponseOptionEntities(FIXED_CLOCK),
+    sources: buildHomeEnergySources(FIXED_CLOCK),
   };
 }
 
@@ -577,6 +619,140 @@ describe('buildBidComparisonSources / seeded bid-comparison case sources', () =>
         BID_COMPARISON_SOURCE_TAGS.licenseRegistry,
       ]);
     });
+  });
+});
+
+// Same invariant as `buildBidComparisonSources / seeded bid-comparison case
+// sources` above, for the other two packs: a freshly started car-purchase
+// demo case measured 20 cited sourceIds against 0 seeded Source rows, and a
+// freshly started home-energy-guardian case measured 4 against 0
+// (apps/agent/src/server.ts's `demoSeedSources` map used to document this
+// honestly -- "car-purchase/home-energy-guardian have the same defect but no
+// builder yet"). `buildCarPurchaseSources`/`buildHomeEnergySources` close
+// that gap the same way `buildBidComparisonSources` already did; this proves
+// it as the SAME invariant over whatever a seeded entity's attributes
+// actually cite, never a hardcoded id list, so it stays true even if the
+// underlying fixtures change shape.
+describe('buildCarPurchaseSources / seeded car-purchase case sources', () => {
+  it('provides a Source for every sourceIds entry every seeded entity attribute cites, and the cited set is non-empty', () => {
+    const caseState = seededCarPurchaseCase();
+    const citedIds = citedSourceIds(caseState.entities);
+    const sourceIdsOnCase = new Set(caseState.sources.map((source) => source.id));
+
+    expect(citedIds.size).toBeGreaterThan(0);
+
+    for (const sourceId of citedIds) {
+      expect(
+        sourceIdsOnCase.has(sourceId),
+        `sourceId "${sourceId}" is cited by a seeded entity attribute but has no matching Source on the case`,
+      ).toBe(true);
+    }
+  });
+
+  it('never produces an orphan Source -- every Source it builds is cited by at least one seeded entity attribute', () => {
+    const caseState = seededCarPurchaseCase();
+    const citedIds = citedSourceIds(caseState.entities);
+
+    for (const source of caseState.sources) {
+      expect(
+        citedIds.has(source.id),
+        `Source "${source.id}" is not cited by any seeded entity attribute`,
+      ).toBe(true);
+    }
+  });
+
+  it('builds Source records that satisfy SourceSchema (fixture origin, verified, a real retrievedAt, a real non-empty summary, and a human-readable title -- never the raw sourceId)', () => {
+    const sources = buildCarPurchaseSources(FIXED_CLOCK);
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(() => SourceSchema.parse(source)).not.toThrow();
+      expect(source.origin).toBe('fixture');
+      expect(source.verification).toBe('verified');
+      expect(source.summary).toBeTruthy();
+      // §34 regression (see `car-purchase-scenario.ts`'s `ensureSourcesExist`
+      // doc comment): `title` must be the real publisher name, never the
+      // raw internal id `RecommendationCard` would otherwise render as a
+      // citation's visible link text.
+      expect(source.title).not.toBe(source.id);
+      expect(source.title).toBe(publisherForFixtureSource(source.id));
+    }
+  });
+
+  // Regression coverage for the coordinator-flagged consistency requirement:
+  // `car-purchase-scenario.ts`'s `ensureSourcesExist` (the live-run backfill
+  // for a sourceId this seed builder did not pre-build) must never disagree
+  // with this seed builder about what a given sourceId's Source looks like.
+  // Both now share `publisherForFixtureSource` for `title`/`publisher` and
+  // the same `https://fixtures.example.com/sources/{id}` url shape -- see
+  // `seeds.ts`'s own "Shared fixture Source publisher labels" section.
+  it('gives every Source the same url shape and the same title/publisher `ensureSourcesExist` would build for the same sourceId', () => {
+    const sources = buildCarPurchaseSources(FIXED_CLOCK);
+    for (const source of sources) {
+      expect(source.url).toBe(`https://fixtures.example.com/sources/${source.id}`);
+      expect(source.publisher).toBe(publisherForFixtureSource(source.id));
+    }
+  });
+
+  it('builds exactly one Source for the four safety/reliability report ids shared across all four candidates, never one per candidate', () => {
+    const sources = buildCarPurchaseSources(FIXED_CLOCK);
+    const idCounts = new Map<string, number>();
+    for (const source of sources) {
+      idCounts.set(source.id, (idCounts.get(source.id) ?? 0) + 1);
+    }
+    expect(idCounts.get('source-national-crash-safety-consortium')).toBe(1);
+    for (const [id, count] of idCounts) {
+      expect(count, `Source id "${id}" must be built exactly once`).toBe(1);
+    }
+  });
+});
+
+describe('buildHomeEnergySources / seeded home-energy-guardian case sources', () => {
+  it('provides a Source for every sourceIds entry every seeded entity attribute cites, and the cited set is non-empty', () => {
+    const caseState = seededHomeEnergyCase();
+    const citedIds = citedSourceIds(caseState.entities);
+    const sourceIdsOnCase = new Set(caseState.sources.map((source) => source.id));
+
+    expect(citedIds.size).toBeGreaterThan(0);
+
+    for (const sourceId of citedIds) {
+      expect(
+        sourceIdsOnCase.has(sourceId),
+        `sourceId "${sourceId}" is cited by a seeded entity attribute but has no matching Source on the case`,
+      ).toBe(true);
+    }
+  });
+
+  it('never produces an orphan Source -- every Source it builds is cited by at least one seeded entity attribute', () => {
+    const caseState = seededHomeEnergyCase();
+    const citedIds = citedSourceIds(caseState.entities);
+
+    for (const source of caseState.sources) {
+      expect(
+        citedIds.has(source.id),
+        `Source "${source.id}" is not cited by any seeded entity attribute`,
+      ).toBe(true);
+    }
+  });
+
+  it('builds Source records that satisfy SourceSchema (fixture origin, verified, a real retrievedAt, a real non-empty summary, and a human-readable title -- never the raw sourceId)', () => {
+    const sources = buildHomeEnergySources(FIXED_CLOCK);
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(() => SourceSchema.parse(source)).not.toThrow();
+      expect(source.origin).toBe('fixture');
+      expect(source.verification).toBe('verified');
+      expect(source.summary).toBeTruthy();
+      expect(source.title).not.toBe(source.id);
+      expect(source.title).toBe(publisherForFixtureSource(source.id));
+    }
+  });
+
+  it("cites each response option's own real description as the Source summary, never an invented sentence", () => {
+    const sources = buildHomeEnergySources(FIXED_CLOCK);
+    const monitor = sources.find(
+      (source) => source.id === 'source-response-option-monitor-one-cycle',
+    );
+    expect(monitor?.summary).toContain('Take no action and observe');
   });
 });
 

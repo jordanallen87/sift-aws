@@ -3,9 +3,10 @@
  * `pnpm test:persona` — the persona UX harness.
  *
  * Runs each persona's turns against the **real** stack in process: the real
- * compiled Vehicle Selection pack, the real `CommandService`, the real
- * `RunPlanService`, real SQLite, and the same `@sift/core` derivations the
- * pane renders from. Nothing here is a stand-in for a Sift component.
+ * compiled Decision Pack (Vehicle Selection or Bid Comparison, whichever the
+ * persona names), the real `CommandService`, the real `RunPlanService`, real
+ * SQLite, and the same `@sift/core` derivations the pane renders from.
+ * Nothing here is a stand-in for a Sift component.
  *
  * ## The executor answers whatever Sift asks
  *
@@ -48,7 +49,11 @@ import {
   type Clock,
   type IdGenerator,
 } from '../packages/core/src/index.js';
-import { PackRegistry, compileCarPurchasePack } from '../packages/packs/src/index.js';
+import {
+  PackRegistry,
+  compileCarPurchasePack,
+  compileBidComparisonPack,
+} from '../packages/packs/src/index.js';
 import { PERSONAS } from '../packages/scenarios/fixtures/personas/index.js';
 import {
   DIAGNOSTIC_PASS,
@@ -69,7 +74,12 @@ import { CommandService } from '../apps/agent/src/services/command-service.js';
 import { RunPlanService } from '../apps/agent/src/services/run-plan-service.js';
 import { RunService, SqliteRunStore } from '../apps/agent/src/services/run-service.js';
 import { carPurchaseCapabilityCatalog } from '../apps/agent/src/runtime/car-purchase-scenario.js';
-import { buildCarPurchaseCandidateEntities } from '../packages/scenarios/src/seeds.js';
+import { bidComparisonCapabilityCatalog } from '../apps/agent/src/runtime/bid-comparison-engine.js';
+import {
+  buildCarPurchaseCandidateEntities,
+  buildBidComparisonEntities,
+  buildBidComparisonSources,
+} from '../packages/scenarios/src/seeds.js';
 
 const ARTIFACT_DIR = fileURLToPath(new URL('../artifacts/persona', import.meta.url));
 
@@ -117,6 +127,7 @@ function buildStack(): Stack {
   const activityStore = new SqliteActivityStore(database);
   const registry = new PackRegistry();
   registry.register(compileCarPurchasePack(carPurchaseCapabilityCatalog(), clock));
+  registry.register(compileBidComparisonPack(bidComparisonCapabilityCatalog(), clock));
 
   const runPlanService = new RunPlanService({
     caseStore,
@@ -137,7 +148,16 @@ function buildStack(): Stack {
     // no candidates at all, and every triage turn in every persona was a
     // silent no-op -- which is how a completely stuck family journey
     // reported PASS on its first run.
-    demoSeedEntities: { 'car-purchase': buildCarPurchaseCandidateEntities },
+    demoSeedEntities: {
+      'car-purchase': buildCarPurchaseCandidateEntities,
+      'bid-comparison': buildBidComparisonEntities,
+    },
+    // Wired exactly as `server.ts` wires it. `buildBidComparisonEntities`
+    // cites `sourceIds` on every attribute it seeds; without this, those
+    // citations dangle on a freshly started `bid-comparison` demo case
+    // (`CaseState.sources` stays `[]`) -- see `command-service.ts`'s own
+    // `demoSeedSources` doc comment.
+    demoSeedSources: { 'bid-comparison': buildBidComparisonSources },
   });
 
   const runService = new RunService({
@@ -561,12 +581,45 @@ class RealPersonaExecutor implements PersonaTurnExecutor {
     return ['requestInvestigation'];
   }
 
+  /**
+   * A real, verified product gap, not merely a harness assumption -- worth
+   * recording precisely because it looked at first like a harness-only
+   * restriction.
+   *
+   * `bid-comparison` declares no `discovery` section at all (see
+   * `packages/packs/src/bid-comparison.ts`'s module header), so
+   * `pack.discovery?.blindSpots` is empty for it. That alone looked
+   * harmless: `CommandService.completeBlindSpotReview`'s own handler
+   * accepts an empty `offeredPromptIds` (it only rejects an offered id the
+   * pack never declared), and `deriveNextMoves`
+   * (`packages/core/src/discovery.ts`) unconditionally offers "Check for
+   * anything missed" the moment every required topic is answered --
+   * trivially true here, since zero required topics are trivially all
+   * answered.
+   *
+   * But `CompleteBlindSpotReviewInputSchema` (`packages/contracts/src/
+   * commands.ts`) declares `offeredPromptIds: z.array(idString()).min(1)`
+   * -- the command REFUSES an empty list before the handler is ever
+   * reached. So for a pack that declares zero blind spots, there is no
+   * valid `offeredPromptIds` value at all: the move `deriveNextMoves`
+   * offers can never actually be completed, in this harness or in the real
+   * product, by any person or agent. This throws rather than papering over
+   * that with a call the real schema would also refuse -- see this file's
+   * own header ("the executor answers whatever Sift asks"; here, Sift asks
+   * for something structurally unanswerable, which a persona must not
+   * pretend otherwise). Not fixed here: the right repair is a `core`
+   * change (skip the move, or treat a zero-blind-spot pack's review as
+   * trivially complete) that reaches every pack sharing this derivation,
+   * which is beyond registering a second pack in this harness.
+   */
   private completeBlindSpots(snapshot: CaseState): string[] {
     const pack = this.requirePack(snapshot);
     const offered = (pack.discovery?.blindSpots ?? []).map((prompt) => prompt.id);
     if (offered.length === 0) {
       throw new Error(
-        `Persona "${this.persona.id}" completes a blind-spot review, but pack "${pack.identity.id}" declares no blind spots.`,
+        `Persona "${this.persona.id}" completes a blind-spot review, but pack "${pack.identity.id}" declares no blind spots. ` +
+          `CompleteBlindSpotReviewInputSchema requires at least one offered prompt id, so this is not completable for this pack -- ` +
+          `not a harness limitation.`,
       );
     }
     const receipt = this.stack.commandService.completeBlindSpotReview(this.nextCommandId(), {
@@ -784,8 +837,17 @@ async function main(): Promise<void> {
   for (const persona of PERSONAS) {
     const stack = buildStack();
     try {
+      // `DIAGNOSTIC_PASS` is a `Partial` (see its own header comment): a
+      // persona nobody has scored -- currently `school-facilities-manager`
+      // -- has no entry. Spread it in only when genuinely present, exactly
+      // the discipline `runPersona`/`RunPersonaOptions` itself documents
+      // ("Omitted means unscored, never 'assumed fine'") -- passing
+      // `{ scores: undefined }` would violate `exactOptionalPropertyTypes`
+      // and, worse, would be this call site re-inventing the default the
+      // schema was written to forbid.
+      const diagnosticScores = DIAGNOSTIC_PASS[persona.id];
       const report = await runPersona(persona, new RealPersonaExecutor(stack, persona), {
-        scores: DIAGNOSTIC_PASS[persona.id],
+        ...(diagnosticScores !== undefined ? { scores: diagnosticScores } : {}),
       });
       const diagnostics = summarizeDiagnostics(report.scores);
 

@@ -34,10 +34,11 @@ import { webmcpHero } from './journey/journeys/webmcp-hero.js';
 import { awsHero } from './journey/journeys/aws-hero.js';
 import { sharedControl } from './journey/journeys/shared-control.js';
 import { familyNovice } from './journey/journeys/family-novice.js';
+import { bidComparisonHero } from './journey/journeys/bid-comparison-hero.js';
 
 const ARTIFACT_ROOT = fileURLToPath(new URL('../artifacts/journey', import.meta.url));
 
-const ALL: Journey[] = [webmcpHero, awsHero, sharedControl, familyNovice];
+const ALL: Journey[] = [webmcpHero, awsHero, sharedControl, familyNovice, bidComparisonHero];
 
 async function main(): Promise<void> {
   const baseUrl = (process.env['SIFT_HOST_URL'] ?? '').replace(/\/+$/, '');

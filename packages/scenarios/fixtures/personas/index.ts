@@ -1,5 +1,5 @@
 /**
- * The three people this product is for, written as scripted turns.
+ * The four people this product is for, written as scripted turns.
  *
  * These are not test data in the usual sense — they are the product's
  * claims about who it serves, in a form that fails. Each persona is chosen
@@ -19,6 +19,16 @@
  *   tempted to fabricate: a real listing has a price and a seller, and Sift
  *   has neither. The persona exists to make sure that stays an explicit
  *   unknown.
+ * - **School facilities manager** is `bid-comparison`'s own persona, and a
+ *   different seam again: unlike the three `car-purchase` journeys above,
+ *   this pack declares no discovery topics at all
+ *   (`packages/packs/src/bid-comparison.ts` has no `discovery` field). Its
+ *   twelve bids arrive as complete documents, not something to interview
+ *   someone about, so this persona never answers a discovery question — it
+ *   confirms nothing was missed and asks Sift to verify what is already on
+ *   the case. It exists to prove the persona harness works for a
+ *   genuinely different pack shape, not only for the one it was written
+ *   against first.
  *
  * Turn labels are what appears in a failure report, so each says what the
  * person is trying to do rather than which command runs.
@@ -189,10 +199,84 @@ const KNOWN_LISTING_SHOPPER: Persona = PersonaSchema.parse({
   ],
 });
 
+/**
+ * `bid-comparison`'s own persona: a nine-person general contractor's
+ * facilities-manager counterpart in the household/small-institution sense
+ * `docs/bid-comparison/plan.md` describes — a school district facilities
+ * manager comparing twelve plumbing bids for a restroom and locker-room
+ * re-pipe, who is not a procurement expert and cares about price,
+ * licensing/insurance, warranty, and schedule.
+ *
+ * Shaped differently from the three journeys above on purpose, because the
+ * pack itself is shaped differently: `bid-comparison` declares no discovery
+ * topics (see this module's header comment), so there is no interview to
+ * answer here — the twelve bids are already fully on the case the moment
+ * the demo starts (`buildBidComparisonEntities`,
+ * `apps/agent/src/services/command-service.ts`'s `demoSeedEntities`). What
+ * this persona actually does is the honest equivalent for a pack shaped
+ * that way: look at what already arrived, then ask Sift to go verify what a
+ * bid alone cannot prove about itself — its arithmetic, its license and
+ * insurance standing, and whether its schedule is credible.
+ *
+ * Deliberately does not use `setCandidateDisposition`/`upsertOption`/
+ * `updateDiscovery`/`finishDiscovery`: every one of those commands, and the
+ * `deriveNextMoves`/`deriveDecisionPhase` triage machinery behind them
+ * (`packages/core/src/discovery.ts`), is written against entities of kind
+ * `'candidate'` with a keep/pass/unsure disposition. A `bid-comparison`
+ * entity's kind is `'bid'`, so none of that triage surface ever applies to
+ * this case — there is nothing to Keep, Pass, or discover a catalog of. A
+ * persona turn scripted against a move this pack never offers would not be
+ * a small script bug; it would be this persona lying about what a person
+ * choosing among bids actually does next.
+ *
+ * Also deliberately does not use `completeBlindSpotReview`, and this one is
+ * a real, verified finding rather than a stylistic choice: `deriveNextMoves`
+ * offers "Check for anything missed" on this case from the first turn
+ * onward (it fires once every *required* topic is answered, which is
+ * trivially true at zero required topics), but
+ * `CompleteBlindSpotReviewInputSchema`
+ * (`packages/contracts/src/commands.ts`) requires at least one offered
+ * prompt id, and a pack with no `discovery` section declares none. There is
+ * no valid input that completes this move for this pack, in the real
+ * product or in this harness — see `scripts/test-persona.ts`'s
+ * `completeBlindSpots` for where this was actually hit and confirmed. This
+ * persona does not attempt it, on the same principle as the paragraph
+ * above: scripting a move that cannot succeed would not be a small
+ * omission, it would be this persona asserting the pack offers something it
+ * does not.
+ */
+const SCHOOL_FACILITIES_MANAGER: Persona = PersonaSchema.parse({
+  id: 'school-facilities-manager',
+  title: 'School facilities manager',
+  goal: 'Choose which of twelve plumbing bids to award for a school restroom re-pipe before the school year starts, without being a procurement expert.',
+  packId: 'bid-comparison',
+  demoId: 'bid-comparison',
+  mode: 'companion',
+  turns: [
+    {
+      label: 'Ask for help comparing the plumbing bids',
+      actor: 'human',
+      utterance:
+        "I've got twelve plumbing bids in for our elementary school's restroom and locker-room re-pipe, and I need to pick one before the school year starts. I'm not a procurement person, so I don't really know where to begin.",
+    },
+    { label: 'See what Sift already knows about each bid', actor: 'human' },
+    {
+      label: 'Ask Sift to verify the bids',
+      actor: 'human',
+      utterance:
+        'I need this done before the school year starts, so double-check the pricing, the license and insurance on file, and whether the schedule is realistic for every one of these bids.',
+      command: 'requestInvestigation',
+    },
+    { label: 'Watch what Sift is checking', actor: 'human' },
+    { label: 'Review where things stand', actor: 'human' },
+  ],
+});
+
 export const PERSONAS: readonly Persona[] = [
   FAMILY_NOVICE,
   LANDSCAPING_OWNER,
   KNOWN_LISTING_SHOPPER,
+  SCHOOL_FACILITIES_MANAGER,
 ];
 
 export function personaById(id: Persona['id']): Persona {

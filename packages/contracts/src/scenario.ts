@@ -273,7 +273,18 @@ export type DemoScenario = z.infer<typeof DemoScenarioSchema>;
 //    tree. Collapsing that into `pass` would be the exact fabrication the
 //    gates exist to catch.
 
-export const PERSONA_IDS = ['family-novice', 'landscaping-owner', 'known-listing-shopper'] as const;
+export const PERSONA_IDS = [
+  'family-novice',
+  'landscaping-owner',
+  'known-listing-shopper',
+  // `bid-comparison`'s own persona: a school facilities manager who is not
+  // a procurement expert, choosing among twelve plumbing bids. Deliberately
+  // has no entry in `DIAGNOSTIC_PASS` (`packages/scenarios/fixtures/personas/
+  // diagnostics.ts`) -- nobody has run a diagnostic pass over its turn
+  // artifacts, and inventing scores nobody produced is exactly what that
+  // module's own header forbids.
+  'school-facilities-manager',
+] as const;
 export type PersonaId = (typeof PERSONA_IDS)[number];
 
 /** Who took the turn. An agent turn is held to the authority rules a human turn is not. */

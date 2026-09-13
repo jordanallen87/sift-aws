@@ -571,6 +571,21 @@ test.describe('Bid Comparison -- full demo journey', () => {
       .locator('li')
       .count();
     expect(round1SourceCount).toBeGreaterThan(0);
+    // `li` count alone cannot tell a citation that resolved to a real
+    // Source row from one whose id dangles -- `RecommendationCard` renders
+    // both inside a same-shaped `<li>`, and used to give both the identical
+    // `recommendation-card-source-*` testid, so a case where every citation
+    // dangled passed this count check exactly as a case where every citation
+    // resolved. That is not hypothetical: a real 60-dangling-citation bug
+    // shipped through this exact gap. The dangling branch now carries its
+    // own `recommendation-card-unresolved-source-*` testid
+    // (`RecommendationCard.tsx`), so asserting there are none of them here
+    // is what actually pins "every cited source resolves," not just "some
+    // source markup rendered."
+    const round1UnresolvedSourceCount = await page
+      .locator('[data-testid^="recommendation-card-unresolved-source-"]')
+      .count();
+    expect(round1UnresolvedSourceCount).toBe(0);
 
     const round1State = await getCaseState(page.request, caseId);
     expect(

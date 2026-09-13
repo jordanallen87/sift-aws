@@ -31,7 +31,9 @@ import {
   buildBidComparisonEntities,
   buildBidComparisonSources,
   buildCarPurchaseCandidateEntities,
+  buildCarPurchaseSources,
   buildHomeEnergyResponseOptionEntities,
+  buildHomeEnergySources,
 } from '@sift/scenarios';
 import { buildApp } from './app.js';
 import { loadConfig, type SiftConfig } from './config.js';
@@ -200,13 +202,17 @@ export function startServer(options: StartServerOptions = {}): Promise<StartedSe
       'home-energy-guardian': buildHomeEnergyResponseOptionEntities,
       'bid-comparison': buildBidComparisonEntities,
     },
-    // Real gap closed alongside `demoSeedEntities` above: `bid-comparison`'s
+    // Real gap closed alongside `demoSeedEntities` above: every pack's
     // seeded entities cite `sourceIds` on their attributes, but nothing
     // wrote the `Source` rows those citations point at -- a freshly started
-    // case held zero sources while every attribute claimed one. Only
-    // `bid-comparison` is wired: `car-purchase`/`home-energy-guardian` have
-    // the same defect but no builder yet (tracked separately).
+    // case held real cited sourceIds while every attribute's citation
+    // resolved to nothing. All three packs are wired, each via its own
+    // seed-data builder (`@sift/scenarios`'s `seeds.ts`): `buildCarPurchaseSources`/
+    // `buildHomeEnergySources` mirror `buildBidComparisonSources`'s own
+    // "same underlying build as its entities builder, split" pattern.
     demoSeedSources: {
+      'car-purchase': buildCarPurchaseSources,
+      'home-energy-guardian': buildHomeEnergySources,
       'bid-comparison': buildBidComparisonSources,
     },
   });

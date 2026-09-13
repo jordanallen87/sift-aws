@@ -165,6 +165,87 @@ describe('createSiftClient', () => {
     expect(receipt.runId).toBe('run-1');
   });
 
+  it('posts readBidDocument to /api/cases/:caseId/bid-documents/read, not the generic command endpoint', async () => {
+    let capturedBody: unknown;
+    server.use(
+      http.post(`${BASE_URL}/api/cases/case-1/bid-documents/read`, async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json(baseReceipt);
+      }),
+      http.post(`${BASE_URL}/api/cases/case-1/commands/readBidDocument`, () => {
+        throw new Error('readBidDocument must not post to the generic command endpoint');
+      }),
+    );
+
+    const client = createSiftClient({ baseUrl: BASE_URL });
+    const receipt = await client.readBidDocument({
+      caseId: 'case-1',
+      expectedSequence: 1,
+      filename: 'bid-northgate.pdf',
+      text: 'Quoted total: $48,200',
+    });
+
+    expect(receipt).toEqual(baseReceipt);
+    expect(capturedBody).toMatchObject({
+      caseId: 'case-1',
+      filename: 'bid-northgate.pdf',
+      text: 'Quoted total: $48,200',
+    });
+  });
+
+  it('rejects an invalid readBidDocument input locally, without making a network request', async () => {
+    server.use(
+      http.post(`${BASE_URL}/api/cases/case-1/bid-documents/read`, () => {
+        throw new Error('readBidDocument must not reach the network with invalid input');
+      }),
+    );
+
+    const client = createSiftClient({ baseUrl: BASE_URL });
+
+    await expect(
+      client.readBidDocument({
+        caseId: 'case-1',
+        expectedSequence: 1,
+        filename: 'bid-northgate.pdf',
+        text: '', // below the schema's `.min(1)`
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+
+  it('surfaces a 503 UNAVAILABLE from readBidDocument verbatim, for a deployment with no model configured', async () => {
+    server.use(
+      http.post(`${BASE_URL}/api/cases/case-1/bid-documents/read`, () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: 'UNAVAILABLE',
+              message:
+                'Reading a PDF bid document requires a model, and this deployment has none configured for it (SIFT_BID_DOCUMENT_READER_ENABLED is not enabled). Import the bid as a JSON or CSV file instead, or type its values in directly.',
+              retryable: false,
+            },
+          },
+          { status: 503 },
+        ),
+      ),
+    );
+
+    const client = createSiftClient({ baseUrl: BASE_URL });
+
+    await expect(
+      client.readBidDocument({
+        caseId: 'case-1',
+        expectedSequence: 1,
+        filename: 'bid-northgate.pdf',
+        text: 'Quoted total: $48,200',
+      }),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: 'UNAVAILABLE',
+      message:
+        'Reading a PDF bid document requires a model, and this deployment has none configured for it (SIFT_BID_DOCUMENT_READER_ENABLED is not enabled). Import the bid as a JSON or CSV file instead, or type its values in directly.',
+    });
+  });
+
   it.each([
     ['selectPack', { caseId: 'case-1', packId: 'car-purchase', expectedSequence: 1 }],
     ['focusOption', { caseId: 'case-1', optionId: 'opt-1', expectedSequence: 1 }],

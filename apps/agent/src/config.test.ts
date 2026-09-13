@@ -16,6 +16,7 @@ const DEFAULTS = {
   awsRegion: 'us-east-1',
   demoPacingMs: 0,
   publicOrigin: undefined,
+  bidDocumentReaderEnabled: false,
 } as const;
 
 describe('loadConfig', () => {
@@ -50,7 +51,18 @@ describe('loadConfig', () => {
       awsRegion: 'eu-west-1',
       demoPacingMs: 0,
       publicOrigin: 'https://sift.example.com',
+      bidDocumentReaderEnabled: false,
     });
+  });
+
+  it("reads and coerces SIFT_BID_DOCUMENT_READER_ENABLED (opt-in only, per architecture.md's no-network local demo requirement)", () => {
+    expect(loadConfig({}).bidDocumentReaderEnabled).toBe(false);
+    expect(loadConfig({ SIFT_BID_DOCUMENT_READER_ENABLED: 'true' }).bidDocumentReaderEnabled).toBe(
+      true,
+    );
+    expect(loadConfig({ SIFT_BID_DOCUMENT_READER_ENABLED: 'false' }).bidDocumentReaderEnabled).toBe(
+      false,
+    );
   });
 
   it('treats an empty-string SIFT_MODEL_ID as unset and applies the default', () => {

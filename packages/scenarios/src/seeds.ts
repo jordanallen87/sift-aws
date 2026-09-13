@@ -61,6 +61,7 @@ import type {
   CaseState,
   CompiledDecisionPack,
   EntityRecord,
+  Source,
 } from '@sift/contracts';
 import {
   calculateBidEconomics,
@@ -78,8 +79,10 @@ import {
   type CandidateDealerOfferFacts,
   type CandidateListingFacts,
   type LicenseLookupFacts,
+  type LicenseLookupResult,
   type OwnershipCostResult,
   type ResponseOption,
+  type ToolEvidenceItem,
 } from './tools/index.js';
 
 // --- Home Energy Guardian response-option seeding ---
@@ -758,18 +761,33 @@ const BID_COMPARISON_PLUG_NUMBERS: Readonly<Record<string, Record<string, number
   },
 };
 
-/** Every attribute the `bid-comparison` pack manifest declares on its one `bid` entity kind, computed from one bid's real `readBid`/`calculateBidEconomics`/`lookupLicense` results. */
+/**
+ * Every attribute the `bid-comparison` pack manifest declares on its one
+ * `bid` entity kind, computed from one bid's real `readBid`/
+ * `calculateBidEconomics`/`lookupLicense` results.
+ *
+ * `licenseSourceId`/`namedInsuredSourceId` are taken verbatim from
+ * `lookupLicense`'s own `ToolEvidenceItem.sourceId`s (see
+ * `buildBidComparisonSeedData` below), never recomputed here -- `./tools/
+ * license-lookup.ts`'s `licenseSourceId()` lowercases the licence number
+ * (`scripts/check-source.ts` flags the uppercase form as a possible secret;
+ * see that function's own doc comment) before building the id, so an id
+ * built by re-interpolating `license.licenseNumber` here would carry the
+ * licence's original uppercase casing and never match what the tool itself
+ * emits. Citing the tool's own id, rather than a second, independently
+ * recomputed copy of it, is the only way this can never drift again.
+ */
 function bidComparisonAttributes(
   clock: Clock,
   bid: BidReaderResult,
   calculated: BidCalculatorResult,
   license: LicenseLookupFacts,
+  licenseSourceId: string,
+  namedInsuredSourceId: string,
 ): Record<string, AttributeRecord> {
   const bidSourceId = `source-${bid.bidId}`;
   const adjustedTotalSourceId = `source-bid-calculator-${bid.bidId}-adjusted-total`;
   const scopeCompletenessSourceId = `source-bid-calculator-${bid.bidId}-scope-completeness`;
-  const licenseSourceId = `source-license-${license.licenseNumber}`;
-  const namedInsuredSourceId = `${licenseSourceId}-named-insured`;
 
   return {
     'bid.quoted_total': record(clock, {
@@ -897,15 +915,173 @@ function bidComparisonAttributes(
 }
 
 /**
- * Builds the three Bid Comparison `EntityRecord`s (`bid-northgate`,
- * `bid-cedar`, `bid-tworivers`), kind `'bid'` (the pack manifest's one
- * declared entity kind -- `packages/packs/src/bid-comparison.ts`'s
- * `entities: [{ id: 'bid', ... }]`), from the real fixture tools. See this
- * section's own header comment for the full grounding.
+ * Finds the one `ToolEvidenceItem` a real fixture tool's own `evidence`
+ * array carries for `sourceId`, rather than assuming array position or
+ * re-deriving the id a second time. Throws (never silently returns
+ * `undefined`) if the id is absent -- the same "no reachable real-data
+ * trigger, exercised as a loud defensive check" discipline `unwrapOk`
+ * documents above: every real call site here names a `sourceId` this
+ * module itself just built from the SAME tool result's own fields, so a
+ * miss here can only mean the two have drifted apart, which must never pass
+ * silently.
  */
-export function buildBidComparisonEntities(clock: Clock): EntityRecord[] {
+function evidenceFor(
+  evidence: readonly ToolEvidenceItem[],
+  sourceId: string,
+  context: string,
+): ToolEvidenceItem {
+  const item = evidence.find((entry) => entry.sourceId === sourceId);
+  if (item === undefined) {
+    throw new Error(`seeds.ts: no evidence item found for sourceId "${sourceId}" while ${context}`);
+  }
+  return item;
+}
+
+/**
+ * `lookupLicense`'s `evidence` always carries exactly two items -- a
+ * "standing" item (licence/class/insurance status) and a "named insured"
+ * item, in that order (`license-lookup.ts`'s `buildEvidence`) -- but this
+ * finds them by their real, distinguishing id shape (the named-insured item
+ * is always `${standingSourceId}-named-insured`) rather than assuming that
+ * order, and throws rather than silently proceeding if the tool ever stops
+ * returning exactly that shape.
+ */
+function licenseEvidenceItems(
+  bidId: string,
+  evidence: readonly ToolEvidenceItem[],
+): { standing: ToolEvidenceItem; namedInsured: ToolEvidenceItem } {
+  const namedInsured = evidence.find((item) => item.sourceId.endsWith('-named-insured'));
+  const standing = evidence.find((item) => item !== namedInsured);
+  if (standing === undefined || namedInsured === undefined || evidence.length !== 2) {
+    throw new Error(
+      `seeds.ts: expected lookupLicense to return exactly a "standing" and a "named-insured" evidence item for "${bidId}", got ${evidence.length} item(s)`,
+    );
+  }
+  return { standing, namedInsured };
+}
+
+/**
+ * Non-network URL for a bid-comparison fixture `Source` -- the same
+ * `sift://` convention `apps/agent/src/services/command-service.ts` already
+ * uses for a source with no real web address (`SourceSchema.url` is
+ * required; see that file's own `sift://cases/{caseId}/documents/{sourceId}`
+ * / `sift://cases/{caseId}/checks/{id}` construction). These sources are not
+ * case-scoped -- the same twelve bid fixtures back every seeded
+ * bid-comparison case -- so the path names the shared fixture set instead
+ * of a case id, keyed by the source's own id for a stable, deterministic,
+ * one-to-one URL per source.
+ */
+function bidComparisonSourceUrl(sourceId: string): string {
+  return `sift://fixtures/bid-comparison/${sourceId}`;
+}
+
+/**
+ * The tag vocabulary for the sixty seeded `bid-comparison` `Source`s, so the
+ * Reference library renders filter chips for them instead of one flat
+ * 60-item scroll (the defect this constant fixes: every seeded source
+ * previously carried `tags: undefined`).
+ *
+ * Chosen to be the SAME vocabulary `apps/agent/src/services/command-service.ts`
+ * already mints for a real bid-document import, not a parallel one, so a
+ * person filtering the library gets the same kind of thing regardless of
+ * whether a source arrived by seed or by import:
+ *
+ * - `bidDocument` ('bid-document') is that file's own tag for the submitted
+ *   bid itself (`tags: ['bid-document', format]`). Reused verbatim -- a bid
+ *   `readBid` reads off a fixture and a bid a person uploads are the same
+ *   kind of artifact.
+ * - `credentialCheck` ('import-check') is that file's own tag for a
+ *   registry check `lookupLicense` ran (`buildCredentialAttributes`'s two
+ *   `addSource` calls, titled "Contractor licence registry" and
+ *   "Certificate of insurance"). Reused verbatim -- `licenseEvidenceItems`
+ *   below calls that SAME tool for the SAME two evidence items, so these are
+ *   not merely similar, they are the identical check.
+ *
+ * `licenseRegistry`/`certificateOfInsurance` are new, existing nowhere in
+ * `command-service.ts`, because a bid-comparison case cares which of the two
+ * credential checks a given source is (so "isolate the bids" / "isolate
+ * credential records" both work as single-chip filters, while the licence
+ * and the certificate stay individually distinguishable too).
+ *
+ * `bidCalculation` ('bid-calculation') is also new. It is deliberately NOT
+ * `credentialCheck`: unlike the two checks above, the adjusted total and
+ * scope completeness are never a registry lookup -- both come from the same
+ * `calculateBidEconomics` call's own `evidence` (their source ids share the
+ * `source-bid-calculator-` prefix built above), i.e. the bid-calculator's
+ * own arithmetic on the bid's stated numbers, not a fact fetched from
+ * somewhere else. (`command-service.ts` derives an imported bid's scope
+ * completeness through a different tool, `scope-differ`, not the
+ * bid-calculator, so there is no existing tag to reuse for this one.)
+ *
+ * Deliberately four tags of "kind", not more: exactly what distinguishes
+ * "the bids" from "what Sift worked out" from the two credential records,
+ * per this module's own module header. No source carries more than two.
+ */
+export const BID_COMPARISON_SOURCE_TAGS = {
+  bidDocument: 'bid-document',
+  bidCalculation: 'bid-calculation',
+  credentialCheck: 'import-check',
+  licenseRegistry: 'license-registry',
+  certificateOfInsurance: 'certificate-of-insurance',
+} as const;
+
+/**
+ * Builds one `Source` from a real fixture tool's own `ToolEvidenceItem`:
+ * `summary` is that item's own `summary` sentence verbatim (never
+ * paraphrased or invented -- it already quotes the fixture's real numbers),
+ * `id`/`url` are keyed off its own `sourceId`, and `title`/`publisher` are
+ * composed only from real fixture fields (contractor name, licence number,
+ * licence holder name) the caller passes in. `tags` is the source's kind
+ * from `BID_COMPARISON_SOURCE_TAGS` above (see that constant for why).
+ */
+function bidComparisonSource(
+  clock: Clock,
+  evidence: ToolEvidenceItem,
+  options: { title: string; publisher?: string; tags: string[] },
+): Source {
   const now = clock.now();
-  return BID_FIXTURE_NAMES.map((bidId: BidFixtureName): EntityRecord => {
+  return {
+    id: evidence.sourceId,
+    url: bidComparisonSourceUrl(evidence.sourceId),
+    title: options.title,
+    ...(options.publisher !== undefined ? { publisher: options.publisher } : {}),
+    retrievedAt: now,
+    tags: options.tags,
+    summary: evidence.summary,
+    origin: 'fixture',
+    verification: 'unverified',
+    createdAt: now,
+  };
+}
+
+interface BidComparisonSeedData {
+  readonly entities: EntityRecord[];
+  readonly sources: Source[];
+}
+
+/**
+ * Builds the twelve Bid Comparison `EntityRecord`s, kind `'bid'` (the pack
+ * manifest's one declared entity kind --
+ * `packages/packs/src/bid-comparison.ts`'s `entities: [{ id: 'bid', ... }]`),
+ * AND the `Source` record for every `sourceIds` entry those entities'
+ * attributes cite -- both from the same real fixture-tool calls
+ * (`readBid`/`calculateBidEconomics`/`lookupLicense`), so a freshly seeded
+ * case's entities and sources can never disagree about which id names which
+ * source. See this section's own header comment for the full grounding.
+ *
+ * Several bids share the shape of a source id (the license/named-insured
+ * pair) only in principle -- each of the twelve bids in this fixture set
+ * names a distinct licence number, so no id collision is reachable today --
+ * but `sourcesById` still deduplicates by id defensively, so a future bid
+ * that reused another bid's licence would still get exactly one `Source`,
+ * never a duplicate or a second, conflicting one.
+ */
+function buildBidComparisonSeedData(clock: Clock): BidComparisonSeedData {
+  const now = clock.now();
+  const entities: EntityRecord[] = [];
+  const sourcesById = new Map<string, Source>();
+
+  for (const bidId of BID_FIXTURE_NAMES as readonly BidFixtureName[]) {
     const bid = unwrapOk<BidReaderResult>(readBid({ bidId }), `reading bid "${bidId}"`);
     const calculated = unwrapOk<BidCalculatorResult>(
       calculateBidEconomics({
@@ -916,18 +1092,121 @@ export function buildBidComparisonEntities(clock: Clock): EntityRecord[] {
       }),
       `calculating bid economics for "${bidId}"`,
     );
-    const license = unwrapOk<{ license: LicenseLookupFacts }>(
+    const licenseResult = unwrapOk<LicenseLookupResult>(
       lookupLicense({ licenseNumber: bid.licenseNumber }),
       `looking up the license for "${bidId}"`,
-    ).license;
+    );
+    const license = licenseResult.license;
+    const { standing: standingEvidence, namedInsured: namedInsuredEvidence } = licenseEvidenceItems(
+      bidId,
+      licenseResult.evidence,
+    );
 
-    return {
+    const bidSourceId = `source-${bid.bidId}`;
+    const adjustedTotalSourceId = `source-bid-calculator-${bid.bidId}-adjusted-total`;
+    const scopeCompletenessSourceId = `source-bid-calculator-${bid.bidId}-scope-completeness`;
+
+    entities.push({
       id: bidId,
       kind: 'bid',
       label: bid.contractorName,
-      attributes: bidComparisonAttributes(clock, bid, calculated, license),
+      attributes: bidComparisonAttributes(
+        clock,
+        bid,
+        calculated,
+        license,
+        standingEvidence.sourceId,
+        namedInsuredEvidence.sourceId,
+      ),
       createdAt: now,
       updatedAt: now,
-    };
-  });
+    });
+
+    const bidEvidence = evidenceFor(bid.evidence, bidSourceId, `reading bid "${bidId}"`);
+    const adjustedTotalEvidence = evidenceFor(
+      calculated.evidence,
+      adjustedTotalSourceId,
+      `calculating bid economics for "${bidId}"`,
+    );
+    const scopeCompletenessEvidence = evidenceFor(
+      calculated.evidence,
+      scopeCompletenessSourceId,
+      `calculating bid economics for "${bidId}"`,
+    );
+
+    const sourceSpecs: [ToolEvidenceItem, { title: string; publisher?: string; tags: string[] }][] =
+      [
+        [
+          bidEvidence,
+          {
+            title: `${bid.contractorName} bid submission`,
+            publisher: bid.contractorName,
+            tags: [BID_COMPARISON_SOURCE_TAGS.bidDocument],
+          },
+        ],
+        [
+          adjustedTotalEvidence,
+          {
+            title: `${bid.contractorName} bid calculator: scope-normalized adjusted total`,
+            tags: [BID_COMPARISON_SOURCE_TAGS.bidCalculation],
+          },
+        ],
+        [
+          scopeCompletenessEvidence,
+          {
+            title: `${bid.contractorName} bid calculator: scope completeness`,
+            tags: [BID_COMPARISON_SOURCE_TAGS.bidCalculation],
+          },
+        ],
+        [
+          standingEvidence,
+          {
+            title: `${license.licenseHolderName} license ${license.licenseNumber}`,
+            tags: [
+              BID_COMPARISON_SOURCE_TAGS.credentialCheck,
+              BID_COMPARISON_SOURCE_TAGS.licenseRegistry,
+            ],
+          },
+        ],
+        [
+          namedInsuredEvidence,
+          {
+            title: `${license.licenseHolderName} certificate of insurance`,
+            tags: [
+              BID_COMPARISON_SOURCE_TAGS.credentialCheck,
+              BID_COMPARISON_SOURCE_TAGS.certificateOfInsurance,
+            ],
+          },
+        ],
+      ];
+    for (const [evidence, options] of sourceSpecs) {
+      if (!sourcesById.has(evidence.sourceId)) {
+        sourcesById.set(evidence.sourceId, bidComparisonSource(clock, evidence, options));
+      }
+    }
+  }
+
+  return { entities, sources: [...sourcesById.values()] };
+}
+
+/**
+ * Builds the twelve Bid Comparison `EntityRecord`s. See
+ * `buildBidComparisonSeedData` above for the full grounding; this and
+ * `buildBidComparisonSources` below are the same underlying build, split
+ * into the two return shapes their existing callers each need.
+ */
+export function buildBidComparisonEntities(clock: Clock): EntityRecord[] {
+  return buildBidComparisonSeedData(clock).entities;
+}
+
+/**
+ * Builds the `Source` record for every `sourceIds` entry the twelve Bid
+ * Comparison `EntityRecord`s' attributes cite (deduplicated by id) -- so a
+ * freshly seeded `bid-comparison` case can hold these on `CaseState.sources`
+ * and every one of those citations resolves. See `buildBidComparisonSeedData`
+ * above for the full grounding, and `BID_COMPARISON_SOURCE_TAGS` above that
+ * for why each of the sixty carries the `tags` it does.
+ */
+export function buildBidComparisonSources(clock: Clock): Source[] {
+  return buildBidComparisonSeedData(clock).sources;
 }

@@ -2,9 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BID_FIXTURE_NAMES } from './bid-reader.js';
 import { loadFixture } from './fixture-loader.js';
 import {
   LICENSE_LOOKUP_TOOL_ID,
+  licenceHolderMatchesBidder,
   lookupLicense,
   type LicenseLookupResult,
 } from './license-lookup.js';
@@ -171,5 +173,98 @@ describe('lookupLicense -- determinism, not_found, and cancellation', () => {
       signal: signalAbortingOnRead(2),
     });
     expect(result.status).toBe('cancelled');
+  });
+});
+
+describe('licenceHolderMatchesBidder', () => {
+  it('tolerates the "Inc" suffix -- the exact discrepancy between bid-tworivers.json and its own registry entry', () => {
+    expect(licenceHolderMatchesBidder('Two Rivers Mechanical Inc', 'Two Rivers Mechanical')).toBe(
+      true,
+    );
+  });
+
+  it("rejects a bid citing someone else's licence outright -- the live defect this helper exists to fix", () => {
+    expect(licenceHolderMatchesBidder('Northgate Plumbing', 'Harborline Mechanical')).toBe(false);
+  });
+
+  it("every one of the twelve seeded bid fixtures' contractorName matches its own registry licenseHolderName, read off the real checked-in files", () => {
+    const registry = loadFixture('license-registry');
+    expect(BID_FIXTURE_NAMES.length).toBeGreaterThan(0);
+    for (const fixtureName of BID_FIXTURE_NAMES) {
+      const bid = loadFixture(fixtureName);
+      const entry = registry.entries.find(
+        (candidate) => candidate.licenseNumber === bid.licenseNumber,
+      );
+      expect(
+        entry,
+        `no registry entry for ${fixtureName}'s licenceNumber "${bid.licenseNumber}"`,
+      ).toBeDefined();
+      expect(
+        licenceHolderMatchesBidder(entry?.licenseHolderName ?? '', bid.contractorName),
+        `${fixtureName}: "${bid.contractorName}" vs registry holder "${entry?.licenseHolderName}"`,
+      ).toBe(true);
+    }
+  });
+
+  it('is case-insensitive', () => {
+    expect(licenceHolderMatchesBidder('Cedar & Sons', 'cedar & sons')).toBe(true);
+    expect(licenceHolderMatchesBidder('Cedar & Sons', 'CEDAR & SONS')).toBe(true);
+  });
+
+  it('treats ". , & -" as word separators, so a hyphenated or ampersand-joined name matches its spaced-out spelling', () => {
+    expect(licenceHolderMatchesBidder('Cedar & Sons', 'Cedar, Sons')).toBe(true);
+    expect(licenceHolderMatchesBidder('Cedar & Sons', 'Cedar and Sons')).toBe(false); // "&" and the word "and" are not the same token -- normalisation never invents words
+    expect(licenceHolderMatchesBidder('Smith-Jones Mechanical', 'Smith Jones Mechanical')).toBe(
+      true,
+    );
+  });
+
+  it('deletes an apostrophe outright rather than treating it as a word break, so a mid-word contraction matches its unpunctuated spelling', () => {
+    expect(licenceHolderMatchesBidder("O'Brien Plumbing", "O'Brien Plumbing")).toBe(true);
+    expect(licenceHolderMatchesBidder("O'Brien Plumbing", 'OBrien Plumbing')).toBe(true);
+  });
+
+  it('rejects genuinely different names that happen to share a word', () => {
+    expect(licenceHolderMatchesBidder('Summit Mechanical Co.', 'Summit Plumbing')).toBe(false);
+  });
+
+  it('returns false for empty or whitespace-only input on either side, never a fabricated match', () => {
+    expect(licenceHolderMatchesBidder('', '')).toBe(false);
+    expect(licenceHolderMatchesBidder('   ', '   ')).toBe(false);
+    expect(licenceHolderMatchesBidder('Northgate Plumbing', '')).toBe(false);
+    expect(licenceHolderMatchesBidder('', 'Northgate Plumbing')).toBe(false);
+    expect(licenceHolderMatchesBidder('Northgate Plumbing', '   ')).toBe(false);
+  });
+
+  it('strips repeated corporate suffixes, not just one ("Foo Co Inc" -> "Foo")', () => {
+    expect(licenceHolderMatchesBidder('Foo Co Inc', 'Foo')).toBe(true);
+    expect(licenceHolderMatchesBidder('Foo Company', 'Foo')).toBe(true);
+    expect(licenceHolderMatchesBidder('Foo Corporation', 'Foo Corp')).toBe(true);
+    // "Ltd" and "Limited" are different spellings of the same suffix -- both
+    // strip away, leaving "foo" on both sides.
+    expect(licenceHolderMatchesBidder('Foo Ltd', 'Foo Limited')).toBe(true);
+  });
+
+  it('strips the spelled-out "L.L.C." suffix the same as "LLC"', () => {
+    expect(licenceHolderMatchesBidder('Foo L.L.C.', 'Foo LLC')).toBe(true);
+    expect(licenceHolderMatchesBidder('Foo L.L.C.', 'Foo')).toBe(true);
+  });
+
+  it('never strips a suffix word that is the whole name down to nothing', () => {
+    expect(licenceHolderMatchesBidder('Inc', 'Inc')).toBe(true);
+    expect(licenceHolderMatchesBidder('Co', 'Co')).toBe(true);
+    // A single suffix word is not the same business as a real multi-word
+    // name, even one that also ends in that word.
+    expect(licenceHolderMatchesBidder('Inc', 'Foo Inc')).toBe(false);
+  });
+
+  it('never strips "co" (or any suffix word) as a substring from inside a longer word', () => {
+    // "Ecoline" contains the letters "co" but is one token, never decomposed
+    // into "eco" + something -- suffix stripping only ever removes a whole
+    // trailing WORD, never characters from inside one, so "Ecoline" is not
+    // the same word as "Eco" and the two names do not match.
+    expect(licenceHolderMatchesBidder('Ecoline Plumbing', 'Eco Plumbing')).toBe(false);
+    // A real standalone trailing "Co" (its own word) DOES strip as a suffix.
+    expect(licenceHolderMatchesBidder('Eco Plumbing Co', 'Eco Plumbing')).toBe(true);
   });
 });

@@ -80,9 +80,11 @@ import { fileURLToPath } from 'node:url';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import type { PackRegistry } from '@sift/packs';
 import type { Clock } from '@sift/core';
+import { MAX_BID_DOCUMENT_BYTES } from '@sift/contracts';
 import type { SiftDatabase } from './db/connection.js';
 import { createAgentCoreRouter } from './routes/agentcore.js';
 import { createHealthRouter } from './routes/health.js';
+import { createBidDocumentsRouter, type BidDocumentReaderDeps } from './routes/bid-documents.js';
 import { createCasesRouter } from './routes/cases.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createCommandsRouter } from './routes/commands.js';
@@ -125,19 +127,57 @@ export interface BuildAppDeps {
   sseMaxQueueLength?: number;
   /** Overridable in tests so the `existsSync(...)`/`express.static(...)` static-hosting branch below can be proven against a real (but disposable, test-local) directory without depending on whether `apps/web` has actually been built in this environment. Defaults to the real sibling `apps/web/dist` directory. */
   webDistDir?: string;
+  /**
+   * Backs `POST /api/cases/:caseId/bid-documents/read`
+   * (`routes/bid-documents.ts`). `undefined` unless
+   * `SIFT_BID_DOCUMENT_READER_ENABLED=true` (config.ts) -- `server.ts` is
+   * the only caller that ever constructs a real one
+   * (`resolveModelProvider`/`createBedrockModel`,
+   * `runtime/model-provider.ts`); a test injects a `ScriptedModelProvider`
+   * double instead. When `undefined`, that route always answers an honest
+   * refusal rather than ever attempting a model call, per architecture.md's
+   * "no network, no AWS credentials" requirement for the complete local
+   * demo.
+   */
+  bidDocumentReader?: BidDocumentReaderDeps;
 }
 
 const WEB_DIST_DIR = fileURLToPath(new URL('../../web/dist', import.meta.url));
 
+/**
+ * `express.json()`'s own default body-size limit is 100 KB -- well BELOW
+ * `MAX_BID_DOCUMENT_BYTES` (256 KiB, `@sift/contracts`), the cap
+ * `SubmitBidDocumentInputSchema`/`ReadBidDocumentInputSchema` already
+ * declare for a submitted bid document's `text`. Left at the default, a
+ * legitimate document between 100 KB and that cap never reaches either
+ * schema at all: `body-parser` itself throws `PayloadTooLargeError` before
+ * any route runs, which this app's own error-handling middleware (below)
+ * can only report as a generic `500 INTERNAL` -- turning an ordinary,
+ * schema-anticipated "too large" case into an unhandled-looking crash
+ * response instead of the clean `400 VALIDATION` these schemas' own
+ * `.refine()` checks are supposed to produce. Sized to the same cap plus
+ * headroom for the rest of a request's JSON envelope (`caseId`,
+ * `filename`, `expectedSequence`, the `readBy` marker, ...) -- all of
+ * which are individually bounded well under this -- rather than an
+ * unrelated, independently-chosen number.
+ */
+const JSON_REQUEST_BODY_LIMIT_BYTES = MAX_BID_DOCUMENT_BYTES + 8_192;
+
 export function buildApp(deps: BuildAppDeps): Application {
   const app = express();
 
-  app.use(express.json());
+  app.use(express.json({ limit: JSON_REQUEST_BODY_LIMIT_BYTES }));
   app.use(createHealthRouter({ database: deps.database }));
   app.use(createPacksRouter({ registry: deps.registry }));
   app.use(createCatalogRouter());
   app.use(createCasesRouter({ commandService: deps.commandService, caseStore: deps.caseStore }));
   app.use(createCommandsRouter({ commandService: deps.commandService }));
+  app.use(
+    createBidDocumentsRouter({
+      commandService: deps.commandService,
+      ...(deps.bidDocumentReader !== undefined ? { reader: deps.bidDocumentReader } : {}),
+    }),
+  );
   app.use(
     createRunsRouter({
       runService: deps.runService,

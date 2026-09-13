@@ -313,6 +313,48 @@ function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
+/**
+ * Marks a submitted document's `text` as a MODEL's reading of a person's
+ * PDF, rather than the file itself in a deterministically-parseable format
+ * -- see `apps/agent/src/runtime/bid-document-reader.ts` (the model step)
+ * and `apps/agent/src/routes/bid-documents.ts`'s
+ * `POST /api/cases/:caseId/bid-documents/read` (the async route that runs
+ * it BEFORE this command, then JSON-stringifies a successful reading into
+ * an ordinary `format: 'application/json'` document, this schema's sibling
+ * field, below).
+ *
+ * Optional, and deliberately its own object rather than a bare boolean:
+ * "a model read this" alone does not say WHY a model reading is a WEAKER
+ * claim than a labelled field in a machine-readable file --
+ * `command-service.ts`'s `submitBidDocument` needs the model's own id (for
+ * the same audit trail every other `origin: 'agent_proposed'` record
+ * already carries) and the PDF's own original file name, so the `Source`
+ * this command mints can be titled after the document the person actually
+ * chose, not the synthesised JSON `text` carries once a reading succeeds.
+ */
+const SubmittedBidDocumentReadBySchema = z
+  .object({
+    /** Closed to `'model'`: the one non-human reader this marker exists to name. A future non-model automated reader (e.g. a deterministic OCR pass) would need its own value, not an overload of this one. */
+    agent: z.literal('model'),
+    /** Which model produced the reading (`SIFT_MODEL_ID`, config.ts) -- recorded for the same audit reason every other `origin: 'agent_proposed'` record's provenance is traceable. */
+    modelId: safeString(200),
+    /** The PDF's own file name -- the document the person actually chose. Carried here independently of `SubmittedBidDocumentSchema.filename` so the `Source` this command mints is titled correctly even if a caller ever got that sibling field wrong. */
+    originalFilename: safeString(200),
+    /**
+     * The one original format this marker exists for today: a browser
+     * extracts a PDF's text layer (this schema's own header,
+     * `bid-document-reader.ts`'s) and hands the prose to a model, never the
+     * reverse. A closed literal, not `BID_DOCUMENT_FORMATS` -- that enum
+     * names formats the DETERMINISTIC extractor can parse directly, which a
+     * raw PDF is not and never becomes; conflating the two axes would let a
+     * PDF masquerade as one of that enum's deterministically-parseable
+     * formats.
+     */
+    originalFormat: z.literal('application/pdf'),
+  })
+  .strict();
+export type SubmittedBidDocumentReadBy = z.infer<typeof SubmittedBidDocumentReadBySchema>;
+
 const SubmittedBidDocumentSchema = z
   .object({
     /** The document's own name, used as the `Source.title` and, when the contractor's name cannot be read, as the option's label. Never invented. */
@@ -353,6 +395,8 @@ const SubmittedBidDocumentSchema = z
      * honest instead of being filled with a fabricated web address.
      */
     sourceUrl: z.url().max(2000).optional(),
+    /** Present only when `text` is a MODEL's reading of a PDF, not the file itself -- see `SubmittedBidDocumentReadBySchema`'s own doc comment. */
+    readBy: SubmittedBidDocumentReadBySchema.optional(),
   })
   .strict();
 
@@ -375,6 +419,182 @@ export type SubmitBidDocumentInput = z.infer<typeof SubmitBidDocumentInputSchema
 // neighbours above: webmcp.md's tool catalog declares no bid-document tool,
 // and inventing one here would put a tool name in the contracts that no
 // spec, registration, or handler backs.
+
+// --- ModelReadBidDocumentSchema ---
+//
+// The other half of the free-text seam `BID_DOCUMENT_FORMATS`'s doc comment
+// names above: "when a model is genuinely involved in the reading -- the
+// *same* `origin: 'agent_proposed'` / never-`'verified'` rules this command
+// already enforces for every value it writes." This is that model's output
+// contract. It is not itself a `SiftCommands` input -- no command accepts it
+// directly -- because a model call is async and `CommandService` is
+// synchronous end-to-end (its store is `better-sqlite3`, and commands are
+// replayed by `commandId` for idempotency, which a model call inside one
+// would break). `apps/agent/src/runtime/bid-document-reader.ts` runs a model
+// against this schema OUTSIDE and BEFORE `submitBidDocument`, then
+// JSON-stringifies a valid reply into an ordinary
+// `SubmitBidDocumentInput.document` with `format: 'application/json'` --
+// so the proven deterministic `extractBidDocument` still does the actual
+// field-by-field mapping onto attributes; this schema only bounds what a
+// model may hand it.
+//
+// Mirrors the canonical bid shape `extractBidDocument` already reads
+// (`packages/scenarios/fixtures/bids/bid-northgate.json`,
+// `bid-document-extractor.ts`'s `extractJsonFields`/`readJsonWarrantyMonths`/
+// `readJsonLineItems`) field-for-field: `contractorName`, `licenseNumber`,
+// `total`, `depositPercent`, `startInWeeks`, `durationWorkingDays`,
+// `warranty.termMonths`/`warranty.statedInWriting`, `lineItems[]`. A
+// validated reply is therefore already a document that extractor
+// understands with zero translation.
+//
+// **Every field is optional, all the way down** -- including every field of
+// `warranty`, and every field of a line item but `label`/`amount` (the two a
+// line item is meaningless without). That is the entire point: a model
+// reading prose must be able to say nothing about a field it is not sure of,
+// rather than invent a plausible-sounding value. See
+// `bid-document-reader.ts`'s exported `READ_BID_DOCUMENT_PROMPT` for the
+// instruction this schema exists to make enforceable, and
+// `command-service.ts`'s "zero fields read" guard on `submitBidDocument`
+// (search "Zero fields, not") for the sibling rule `bid-document-reader.ts`'s
+// own zero-field check mirrors one layer earlier.
+//
+// Every numeric/length bound below is a plausibility ceiling, not a real
+// domain limit -- generous on purpose (per `MAX_EXTRACTED_LINE_ITEMS`'s own
+// comment, "deliberately generous while still bounded"), because the model
+// already carries the only judgment call this shape makes ("did the
+// document really state this"); these caps exist only to catch a garbled
+// read (a stray digit, a hallucinated 40-year warranty), matching
+// architecture.md "Tool inputs, outputs, model responses ... are
+// size-bounded and schema-validated".
+
+const MODEL_READ_ISO_4217_CURRENCY = z
+  .string()
+  .regex(/^[A-Z]{3}$/, 'currency must be a three-letter ISO 4217 code');
+
+/**
+ * Bound on a single dollar figure a model may read off a bid document --
+ * `total.amount` and each line item's `amount.amount`. $100,000,000 is far
+ * above any real trade-package bid (the largest checked-in fixture is under
+ * $300,000); it exists to catch a garbled read, not to model a real ceiling.
+ */
+export const MAX_MODEL_READ_BID_AMOUNT = 100_000_000;
+
+const ModelReadMoneyAmountSchema = z
+  .object({
+    amount: z.number().finite().nonnegative().max(MAX_MODEL_READ_BID_AMOUNT),
+    currency: MODEL_READ_ISO_4217_CURRENCY,
+  })
+  .strict();
+
+/** A trade bid rarely starts more than two years out; a figure past this is a misread of the schedule, not a real one. */
+export const MAX_MODEL_READ_START_IN_WEEKS = 104;
+
+/** ~8 working years -- generous headroom over any real trade-package duration, while still catching a garbled figure. */
+export const MAX_MODEL_READ_DURATION_WORKING_DAYS = 2000;
+
+/** 50 years. A workmanship warranty term past this is not a term the document plausibly states; it is a misread. */
+export const MAX_MODEL_READ_WARRANTY_TERM_MONTHS = 600;
+
+/**
+ * The most line items a model-read document may contribute. Matches
+ * `MAX_EXTRACTED_LINE_ITEMS` (`bid-document-extractor.ts`) exactly, so a
+ * document that would clear this schema's cap never turns around and gets
+ * refused a second time, once JSON-stringified, by the extractor's own
+ * identical cap -- rejecting it here just gives the same answer one step
+ * earlier. Not imported from that module: `@sift/contracts` must not depend
+ * on `@sift/scenarios` (the dependency runs the other way), so the number is
+ * restated, not shared.
+ */
+export const MAX_MODEL_READ_LINE_ITEMS = 200;
+
+const ModelReadLineItemSchema = z
+  .object({
+    /**
+     * Optional, and deliberately not `idString()`: a prose bid document has
+     * no reason to print Sift's own internal scope-item slugs, so this is
+     * populated only on the rare document that happens to print something
+     * id-shaped next to a line. Most model reads will omit it and rely on
+     * `label` alone, exactly as `extractBidDocument`'s own CSV path already
+     * tolerates a line item with no `scopeItemId` column.
+     */
+    scopeItemId: safeString(200).optional(),
+    label: safeString(500),
+    amount: ModelReadMoneyAmountSchema,
+  })
+  .strict();
+
+const ModelReadWarrantySchema = z
+  .object({
+    termMonths: z.number().finite().min(0).max(MAX_MODEL_READ_WARRANTY_TERM_MONTHS).optional(),
+    /** Whether the document states the term IN WRITING, vs. merely mentioning a warranty exists -- the same distinction `readJsonWarrantyMonths`'s `QUALIFIED_FIELD_CONFIDENCE` branch draws, carried one layer earlier. */
+    statedInWriting: z.boolean().optional(),
+  })
+  .strict();
+
+export const ModelReadBidDocumentSchema = z
+  .object({
+    contractorName: safeString(200).optional(),
+    licenseNumber: safeString(100).optional(),
+    total: ModelReadMoneyAmountSchema.optional(),
+    depositPercent: z.number().finite().min(0).max(100).optional(),
+    startInWeeks: z.number().finite().min(0).max(MAX_MODEL_READ_START_IN_WEEKS).optional(),
+    durationWorkingDays: z
+      .number()
+      .finite()
+      .min(0)
+      .max(MAX_MODEL_READ_DURATION_WORKING_DAYS)
+      .optional(),
+    warranty: ModelReadWarrantySchema.optional(),
+    lineItems: z.array(ModelReadLineItemSchema).max(MAX_MODEL_READ_LINE_ITEMS).optional(),
+  })
+  .strict();
+export type ModelReadBidDocument = z.infer<typeof ModelReadBidDocumentSchema>;
+
+// --- ReadBidDocumentInput (apps/agent's async route, NOT a `SiftCommands`
+// input) ---
+//
+// `POST /api/cases/:caseId/bid-documents/read` (`routes/bid-documents.ts`)
+// validates its body with this schema BEFORE ever calling a model: a PDF's
+// browser-extracted prose text layer, plus the same `expectedSequence`/
+// `optionId` `SubmitBidDocumentInputSchema` already carries, since this
+// route hands both straight through, unchanged, once a reading succeeds.
+//
+// Deliberately its own shape, not `SubmitBidDocumentInputSchema` reused:
+// that schema's `document.format` is one of `BID_DOCUMENT_FORMATS`, and a
+// raw PDF text layer is neither -- it becomes `application/json` only AFTER
+// a model has read it into a `ModelReadBidDocument` above. `text` reuses
+// the identical `MAX_BID_DOCUMENT_BYTES` cap `SubmittedBidDocumentSchema
+// .text` enforces (restated, not re-derived, exactly like
+// `bid-document-reader.ts`'s own identical restatement -- see that
+// constant's own comment, "Enforced twice on purpose") so an oversized
+// paste is refused at this earlier HTTP boundary, before a byte of it ever
+// reaches a model.
+export const ReadBidDocumentInputSchema = z
+  .object({
+    caseId: idString(),
+    expectedSequence,
+    /** Re-reading a corrected document onto the option it already produced. Same field, same meaning, as `SubmitBidDocumentInputSchema.optionId`. */
+    optionId: idString().optional(),
+    /** The document's own file name (e.g. `"northgate-bid.pdf"`) -- never invented, and carried through unchanged into `SubmittedBidDocumentSchema.filename`/`readBy.originalFilename` once a reading succeeds. */
+    filename: safeString(200),
+    /**
+     * The PDF's extracted text layer, as plain text -- untrusted content a
+     * browser handed this route (`bid-document-reader.ts`'s own
+     * `READ_BID_DOCUMENT_PROMPT` instructs the model to treat it as data,
+     * never instructions). Read but never rendered until a successful
+     * reading re-enters these contracts through
+     * `ModelReadBidDocumentSchema`'s own `safeString`-guarded fields.
+     */
+    text: z
+      .string()
+      .min(1)
+      .max(MAX_BID_DOCUMENT_BYTES)
+      .refine((text) => utf8ByteLength(text) <= MAX_BID_DOCUMENT_BYTES, {
+        message: `document must not exceed ${MAX_BID_DOCUMENT_BYTES} bytes encoded as UTF-8`,
+      }),
+  })
+  .strict();
+export type ReadBidDocumentInput = z.infer<typeof ReadBidDocumentInputSchema>;
 
 // --- AddNoteInput (webmcp.md `sift_add_note` -- docs/change-sets/2026-08-30-
 // generic-decision-workspace.md §28 "Notes" / §29 "WebMCP should be able to

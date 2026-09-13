@@ -1,11 +1,12 @@
 /**
  * Zod-validated Sift service configuration loader.
  *
- * Reads the ten `SIFT_*`/`AWS_*` environment variables documented in the
- * repo root `.env.example` (`SIFT_EXECUTION_TARGET`, `SIFT_DATA_DIR`,
+ * Reads the `SIFT_*`/`AWS_*` environment variables documented in the repo
+ * root `.env.example` (`SIFT_EXECUTION_TARGET`, `SIFT_DATA_DIR`,
  * `SIFT_AUTHORING_ENABLED`, `SIFT_DEBUG_ENABLED`, `SIFT_TRACING_ENABLED`,
  * `SIFT_DEBUG_PAYLOAD_MODE`, `SIFT_DEBUG_RETENTION_DAYS`, `SIFT_MODEL_ID`,
- * `AWS_REGION`, `SIFT_PUBLIC_ORIGIN`), applies exactly the defaults shown
+ * `AWS_REGION`, `SIFT_PUBLIC_ORIGIN`, `SIFT_DEMO_PACING_MS`,
+ * `SIFT_BID_DOCUMENT_READER_ENABLED`), applies exactly the defaults shown
  * there, and throws one `ConfigError` listing every invalid/missing
  * variable at once.
  *
@@ -50,6 +51,7 @@ export interface RawEnv {
   SIFT_MODEL_ID?: string | undefined;
   AWS_REGION?: string | undefined;
   SIFT_PUBLIC_ORIGIN?: string | undefined;
+  SIFT_BID_DOCUMENT_READER_ENABLED?: string | undefined;
 }
 
 export interface SiftConfig {
@@ -79,6 +81,26 @@ export interface SiftConfig {
   demoPacingMs: number;
   /** Same-origin (undefined/unset) unless a separate deployed origin is introduced. */
   publicOrigin?: string;
+  /**
+   * Enables `POST /api/cases/:caseId/bid-documents/read`
+   * (`routes/bid-documents.ts`): reading a bid PDF's browser-extracted
+   * prose text layer with a real model (`SIFT_MODEL_ID`/`AWS_REGION`) BEFORE
+   * handing it to the synchronous, deterministic `submitBidDocument`
+   * command (`runtime/bid-document-reader.ts`'s header explains why that
+   * model step cannot live inside the command layer at all).
+   *
+   * Defaults to `false` and MUST stay `false` for the complete local demo:
+   * docs/specs/architecture.md requires that demo to run with no network
+   * and no AWS credentials, and this is the one route in this service that
+   * would otherwise make a real, network-dependent Bedrock call. `server.ts`
+   * only constructs the model (`resolveModelProvider`/`createBedrockModel`,
+   * `runtime/model-provider.ts`) when this is `true`; when `false`, the
+   * route is still mounted but always answers a clear, actionable refusal
+   * instead of ever attempting a model call -- reading a PDF needs a model
+   * this deployment does not have configured, and importing the bid as
+   * JSON/CSV or typing its values in directly both still work.
+   */
+  bidDocumentReaderEnabled: boolean;
 }
 
 export class ConfigError extends Error {
@@ -132,6 +154,9 @@ const ConfigSchema = z.object({
   // misconfiguration cannot hang a run indefinitely.
   SIFT_DEMO_PACING_MS: integerFromEnvString(0, 2000).default(0),
   SIFT_PUBLIC_ORIGIN: z.preprocess(emptyToUndefined, z.url().optional()),
+  // Opt-in only -- see `SiftConfig.bidDocumentReaderEnabled`'s own doc
+  // comment for why this must default to `false`.
+  SIFT_BID_DOCUMENT_READER_ENABLED: booleanFromEnvString.default(false),
 });
 
 /**
@@ -165,6 +190,7 @@ export function loadConfig(env: RawEnv = process.env): SiftConfig {
     modelId: parsed.SIFT_MODEL_ID ?? 'global.anthropic.claude-sonnet-4-6',
     awsRegion: parsed.AWS_REGION,
     demoPacingMs: parsed.SIFT_DEMO_PACING_MS,
+    bidDocumentReaderEnabled: parsed.SIFT_BID_DOCUMENT_READER_ENABLED,
   };
   if (parsed.SIFT_PUBLIC_ORIGIN !== undefined) {
     config.publicOrigin = parsed.SIFT_PUBLIC_ORIGIN;

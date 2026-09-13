@@ -31,7 +31,8 @@
  *  - `attributeDefinitions` (creation only: `startDemo`'s `seedSnapshot`);
  *  - `selectedOptionId`/`selectedEvidenceId`/`activeFocus` (`focusOption`/
  *    `focusEvidence`'s `updateSelection`);
- *  - `sources` (`submitSource`'s `updateSelection`).
+ *  - `sources` (`submitSource`'s/`submitBidDocument`'s/`startDemo`'s
+ *    `updateSelection`).
  *
  * --- Closed by the 2026-08-30 custom-field/research pipeline task (was:
  * "Deliberately deferred to a later task") ---
@@ -128,6 +129,7 @@ import {
   type PublicActivityEvent,
   type ReviewProposalInput,
   type Source,
+  type SubmitBidDocumentInput,
   UpdateDiscoveryInputSchema,
   RequestInteractionInputSchema,
   SubmitInteractionResponseInputSchema,
@@ -163,6 +165,7 @@ import type { PackRegistry } from '@sift/packs';
 import {
   diffBidScope,
   extractBidDocument,
+  licenceHolderMatchesBidder,
   loadAndEvaluateBillFeed,
   loadFixture,
   lookupLicense,
@@ -206,6 +209,26 @@ export interface CommandServiceDeps {
    * exactly what `startDemo` appends here.
    */
   readonly demoSeedEntities?: Readonly<Record<string, (clock: Clock) => readonly EntityRecord[]>>;
+  /**
+   * Demo id -> starting `Source`s for `startDemo` to write onto the freshly
+   * created case, alongside `demoSeedEntities` above. Closes the same kind
+   * of real gap `demoSeedEntities` closes: a `demoSeedEntities` builder is
+   * free to cite `sourceIds` on the attributes it seeds (`bid-comparison`'s
+   * `buildBidComparisonEntities` does, for all twelve of its options), but
+   * nothing wrote the `Source` rows those citations point at, so every one
+   * dangled on a freshly started case -- `CaseState.sources` stayed `[]`
+   * while every attribute claimed a citation. Optional so every pack/demo
+   * without an entry (and every existing test) keeps seeding zero sources
+   * unchanged.
+   *
+   * `sources` has no `CaseEvent` variant (`case-store.ts`'s `SelectionPatch`
+   * doc comment), so `startDemo` writes these through
+   * `CaseStore.updateSelection()` -- the same non-event-sourced path
+   * `submitSource`/`submitBidDocument` already use for a `Source` -- rather
+   * than inventing a new event type. `updateSelection()` does not advance
+   * `eventSequence`.
+   */
+  readonly demoSeedSources?: Readonly<Record<string, (clock: Clock) => readonly Source[]>>;
   /**
    * The continuous RunPlan's revision hook (`run-plan-service.ts`'s
    * `RunPlanService.revisePlan`). Optional so every existing test and any
@@ -307,6 +330,39 @@ function normalizeSourceTags(tags: readonly string[]): string[] {
 
 /** The one entity kind `packages/packs/src/bid-comparison.ts` declares (`entities: [{ id: 'bid', ... }]`). */
 const BID_ENTITY_KIND = 'bid';
+
+/**
+ * The single confidence every read field's `AttributeRecord` carries when
+ * `SubmittedBidDocumentInput.document.readBy` marks this document's `text`
+ * as a MODEL's own reading of a PDF's prose, rather than the confidence
+ * `extractBidDocument` (`bid-document-extractor.ts`) would otherwise have
+ * assigned that field: `STATED_FIELD_CONFIDENCE` (0.9, a value sitting
+ * under an unambiguous, labelled key), `DERIVED_FIELD_CONFIDENCE` (0.7, an
+ * arithmetic result over stated numbers), or `QUALIFIED_FIELD_CONFIDENCE`
+ * (0.6, the document merely implies rather than states a value).
+ *
+ * A model reading unstructured prose is a categorically weaker claim than
+ * any of those three tiers. The deterministic extractor's LOWEST tier
+ * (0.6) still trusts a value it found sitting under an unambiguous key name
+ * in machine-readable data -- it cannot be wrong about which field it read,
+ * only about what the person meant by it. A model instead has to correctly
+ * segment, interpret, and normalize free text with no schema to anchor it,
+ * using only the discipline `READ_BID_DOCUMENT_PROMPT` instructs it to
+ * follow (report exactly what is stated, or omit -- never guess,
+ * `bid-document-reader.ts`). That discipline is what keeps a model reading
+ * meaningfully better than a blind guess, but it remains an INFERENCE about
+ * prose, not a parse of a labelled field, so this constant is fixed below
+ * every tier the deterministic extractor can produce (0.4 < 0.6 < 0.7 <
+ * 0.9) and applied UNCONDITIONALLY -- not scaled per field -- so this
+ * command can only ever LOWER what `buildExtractedBidAttributes` would
+ * otherwise have assigned, never raise it, regardless of which field or
+ * which tier a document would otherwise have earned. 0.4 itself is not
+ * vanishingly small: `READ_BID_DOCUMENT_PROMPT`'s own omit-rather-than-guess
+ * rule means a reported field is still a genuine, disciplined attempt at
+ * what the document says, not a coin flip, and a near-zero value would
+ * misrepresent that discipline as worthless.
+ */
+const MODEL_READ_ATTRIBUTE_CONFIDENCE = 0.4;
 
 /**
  * One bid-comparison attribute a bid DOCUMENT states, and how to read it off
@@ -449,8 +505,29 @@ function keepingUserValues(
   return kept;
 }
 
-function buildBidDocumentExcerpt(extracted: BidDocumentExtractionResult): string | undefined {
+function buildBidDocumentExcerpt(
+  extracted: BidDocumentExtractionResult,
+  readBy?: SubmitBidDocumentInput['document']['readBy'],
+): string | undefined {
   const lines: string[] = [];
+  if (readBy !== undefined) {
+    // Leads every model-read excerpt, unconditionally -- including one
+    // whose lines below end up otherwise empty (a document stating only a
+    // total and a contractor name, with no licence number or line items,
+    // would otherwise leave this disclosure entirely unstated; see the
+    // `lines.length === 0` return below). `Source.excerpt` is documented as
+    // "a quotation FROM the source" (this function's own header), and for a
+    // model-read document there IS no such quotation to offer: a browser
+    // extracts a PDF's text layer, not the file itself, so nothing checkable
+    // against the original remains here. What follows is a MODEL's
+    // interpretation of that prose, not a verified reading, and this line
+    // says so before anything else.
+    lines.push(
+      `Read by a model ("${readBy.modelId}") from "${readBy.originalFilename}" (application/pdf) -- ` +
+        "an unverified reading of a PDF's prose text, not a labelled field read off a " +
+        'machine-readable file. Every value below is a proposal, not a confirmed fact.',
+    );
+  }
   if (extracted.fields.licenseNumber !== undefined) {
     lines.push(`License number stated: ${extracted.fields.licenseNumber.value}`);
   }
@@ -505,8 +582,9 @@ export class CommandService {
     };
     const seed = instantiateCase(pack, selection, this.deps.clock, this.deps.idGenerator);
     const seedEntities = this.deps.demoSeedEntities?.[input.demoId]?.(this.deps.clock) ?? [];
+    const seedSources = this.deps.demoSeedSources?.[input.demoId]?.(this.deps.clock) ?? [];
 
-    const events: CaseEvent[] = [
+    const creationEvents: CaseEvent[] = [
       {
         eventId: this.deps.idGenerator.next('event'),
         caseId: seed.id,
@@ -548,21 +626,68 @@ export class CommandService {
         type: 'obligation.updated',
         payload: { obligation },
       })),
-      ...seedEntities.map((entity, index): CaseEvent => ({
-        eventId: this.deps.idGenerator.next('event'),
-        caseId: seed.id,
-        sequence: 3 + seed.obligations.length + index,
-        timestamp: seed.createdAt,
-        commandId,
-        type: 'option.upserted',
-        payload: { entity },
-      })),
     ];
+    const entityEvents: CaseEvent[] = seedEntities.map((entity, index): CaseEvent => ({
+      eventId: this.deps.idGenerator.next('event'),
+      caseId: seed.id,
+      sequence: 3 + seed.obligations.length + index,
+      timestamp: seed.createdAt,
+      commandId,
+      type: 'option.upserted',
+      payload: { entity },
+    }));
 
-    const result = this.deps.caseStore.append(seed.id, events, 0, {
-      seedSnapshot: seed,
-      idempotency: { commandId, commandName: 'startDemo' },
-    });
+    let result: AppendResult;
+    if (seedSources.length === 0) {
+      // No sources to protect a citation against -- seed everything in the
+      // one atomic append, exactly as before `demoSeedSources` existed.
+      result = this.deps.caseStore.append(seed.id, [...creationEvents, ...entityEvents], 0, {
+        seedSnapshot: seed,
+        idempotency: { commandId, commandName: 'startDemo' },
+      });
+    } else {
+      // Source first, so no reader can ever observe a seeded entity citing
+      // a `Source` the case does not yet hold -- the same ordering rule
+      // `submitBidDocument`/`submitSource` already use, adapted to
+      // `updateSelection()` requiring the case to already exist: create the
+      // case with no entities yet (nothing cites anything), write the
+      // sources onto it, then append the entities that cite them.
+      //
+      // The bare `commandId` is registered on the LAST store call actually
+      // made, matching `submitBidDocument`'s two-call split: only the final
+      // call may claim the literal `commandId`, or the `checkIdempotent`
+      // check above would never see a genuine retry through to completion.
+      // The earlier call(s) use derived keys -- the same known,
+      // deliberately unchanged partial-failure window `submitBidDocument`'s
+      // doc comment already accepts for its own source-then-append split.
+      const hasEntities = entityEvents.length > 0;
+      const creationResult = this.deps.caseStore.append(seed.id, creationEvents, 0, {
+        seedSnapshot: seed,
+        idempotency: { commandId: `${commandId}:create`, commandName: 'startDemo' },
+      });
+      if (creationResult.status !== 'applied') {
+        return this.toReceipt(commandId, creationResult);
+      }
+
+      const sourceWrite = this.deps.caseStore.updateSelection(
+        seed.id,
+        { sources: [...creationResult.snapshot.sources, ...seedSources] },
+        creationResult.snapshot.eventSequence,
+        seed.createdAt,
+        hasEntities
+          ? { commandId: `${commandId}:source`, commandName: 'startDemo' }
+          : { commandId, commandName: 'startDemo' },
+      );
+      if (sourceWrite.status !== 'applied') {
+        return this.toReceipt(commandId, sourceWrite);
+      }
+
+      result = hasEntities
+        ? this.deps.caseStore.append(seed.id, entityEvents, sourceWrite.snapshot.eventSequence, {
+            idempotency: { commandId, commandName: 'startDemo' },
+          })
+        : sourceWrite;
+    }
 
     if (result.status === 'applied') {
       this.emitActivity({
@@ -1265,7 +1390,14 @@ export class CommandService {
       ]);
     }
 
-    const excerpt = buildBidDocumentExcerpt(extracted);
+    // Present only when this document's `text` is a MODEL's reading of a
+    // PDF, not the file itself -- see `SubmittedBidDocumentReadBySchema`'s
+    // own doc comment (`@sift/contracts`). Everything below that branches
+    // on it exists for one reason: a model interpreting prose is a WEAKER
+    // claim than a labelled field in a machine-readable file, and must not
+    // borrow that field's confidence, title, or tagging.
+    const readBy = input.document.readBy;
+    const excerpt = buildBidDocumentExcerpt(extracted, readBy);
 
     const source: Source = {
       id: sourceId,
@@ -1273,19 +1405,36 @@ export class CommandService {
       // one (`SourceSchema.url` is required), this mints a non-network URI
       // that names the stored document and nothing else.
       url: input.document.sourceUrl ?? `sift://cases/${input.caseId}/documents/${sourceId}`,
-      title: input.document.filename,
+      // The ORIGINAL PDF's own file name when a model read it, not the
+      // synthesised JSON `input.document.filename` (in practice) already
+      // equals -- named independently here so the title stays correct even
+      // if a caller ever got that sibling field wrong.
+      title: readBy?.originalFilename ?? input.document.filename,
       ...(extracted.fields.contractorName !== undefined
         ? { publisher: extracted.fields.contractorName.value }
         : {}),
       retrievedAt: now,
       ...(excerpt !== undefined ? { excerpt } : {}),
-      tags: ['bid-document', input.document.format],
+      // The same two-tag shape this method always used
+      // (`['bid-document', <format>]`), with the format tag naming the
+      // document's TRUE original format (a PDF, never the synthesised
+      // `application/json` `input.document.format` actually carries once a
+      // model has read it) and one further tag so a reader can tell a
+      // model read it, rather than the deterministic extractor.
+      tags:
+        readBy !== undefined
+          ? ['bid-document', readBy.originalFormat, 'model-read']
+          : ['bid-document', input.document.format],
       origin: 'user_submitted',
       verification: 'unverified',
       createdAt: now,
     };
 
-    const attributeResult = this.buildExtractedBidAttributes(extracted, sourceId);
+    const attributeResult = this.buildExtractedBidAttributes(
+      extracted,
+      sourceId,
+      readBy !== undefined ? MODEL_READ_ATTRIBUTE_CONFIDENCE : undefined,
+    );
     if (!attributeResult.ok) {
       return validationFailure('Invalid extracted bid attributes.', attributeResult.errors);
     }
@@ -1461,6 +1610,14 @@ export class CommandService {
   private buildExtractedBidAttributes(
     extracted: BidDocumentExtractionResult,
     sourceId: string,
+    /**
+     * Present only when `submitBidDocument`'s `input.document.readBy` marks
+     * this reading as a MODEL's, never the extractor's own per-field
+     * confidence -- see `MODEL_READ_ATTRIBUTE_CONFIDENCE`'s own doc comment
+     * for why this must always LOWER, never raise, what the extractor would
+     * otherwise have assigned.
+     */
+    confidenceOverride?: number,
   ): { ok: true; attributes: Record<string, AttributeRecord> } | { ok: false; errors: string[] } {
     const attributes: Record<string, AttributeRecord> = {};
     const errors: string[] = [];
@@ -1479,7 +1636,9 @@ export class CommandService {
           // document can carry; an unread field carries none at all.
           status: read === undefined ? 'unknown' : 'supported',
           sourceIds: [sourceId],
-          ...(read !== undefined ? { value: read.value, confidence: read.confidence } : {}),
+          ...(read !== undefined
+            ? { value: read.value, confidence: confidenceOverride ?? read.confidence }
+            : {}),
         },
         this.deps.clock,
       );
@@ -1597,6 +1756,30 @@ export class CommandService {
    * asserted `false`. "We could not find this licence" and "we checked and
    * these credentials are bad" are different findings, and only the second
    * would be fair to score against a contractor.
+   *
+   * A HIT is not automatically a match, either. `licenseNumber` alone finds
+   * a real, active, correctly-insured licence -- it says nothing about
+   * whether that licence belongs to the CONTRACTOR who cited it. A bid
+   * document could as easily name a licence someone else holds, by mistake
+   * or otherwise, and `license-lookup` has no way to know: it only looks
+   * licences up by number. So this method also compares the document's own
+   * stated `contractorName` against the registry's `licenseHolderName`
+   * (`licenceHolderMatchesBidder`, `packages/scenarios/src/tools/
+   * license-lookup.ts` -- tolerant of exactly the corporate-suffix noise a
+   * real filing name carries, e.g. "Two Rivers Mechanical" vs. "Two Rivers
+   * Mechanical Inc", and nothing more). `bid.license_status` and
+   * `bid.insurance_named_insured_match` are still written on a name
+   * mismatch -- they are true facts about the LICENCE, unaffected by who is
+   * citing it -- but `bid.credentials_valid` is left an explicit `unknown`
+   * rather than either `true` or `false`. `false` would accuse a named
+   * contractor of citing someone else's credentials on the strength of a
+   * string comparison alone, when a DBA, a subsidiary bidding under its
+   * parent's licence, or a simple typo are all live, innocent
+   * possibilities this command cannot rule out. An explicit unknown --
+   * checked, could not conclude -- is the same honest-abstention discipline
+   * this file already applies to a field the document simply does not
+   * state; it is never fabricated as a confident answer in either
+   * direction.
    */
   private buildCredentialAttributes(
     extracted: BidDocumentExtractionResult,
@@ -1618,6 +1801,18 @@ export class CommandService {
         type: 'enum',
         value: 'not_found',
       });
+      // Explicitly unknown, not absent. The registry holds no record for
+      // this licence, so there is no insurance entry to compare and no way
+      // to conclude the gate either way -- but the check DID run, and
+      // leaving these off the option entirely would read as "never
+      // attempted", which is a different and untrue thing. This is the same
+      // distinction the extractor already draws for a field a document was
+      // searched for and did not state. Still never `false`: "not on file"
+      // is not evidence of bad credentials.
+      add('bid.insurance_named_insured_match', 'Insurance named insured matches license holder', [
+        missSourceId,
+      ]);
+      add('bid.credentials_valid', 'License and insurance credentials fully valid', [missSourceId]);
       return;
     }
 
@@ -1641,22 +1836,57 @@ export class CommandService {
       [namedInsured.sourceId],
       { type: 'boolean', value: license.insurance.matchesLicenseHolder },
     );
-    // The identical four-way derivation `seeds.ts` uses for the seeded
-    // twelve, so an imported bid and a seeded one mean the same thing by
-    // this gate.
-    add(
-      'bid.credentials_valid',
-      'License and insurance credentials fully valid',
-      [standing.sourceId, namedInsured.sourceId],
-      {
-        type: 'boolean',
-        value:
-          license.isActive &&
-          license.classCoversScope &&
-          license.insurance.isActive &&
-          license.insurance.matchesLicenseHolder,
-      },
+
+    // Can this licence be attributed to the bidder who cited it? Absent a
+    // stated `contractorName` there is nobody to attribute it TO; present
+    // but not `licenceHolderMatchesBidder`-equal to the registry's holder,
+    // there is a real, unexplained discrepancy. Either way `bidderName` is
+    // not the registry's own name for its holder, so the combined gate
+    // cannot be signed off as either clean or bad -- see this method's
+    // header for why that lands on `unknown`, never `false`.
+    const bidderName = extracted.fields.contractorName?.value;
+    const holderMatchesBidder =
+      bidderName !== undefined && licenceHolderMatchesBidder(license.licenseHolderName, bidderName);
+
+    if (holderMatchesBidder) {
+      // The identical four-way derivation `seeds.ts` uses for the seeded
+      // twelve, so an imported bid and a seeded one mean the same thing by
+      // this gate.
+      add(
+        'bid.credentials_valid',
+        'License and insurance credentials fully valid',
+        [standing.sourceId, namedInsured.sourceId],
+        {
+          type: 'boolean',
+          value:
+            license.isActive &&
+            license.classCoversScope &&
+            license.insurance.isActive &&
+            license.insurance.matchesLicenseHolder,
+        },
+      );
+      return;
+    }
+
+    // Same all-lowercase kebab-case shape `licenseSourceId`'s own header
+    // explains (`license-lookup.ts`) -- keeps this id clear of
+    // `check-source.ts`'s entropy heuristic for a possible secret, the same
+    // way `-named-insured` above already does.
+    const attributionSourceId = `${standing.sourceId}-bidder-attribution`;
+    addSource(
+      attributionSourceId,
+      'Contractor licence registry',
+      bidderName === undefined
+        ? `This document states licence "${license.licenseNumber}" (held by "${license.licenseHolderName}") but does not state a contractor name to attribute it to.`
+        : `This document names its bidder as "${bidderName}", but licence "${license.licenseNumber}" is held by "${license.licenseHolderName}" -- these do not resolve to the same business, so the licence cannot be attributed to this bidder.`,
     );
+    // No `value` -- `add` writes this as `status: 'unknown'` with nothing
+    // asserted, exactly like an unstated document field.
+    add('bid.credentials_valid', 'License and insurance credentials fully valid', [
+      standing.sourceId,
+      namedInsured.sourceId,
+      attributionSourceId,
+    ]);
   }
 
   /**

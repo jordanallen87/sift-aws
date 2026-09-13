@@ -29,6 +29,7 @@ import {
 } from '@sift/packs';
 import {
   buildBidComparisonEntities,
+  buildBidComparisonSources,
   buildCarPurchaseCandidateEntities,
   buildHomeEnergyResponseOptionEntities,
 } from '@sift/scenarios';
@@ -47,6 +48,7 @@ import {
   homeEnergyCapabilityCatalog,
 } from './runtime/home-energy-engine.js';
 import { installSiftTracing, type SiftTracingHandle } from './runtime/otel-span-recorder.js';
+import { resolveModelProvider } from './runtime/model-provider.js';
 import { createSystemClock, createSystemIdGenerator } from './runtime-ports.js';
 import { CommandService } from './services/command-service.js';
 import { RunPlanService } from './services/run-plan-service.js';
@@ -198,6 +200,15 @@ export function startServer(options: StartServerOptions = {}): Promise<StartedSe
       'home-energy-guardian': buildHomeEnergyResponseOptionEntities,
       'bid-comparison': buildBidComparisonEntities,
     },
+    // Real gap closed alongside `demoSeedEntities` above: `bid-comparison`'s
+    // seeded entities cite `sourceIds` on their attributes, but nothing
+    // wrote the `Source` rows those citations point at -- a freshly started
+    // case held zero sources while every attribute claimed one. Only
+    // `bid-comparison` is wired: `car-purchase`/`home-energy-guardian` have
+    // the same defect but no builder yet (tracked separately).
+    demoSeedSources: {
+      'bid-comparison': buildBidComparisonSources,
+    },
   });
   const runService = new RunService({
     caseStore,
@@ -208,6 +219,22 @@ export function startServer(options: StartServerOptions = {}): Promise<StartedSe
     engines,
     runPlanService,
   });
+
+  // Strictly opt-in, per architecture.md's "no network, no AWS credentials"
+  // requirement for the complete local demo (`config.ts`'s
+  // `bidDocumentReaderEnabled` doc comment has the full reasoning). Only
+  // when enabled is a real model actually constructed here -- via
+  // `resolveModelProvider`, never a `BedrockModel` built inline -- and only
+  // then does `POST /api/cases/:caseId/bid-documents/read`
+  // (`routes/bid-documents.ts`) ever attempt a model call at all; every
+  // other deployment leaves this `undefined` and that route always answers
+  // its own honest refusal instead.
+  const bidDocumentReader = config.bidDocumentReaderEnabled
+    ? {
+        model: resolveModelProvider({ modelId: config.modelId, awsRegion: config.awsRegion }),
+        modelId: config.modelId,
+      }
+    : undefined;
 
   const app = buildApp({
     database,
@@ -221,6 +248,7 @@ export function startServer(options: StartServerOptions = {}): Promise<StartedSe
     runtimeEventStore,
     clock,
     debugEnabled: config.debugEnabled,
+    ...(bidDocumentReader !== undefined ? { bidDocumentReader } : {}),
   });
 
   return new Promise((resolvePromise) => {

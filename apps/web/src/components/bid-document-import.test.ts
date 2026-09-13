@@ -4,9 +4,11 @@ import type { AttributeDefinition, AttributeRecord, EntityRecord } from '@sift/c
 import {
   bidDocumentFormatFromFile,
   bidDocumentSizeRefusal,
+  classifyChosenBidDocumentFile,
   formatConfidence,
   summarizeBidDocumentImport,
   supportsBidDocumentImport,
+  unreadableBidDocumentMessage,
   utf8ByteLength,
 } from './bid-document-import.js';
 import { buildFixtureCaseState } from '../test/fixtures.js';
@@ -99,6 +101,90 @@ describe('bidDocumentFormatFromFile', () => {
   it('returns null rather than guessing when neither the name nor the MIME type says', () => {
     expect(bidDocumentFormatFromFile('bid-notes.txt', 'text/plain')).toBeNull();
     expect(bidDocumentFormatFromFile('bid', undefined)).toBeNull();
+  });
+});
+
+describe('classifyChosenBidDocumentFile', () => {
+  it('classifies the two readable formats exactly as bidDocumentFormatFromFile does', () => {
+    expect(classifyChosenBidDocumentFile('bid-northgate.json', '')).toEqual({
+      format: 'application/json',
+    });
+    expect(classifyChosenBidDocumentFile('line-items.csv', '')).toEqual({ format: 'text/csv' });
+  });
+
+  // A PDF is model-readable, not unreadable -- see `ChosenBidDocumentFile`'s
+  // own comment for why it gets a outcome of its own rather than sharing
+  // `UnreadableBidDocumentKind` with Word/Excel/plain text.
+  it('names a PDF by extension, as its own outcome, not "unreadable"', () => {
+    expect(classifyChosenBidDocumentFile('bid.pdf', '')).toEqual({ pdf: true });
+  });
+
+  it('names a PDF by MIME type when the name carries no usable extension', () => {
+    expect(classifyChosenBidDocumentFile('bid-export', 'application/pdf')).toEqual({
+      pdf: true,
+    });
+  });
+
+  it('names a Word document by extension', () => {
+    expect(classifyChosenBidDocumentFile('bid.docx', '')).toEqual({ unreadable: 'word' });
+    expect(classifyChosenBidDocumentFile('bid.doc', '')).toEqual({ unreadable: 'word' });
+  });
+
+  it('names a spreadsheet by extension', () => {
+    expect(classifyChosenBidDocumentFile('bid.xlsx', '')).toEqual({ unreadable: 'excel' });
+    expect(classifyChosenBidDocumentFile('bid.xls', '')).toEqual({ unreadable: 'excel' });
+  });
+
+  // The real-world collision this guards against: a machine with Excel
+  // installed reports a genuine .xls file as `application/vnd.ms-excel`,
+  // which is the very MIME type `bidDocumentFormatFromFile` trusts as a
+  // CSV alias for an actual .csv export. The extension must win, or a real
+  // spreadsheet gets read as text and sent as "CSV".
+  it('trusts the .xls extension over a MIME type that would otherwise read as CSV', () => {
+    expect(classifyChosenBidDocumentFile('bid.xls', 'application/vnd.ms-excel')).toEqual({
+      unreadable: 'excel',
+    });
+  });
+
+  it('names a plain text file by extension or by MIME type', () => {
+    expect(classifyChosenBidDocumentFile('bid-notes.txt', 'text/plain')).toEqual({
+      unreadable: 'text',
+    });
+    expect(classifyChosenBidDocumentFile('bid-notes', 'text/plain')).toEqual({
+      unreadable: 'text',
+    });
+  });
+
+  it('is case-insensitive on the extension', () => {
+    expect(classifyChosenBidDocumentFile('BID.PDF', '')).toEqual({ pdf: true });
+  });
+
+  it('calls a file with no usable extension and no recognised MIME type unknown, not unreadable', () => {
+    expect(classifyChosenBidDocumentFile('bid-export', '')).toEqual({ unknown: true });
+    expect(classifyChosenBidDocumentFile('bid', undefined)).toEqual({ unknown: true });
+  });
+
+  it('calls an empty filename with no MIME type unknown', () => {
+    expect(classifyChosenBidDocumentFile('', undefined)).toEqual({ unknown: true });
+  });
+});
+
+describe('unreadableBidDocumentMessage', () => {
+  it('names the file and gives a real next step, for every unreadable kind', () => {
+    for (const kind of ['word', 'excel', 'text'] as const) {
+      const message = unreadableBidDocumentMessage('bid.docx', kind);
+      expect(message).toContain('"bid.docx"');
+      expect(message).toContain('JSON or CSV');
+      expect(message).toContain('form above');
+    }
+  });
+
+  // The one promise this message must never make: that unreadable today
+  // means readable tomorrow.
+  it('never says the format is unsupported only "yet"', () => {
+    for (const kind of ['word', 'excel', 'text'] as const) {
+      expect(unreadableBidDocumentMessage('bid.docx', kind).toLowerCase()).not.toContain('yet');
+    }
   });
 });
 

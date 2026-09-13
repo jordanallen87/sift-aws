@@ -5,6 +5,7 @@ import type {
   CommandReceipt,
   EnergyBillFeedCheckResult,
   EntityRecord,
+  Source,
 } from '@sift/contracts';
 import { compileHomeEnergyGuardianPack, compilePack, PackRegistry } from '@sift/packs';
 import { evaluateReadiness } from '@sift/core';
@@ -249,6 +250,112 @@ describe('CommandService', () => {
     it('starts a case with no entities when the pack has no demoSeedEntities entry (unchanged default behavior)', () => {
       const snapshot = startDemo();
       expect(snapshot.entities).toHaveLength(0);
+    });
+
+    /**
+     * Real gap this closes: a seeded `bid-comparison` case cited 60
+     * distinct `sourceIds` across its entity attributes while holding
+     * ZERO `Source` records -- every citation dangled on a product whose
+     * thesis is source-linked claims. `demoSeedSources` is the parallel
+     * hook to `demoSeedEntities` that writes the `Source` rows a seeded
+     * entity's attributes cite, through `CaseStore.updateSelection()`
+     * (the same non-event-sourced path `submitSource`/`submitBidDocument`
+     * already use for a `Source` -- see `case-store.ts`'s `SelectionPatch`
+     * doc comment and ADR 0005).
+     */
+    it('seeds pack-specific demo sources (e.g. bid citations) when demoSeedSources configures the pack, and every attribute-cited sourceId resolves', () => {
+      const sourceA: Source = {
+        id: 'demo-source-a',
+        url: 'https://example.com/a',
+        title: 'Source A',
+        retrievedAt: FIXED_NOW,
+        tags: [],
+        origin: 'fixture',
+        verification: 'unverified',
+        createdAt: FIXED_NOW,
+      };
+      const sourceB: Source = {
+        ...sourceA,
+        id: 'demo-source-b',
+        url: 'https://example.com/b',
+        title: 'Source B',
+      };
+      const citingEntity: EntityRecord = {
+        id: 'candidate-demo',
+        kind: 'option',
+        label: 'Demo Candidate',
+        attributes: {
+          'car.price': {
+            definitionId: 'car.price',
+            label: 'Price',
+            origin: 'pack',
+            value: { type: 'number', value: 42_000 },
+            sourceIds: [sourceA.id, sourceB.id],
+            status: 'asserted',
+            updatedAt: FIXED_NOW,
+          },
+        },
+        createdAt: FIXED_NOW,
+        updatedAt: FIXED_NOW,
+      };
+
+      const seededCaseStore = new MemoryCaseStore();
+      const seededActivityStore = new InMemoryActivityStore();
+      const seededService = new CommandService({
+        caseStore: seededCaseStore,
+        activityStore: seededActivityStore,
+        registry: createRegistryWithSyntheticPack(),
+        clock: fixedClock,
+        idGenerator: createSequentialIdGenerator(),
+        demoSeedEntities: { 'car-purchase': () => [citingEntity] },
+        demoSeedSources: { 'car-purchase': () => [sourceA, sourceB] },
+      });
+
+      const result = seededService.startDemo('cmd-1', { demoId: 'car-purchase' });
+      requireOk(result);
+      const snapshot = requireSnapshot(result.value);
+
+      // General invariant over the snapshot, not a hardcoded id list: every
+      // sourceId any entity attribute cites resolves to a real Source on
+      // the case -- and the cited set is asserted non-empty first so this
+      // cannot pass vacuously.
+      const citedSourceIds = new Set(
+        snapshot.entities.flatMap((entity) =>
+          Object.values(entity.attributes).flatMap((attribute) => attribute.sourceIds),
+        ),
+      );
+      expect(citedSourceIds.size).toBeGreaterThan(0);
+      const resolvedSourceIds = new Set(snapshot.sources.map((source) => source.id));
+      for (const sourceId of citedSourceIds) {
+        expect(resolvedSourceIds.has(sourceId)).toBe(true);
+      }
+      expect(snapshot.sources).toHaveLength(2);
+
+      // ADR 0005 property: updateSelection() never advances eventSequence,
+      // so the final sequence is exactly what the case.created/
+      // criteria.updated/obligation.updated/option.upserted EVENTS
+      // themselves produced -- 2 fixed events plus one per obligation plus
+      // one per seeded entity -- not one more for the two sources written
+      // alongside them.
+      const expectedEventSequence = 2 + snapshot.obligations.length + 1;
+      expect(snapshot.eventSequence).toBe(expectedEventSequence);
+      expect(result.value.acceptedSequence).toBe(snapshot.eventSequence);
+
+      // The durable case (not just the returned receipt) carries it too.
+      const persisted = seededCaseStore.load(snapshot.id);
+      expect(persisted?.sources).toHaveLength(2);
+      expect(persisted?.eventSequence).toBe(expectedEventSequence);
+
+      const activity = seededActivityStore.replayFrom(snapshot.id, 0);
+      expect(activity.map((event) => event.summary)).toEqual([
+        'Started "Choose Our Next Car (test fixture)".',
+        'Added option "Demo Candidate".',
+      ]);
+    });
+
+    it('starts a case with zero sources when the pack has no demoSeedSources entry (no regression)', () => {
+      const snapshot = startDemo();
+      expect(snapshot.sources).toHaveLength(0);
     });
   });
 

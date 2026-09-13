@@ -61,6 +61,7 @@ import {
   FocusOptionInputSchema,
   HttpConflictResponseSchema,
   HttpErrorBodySchema,
+  ReadBidDocumentInputSchema,
   RequestInvestigationInputSchema,
   RequestRevisionInputSchema,
   ReviewCaseExtensionInputSchema,
@@ -90,6 +91,7 @@ import {
   type EnergyBillFeedCheckResult,
   type FocusEvidenceInput,
   type FocusOptionInput,
+  type ReadBidDocumentInput,
   type RequestInvestigationInput,
   type RequestRevisionInput,
   type ReviewCaseExtensionInput,
@@ -256,6 +258,37 @@ export interface SiftCommands {
    */
   submitBidDocument: (
     input: SubmitBidDocumentInput,
+    options?: CommandCallOptions,
+  ) => Promise<CommandReceipt>;
+  /**
+   * A person's own bid PDF, read by a MODEL rather than the deterministic
+   * extractor `submitBidDocument` uses -- `POST /api/cases/:caseId/
+   * bid-documents/read` (`ReadBidDocumentInputSchema`, `routes/
+   * bid-documents.ts`), not the generic `/commands/:commandName` shape
+   * every `genericCommand` method below goes through.
+   *
+   * A PDF has no labelled fields the way a JSON/CSV bid does -- only prose
+   * a browser's own PDF text layer extraction can hand over
+   * (`../components/pdf-bid-document.ts`), and reading prose honestly needs
+   * a model. `CommandService` is synchronous end to end by design (see
+   * `submitBidDocument`'s own doc comment for why), so that model call
+   * cannot live inside a command handler -- it has to happen in a route
+   * that runs BEFORE the command, which is exactly what this method calls.
+   * A successful reading still ends up going through the identical,
+   * synchronous, deterministic `submitBidDocument` command server-side
+   * (`routes/bid-documents.ts`'s own header) and returns the same
+   * `CommandReceipt` shape, so this client's caller never needs to treat
+   * the outcome differently -- only the request differs, never the
+   * response contract.
+   *
+   * Two failure modes a caller should expect and surface verbatim, never
+   * reword: `503 UNAVAILABLE` when this deployment has no model configured
+   * for it (`SIFT_BID_DOCUMENT_READER_ENABLED` is off, the default), and
+   * `400 VALIDATION` when a reading produced nothing usable. Both carry a
+   * human-readable `message` on the thrown `SiftClientError`.
+   */
+  readBidDocument: (
+    input: ReadBidDocumentInput,
     options?: CommandCallOptions,
   ) => Promise<CommandReceipt>;
   /**
@@ -611,6 +644,22 @@ export function createSiftClient(options: CreateSiftClientOptions = {}): SiftCom
       SubmitBidDocumentInputSchema,
       CommandReceiptSchema,
     ),
+    // Not `genericCommand`: that helper always posts to `/api/cases/:caseId/
+    // commands/:commandName`, and this route is deliberately its own thing
+    // (`/api/cases/:caseId/bid-documents/read`) -- see `readBidDocument`'s
+    // own doc comment above for why a PDF reading cannot be just another
+    // command.
+    readBidDocument: async (input, options) => {
+      const validated = validate(ReadBidDocumentInputSchema, input) as ReadBidDocumentInput;
+      const url = `${baseUrl}/api/cases/${encodeURIComponent(validated.caseId)}/bid-documents/read`;
+      return postJson(
+        fetchImpl,
+        url,
+        validated,
+        CommandReceiptSchema,
+        options,
+      ) as Promise<CommandReceipt>;
+    },
     addNote: genericCommand<AddNoteInput, CommandReceipt>(
       'addNote',
       AddNoteInputSchema,

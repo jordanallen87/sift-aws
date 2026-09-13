@@ -1,22 +1,24 @@
 /**
  * Brings a person's OWN bid document into the case, from the page, through
- * the same `submitBidDocument` command a WebMCP caller would reach
+ * whichever of the two commands actually matches how it was read
  * (docs/engineering-principles.md "Visible UI controls and WebMCP callbacks
- * use the same command implementation").
+ * use the same command implementation" -- both commands this component can
+ * call are the same ones a WebMCP caller would reach).
  *
- * The server side of this -- the command schema, the deterministic
- * extractor, the handler that records what it read -- already existed and is
- * tested; before this component a person at the keyboard still had only two
- * ways to get a bid into a case: retype it one scalar at a time, or be given
- * a fixture checked into the repository. A real file had no way in.
+ * The server side of this -- the command schemas, the deterministic
+ * extractor, the model reading, the handlers that record what each one read
+ * -- already existed and is tested; before this component a person at the
+ * keyboard still had only two ways to get a bid into a case: retype it one
+ * scalar at a time, or be given a fixture checked into the repository. A
+ * real file had no way in.
  *
  * ## The one rule this component exists to hold
  *
- * **An extracted value is a proposal, and must never be shown as settled.**
- * Everything this command writes lands as `origin: 'agent_proposed'` with
- * the extractor's own confidence, and never `status: 'verified'` -- so every
- * value this component shows is labelled as read from the document, carries
- * its confidence, and says it has not been verified. The fields the document
+ * **A read value is a proposal, and must never be shown as settled.**
+ * Everything either command writes lands as `origin: 'agent_proposed'` with
+ * a real confidence, and never `status: 'verified'` -- so every value this
+ * component shows is labelled as read from the document, carries its
+ * confidence, and says it has not been verified. The fields the document
  * did NOT state are given the same prominence as the ones it did, because
  * that half is what a person skimming a filled-in form would otherwise
  * never notice.
@@ -25,32 +27,75 @@
  * tone and its checkmark (`activity-labels.ts`): a document was read, which
  * is not the same as a fact being established, and borrowing the tone the
  * rest of the app uses for "this passed" would quietly assert exactly what
- * the command refuses to.
+ * either command refuses to.
  *
- * ## No multipart upload
+ * ## No multipart upload -- for either command
  *
- * Both accepted formats are text, and the command takes `document.text`, so
- * the file is read in the browser with `FileReader` and travels as an
- * ordinary JSON command. There is no upload endpoint to build, and nothing
- * about a chosen file reaches the server except its name, its declared
- * format, and its text.
+ * JSON and CSV are text, and `submitBidDocument` takes `document.text`, so
+ * a chosen file is read in the browser with `FileReader` and travels as an
+ * ordinary JSON command. A PDF is not text, but the ROUTE it travels to
+ * still takes text, never a file: its text LAYER is extracted in the
+ * browser too (`pdf-bid-document.ts`, `pdfjs-dist`), and only that extracted
+ * text -- never the PDF's own bytes -- ever leaves this page. Neither
+ * command has an upload endpoint to build, and nothing about a chosen file
+ * reaches the server except its name and, depending on which command
+ * applies, its declared format or nothing but text.
  *
- * ## Two ways in, one payload
+ * ## Two ways in, two possible commands
  *
- * A real file picker and a paste area produce the same three fields. The
- * format is derived from the file when a file is chosen
- * (`bidDocumentFormatFromFile`) and asked for when it cannot be
+ * A real file picker and a paste area produce the same fields. For JSON/CSV
+ * the format is derived from the file when a file is chosen
+ * (`classifyChosenBidDocumentFile`) and asked for when it cannot be
  * (`bid-document-import.ts` explains why a guess is worse than a question);
  * a paste has no file to derive from at all, so it is always chosen
  * explicitly. The size cap is checked here in UTF-8 bytes before anything is
  * sent, so an over-size document gets a sentence naming both numbers rather
- * than a 400 from a schema the person cannot see.
+ * than a 400 from a schema the person cannot see -- and that same check
+ * applies to a PDF's extracted text too (`extractPdfDocumentText` already
+ * enforces it once, at extraction time; this is the second, defensive check
+ * every submission gets, in case the text was hand-edited afterward).
+ *
+ * ## A third outcome: recognised, and refused
+ *
+ * A chosen file is not only "a format we read" or "a format we cannot
+ * place" -- it can be a format Sift names outright and still will not read
+ * (a Word document, a spreadsheet, plain text; see
+ * `UnreadableBidDocumentKind`). Telling a person their Word document just
+ * has the wrong format selected would be false: no format selection fixes
+ * it, since nothing here parses one. So that file is never handed to
+ * `FileReader` at all -- its bytes would only become mojibake in the paste
+ * box -- and no format is preselected, because there is no reading to
+ * propose a format for. The person is told plainly and pointed at their
+ * real options: export the bid as JSON or CSV, or use the form above.
+ *
+ * ## A fourth outcome: a PDF, read by a model through a different command
+ *
+ * A PDF used to sit in that same "recognised, and refused" bucket, and no
+ * longer does (`ChosenBidDocumentFile`'s own comment). Choosing one instead
+ * extracts its text layer client-side and, on submit, calls
+ * `commands.readBidDocument` -- `POST /api/cases/:caseId/bid-documents/read`
+ * -- never `commands.submitBidDocument`. That split is not a UI
+ * convenience; it follows the server directly. `submitBidDocument`'s
+ * extractor is deterministic and reads only labelled JSON/CSV fields, and
+ * `CommandService` is synchronous by design (its own doc comment), so it
+ * cannot call a model. A PDF has no labelled fields at all -- only prose --
+ * so reading one honestly requires a model, and that model call has to
+ * happen BEFORE a command, in the one route built for it
+ * (`ReadBidDocumentInputSchema`; a successful reading still ends up going
+ * through the identical, synchronous `submitBidDocument` server-side, just
+ * with the model's reading in place of a person's own file). This
+ * component surfaces that split honestly rather than papering over it:
+ * `pdfSource` (below) tracks which path is live, the format field
+ * disappears entirely for a PDF (there is no format to confirm), and the
+ * resulting summary says a MODEL read the document, not Sift's own
+ * extractor -- see `renderSummary`.
  */
 import { useId, useState, type ChangeEvent } from 'react';
 import {
   MAX_BID_DOCUMENT_BYTES,
   type AttributeDefinition,
   type BidDocumentFormat,
+  type CommandReceipt,
 } from '@sift/contracts';
 import { useSiftCommands } from '../app/AppProviders.js';
 import { SiftClientError } from '../api/sift-client.js';
@@ -58,14 +103,17 @@ import { formatAttributeValue } from './attribute-value-format.js';
 import { STATUS_TONE_META } from './activity-labels.js';
 import {
   BID_DOCUMENT_ACCEPT,
-  bidDocumentFormatFromFile,
   bidDocumentSizeRefusal,
+  classifyChosenBidDocumentFile,
   formatConfidence,
   summarizeBidDocumentImport,
+  unreadableBidDocumentMessage,
   utf8ByteLength,
   type BidDocumentImportSummary,
   type ImportedBidAttribute,
+  type UnreadableBidDocumentKind,
 } from './bid-document-import.js';
+import { extractPdfDocumentText } from './pdf-bid-document.js';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -150,12 +198,35 @@ export function BidDocumentImport({
   const [format, setFormat] = useState<BidDocumentFormat | ''>('');
   const [formatDerivedFrom, setFormatDerivedFrom] = useState<string | null>(null);
   const [formatUnknownFor, setFormatUnknownFor] = useState<string | null>(null);
+  // A file Sift can NAME but will not read -- a PDF, a Word document, a
+  // spreadsheet, plain text. Kept apart from `formatUnknownFor`: that one
+  // is answered by picking a format, this one is not answered by picking
+  // anything, so the two get different messages (`unreadableBidDocumentMessage`).
+  const [unreadableFile, setUnreadableFile] = useState<{
+    fileName: string;
+    kind: UnreadableBidDocumentKind;
+  } | null>(null);
+  // The filename of a PDF whose browser-extracted text currently fills
+  // `text` below. Non-null means: `handleSubmit` calls `commands.
+  // readBidDocument`, not `commands.submitBidDocument` (this file's header,
+  // "A fourth outcome"); there is no format for the person to confirm (a
+  // PDF's text layer is neither of `BID_DOCUMENT_FORMATS`), so the format
+  // field is not shown at all while this is set; and the eventual summary
+  // says a MODEL read the document, not Sift's own extractor
+  // (`summaryReadByModel` below, `renderSummary`).
+  const [pdfSource, setPdfSource] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [reading, setReading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
   const [summary, setSummary] = useState<BidDocumentImportSummary | null>(null);
+  // Whether the option `summary` describes came from a model's reading of a
+  // PDF rather than Sift's own deterministic extractor. Captured at the
+  // moment `handleSubmit` sends the command (`runImport`'s `readByModel`
+  // parameter), not read off `pdfSource` when the summary renders -- by
+  // then a person could already have started a second, different import.
+  const [summaryReadByModel, setSummaryReadByModel] = useState(false);
   const [importedWithoutDetail, setImportedWithoutDetail] = useState<string | null>(null);
 
   const bytes = utf8ByteLength(text);
@@ -165,7 +236,7 @@ export function BidDocumentImport({
     !reading &&
     text.trim().length > 0 &&
     filename.trim().length > 0 &&
-    format !== '';
+    (pdfSource !== null || format !== '');
 
   function clearOutcome() {
     setError(null);
@@ -179,8 +250,76 @@ export function BidDocumentImport({
     clearOutcome();
     setSummary(null);
     setFilename(file.name);
+    // Reset here, unconditionally -- every branch below either leaves this
+    // cleared or (the `pdf` branch alone) sets it again once it has
+    // something real to name. Without this reset, choosing a JSON file
+    // right after a PDF would leave `handleSubmit` still routed to
+    // `readBidDocument`.
+    setPdfSource(null);
 
-    const derived = bidDocumentFormatFromFile(file.name, file.type);
+    const classified = classifyChosenBidDocumentFile(file.name, file.type);
+
+    if ('pdf' in classified) {
+      // A PDF is Sift's one MODEL-readable format -- see this file's
+      // header, "A fourth outcome". There is no format to preselect or ask
+      // for (a PDF is neither of `BID_DOCUMENT_FORMATS`), and the file is
+      // never handed to `FileReader`: its text layer comes from
+      // `pdfjs-dist` (`extractPdfDocumentText`), not from reading its raw
+      // bytes as a string.
+      setFormat('');
+      setFormatDerivedFrom(null);
+      setFormatUnknownFor(null);
+      setUnreadableFile(null);
+      setPdfSource(file.name);
+      setText('');
+      setReading(true);
+      extractPdfDocumentText(file)
+        .then((result) => {
+          setReading(false);
+          if (!result.ok) {
+            // A scan, an over-size reading, or a file `pdfjs-dist` could not
+            // parse at all -- `extractPdfDocumentText`'s own `message` is
+            // already the real sentence for whichever one this was; nothing
+            // here rewrites or generalizes it (this file's own
+            // `errorDetailLines` follows the identical rule for a server
+            // rejection).
+            setPdfSource(null);
+            setError(result.message);
+            setErrorDetails([]);
+            return;
+          }
+          setText(result.text);
+        })
+        .catch((caught: unknown) => {
+          // Defense in depth: `extractPdfDocumentText` is documented never
+          // to reject (its own header). This exists so a bug that defied
+          // that contract still lands on a real sentence rather than an
+          // unhandled rejection.
+          setReading(false);
+          setPdfSource(null);
+          setError(
+            caught instanceof Error ? caught.message : `"${file.name}" could not be read as a PDF.`,
+          );
+        });
+      return;
+    }
+
+    if ('unreadable' in classified) {
+      // A format Sift recognises but deliberately does not read -- see
+      // `unreadableBidDocumentMessage`. No format is preselected (there is
+      // no reading here to propose one from) and the file is never handed
+      // to `FileReader`: reading a spreadsheet's binary bytes as text would
+      // only put mojibake where a real paste belongs.
+      setFormat('');
+      setFormatDerivedFrom(null);
+      setFormatUnknownFor(null);
+      setUnreadableFile({ fileName: file.name, kind: classified.unreadable });
+      setText('');
+      return;
+    }
+
+    setUnreadableFile(null);
+    const derived = 'format' in classified ? classified.format : null;
     setFormat(derived ?? '');
     setFormatDerivedFrom(derived === null ? null : file.name);
     setFormatUnknownFor(derived === null ? file.name : null);
@@ -202,14 +341,21 @@ export function BidDocumentImport({
     reader.readAsText(file);
   }
 
-  function handleSubmit() {
-    // `format === ''` first, not merely as part of `canSubmit`: it is the one
-    // check that also NARROWS the union for the command payload below.
-    if (format === '' || !canSubmit) return;
-
-    // Checked here, in UTF-8 bytes, against the contract's own cap -- the
-    // person gets a sentence instead of a 400, and no oversized body is put
-    // on the wire at all.
+  /**
+   * The tail shared by both submit paths: the defensive over-size recheck
+   * (this file's header, "Two ways in, two possible commands"), the
+   * `submitting` pending state the button's own label already covers
+   * ("Reading document…" -- accurate whether that means an instant local
+   * parse or a model call that takes real seconds), and the identical
+   * receipt handling either command's `CommandReceipt` gets. `sendCommand`
+   * is a thunk, not an already-started `Promise`, so a document over the
+   * cap is caught before either command is even called.
+   */
+  function runImport(
+    trimmedFilename: string,
+    readByModel: boolean,
+    sendCommand: () => Promise<CommandReceipt>,
+  ) {
     const oversize = bidDocumentSizeRefusal(text);
     if (oversize !== null) {
       setError(oversize);
@@ -220,26 +366,13 @@ export function BidDocumentImport({
     setSubmitting(true);
     clearOutcome();
 
-    resolveExpectedSequence()
-      .then((expectedSequence) =>
-        commands.submitBidDocument({
-          caseId,
-          expectedSequence,
-          // No `optionId`: this affordance always ADDS an option. Re-reading a
-          // corrected document onto an existing one is a real capability of
-          // the command, but it is a different question ("which option is
-          // this the same bid as?") and giving it no answer here keeps the
-          // summary below exactly describable -- everything on the created
-          // option came from this document.
-          document: { filename: filename.trim(), format, text },
-        }),
-      )
+    sendCommand()
       .then((receipt) => {
         setSubmitting(false);
         const next = summarizeBidDocumentImport({
           snapshot: receipt.snapshot,
           knownOptionIds,
-          filename: filename.trim(),
+          filename: trimmedFilename,
           attributeDefinitions,
         });
         if (next === null) {
@@ -248,10 +381,11 @@ export function BidDocumentImport({
           // extraction from the request we sent -- which would be this
           // component reporting on a reading it never saw.
           setImportedWithoutDetail(
-            `"${filename.trim()}" was imported. This pane could not read back what was recorded from it -- open the ${optionLabel} to check each value.`,
+            `"${trimmedFilename}" was imported. This pane could not read back what was recorded from it -- open the ${optionLabel} to check each value.`,
           );
           return;
         }
+        setSummaryReadByModel(readByModel);
         setSummary(next);
         onImported(next);
       })
@@ -262,17 +396,63 @@ export function BidDocumentImport({
       });
   }
 
+  function handleSubmit() {
+    if (!canSubmit) return;
+    const trimmedFilename = filename.trim();
+
+    if (pdfSource !== null) {
+      // The PDF path: no format to narrow against, and a different command
+      // entirely -- see this file's header, "A fourth outcome".
+      runImport(trimmedFilename, true, () =>
+        resolveExpectedSequence().then((expectedSequence) =>
+          commands.readBidDocument({
+            caseId,
+            expectedSequence,
+            // No `optionId`, for the identical reason `submitBidDocument`
+            // below sends none: this affordance always ADDS an option.
+            filename: trimmedFilename,
+            text,
+          }),
+        ),
+      );
+      return;
+    }
+
+    // `format === ''` checked here, not merely folded into `canSubmit`: it
+    // is the one check that also NARROWS the union for `submitBidDocument`'s
+    // payload below.
+    if (format === '') return;
+    runImport(trimmedFilename, false, () =>
+      resolveExpectedSequence().then((expectedSequence) =>
+        commands.submitBidDocument({
+          caseId,
+          expectedSequence,
+          // No `optionId`: this affordance always ADDS an option. Re-reading a
+          // corrected document onto an existing one is a real capability of
+          // the command, but it is a different question ("which option is
+          // this the same bid as?") and giving it no answer here keeps the
+          // summary below exactly describable -- everything on the created
+          // option came from this document.
+          document: { filename: trimmedFilename, format, text },
+        }),
+      ),
+    );
+  }
+
   function startAnother() {
     setSummary(null);
+    setSummaryReadByModel(false);
     setFilename('');
     setFormat('');
     setFormatDerivedFrom(null);
     setFormatUnknownFor(null);
+    setUnreadableFile(null);
+    setPdfSource(null);
     setText('');
     clearOutcome();
   }
 
-  function renderReadAttribute(entry: ImportedBidAttribute) {
+  function renderReadAttribute(entry: ImportedBidAttribute, readByModel: boolean) {
     const { record } = entry;
     return (
       <li
@@ -289,10 +469,16 @@ export function BidDocumentImport({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-[var(--space-1)]">
-          {/* "Read from the document", never a checkmark or a satisfied tone
-              -- see this file's header. `outline` is the badge variant with
-              no status colour of its own. */}
-          <Badge variant="outline">Read from the document</Badge>
+          {/* "Read from the document" or "Read by a model", never a
+              checkmark or a satisfied tone -- see this file's header.
+              `outline` is the badge variant with no status colour of its
+              own. Which text applies is the one place, at field
+              granularity, that a model reading is told apart from Sift's
+              own extractor; `renderSummary`'s own paragraph says it again
+              at the top of the whole list. */}
+          <Badge variant="outline">
+            {readByModel ? 'Read by a model' : 'Read from the document'}
+          </Badge>
           <span className={hintClassName}>
             {record.confidence === undefined
               ? 'No confidence recorded. Not verified.'
@@ -327,6 +513,8 @@ export function BidDocumentImport({
 
   function renderSummary(current: BidDocumentImportSummary) {
     const unreadCount = current.unreadRequired.length + current.unreadOptional.length;
+    const readByModel = summaryReadByModel;
+    const readCountLabel = `${current.read.length} value${current.read.length === 1 ? '' : 's'}`;
     return (
       <div
         data-testid="bid-document-import-summary"
@@ -337,8 +525,16 @@ export function BidDocumentImport({
           <h4 data-testid="bid-document-import-summary-heading">
             {`Imported "${current.filename}" as "${current.option.label}"`}
           </h4>
-          <p className={hintClassName}>
-            {`Sift read ${current.read.length} value${current.read.length === 1 ? '' : 's'} off this document and could not read ${unreadCount}. Nothing below is verified -- check each value against the document before you rely on it.`}
+          {/* Names the actual reader -- "A model read" or "Sift read" --
+              rather than one word for both: this is the one sentence a
+              person reads before anything else in this pane, and a PDF's
+              reading deserves to be told apart from Sift's own
+              deterministic extractor right here, not only per field below
+              (`renderReadAttribute`). */}
+          <p className={hintClassName} data-testid="bid-document-import-summary-reader">
+            {readByModel
+              ? `A model read ${readCountLabel} off this document and could not read ${unreadCount}. Nothing below is verified -- check each value against the document before you rely on it.`
+              : `Sift read ${readCountLabel} off this document and could not read ${unreadCount}. Nothing below is verified -- check each value against the document before you rely on it.`}
           </p>
         </div>
 
@@ -353,7 +549,7 @@ export function BidDocumentImport({
               data-testid="bid-document-import-read"
               className="flex flex-col gap-[var(--space-1)]"
             >
-              {current.read.map(renderReadAttribute)}
+              {current.read.map((entry) => renderReadAttribute(entry, readByModel))}
             </ul>
           )}
         </div>
@@ -405,9 +601,11 @@ export function BidDocumentImport({
       <div className="flex flex-col gap-[var(--space-1)]">
         <h3 id={`${fieldPrefix}-heading`}>Import a bid document</h3>
         <p className={hintClassName}>
-          Choose a JSON or CSV bid, or paste one. Sift reads what the document states and records
-          each value as a proposal with its own confidence -- never as your own entry, and never as
-          verified. Anything the document does not state is left empty, not filled in with a guess.
+          Choose a JSON, CSV, or PDF bid, or paste one. A JSON or CSV file is read by Sift's own
+          extractor; a PDF has no labelled fields, so it is read by a model instead. Either way,
+          every value comes back as a proposal with its own confidence -- never as your own entry,
+          and never as verified. Anything the document does not state is left empty, not filled in
+          with a guess.
         </p>
       </div>
 
@@ -440,8 +638,18 @@ export function BidDocumentImport({
               onChange={handleFileChange}
             />
             <p id={`${fieldPrefix}-file-hint`} className={hintClassName}>
-              JSON or CSV. The file is read in your browser and sent as text.
+              JSON, CSV, or PDF. Every one of them is read in your browser -- JSON/CSV are sent as
+              plain text; a PDF's text is extracted here first, then sent to a model to read.
             </p>
+            {unreadableFile !== null ? (
+              <p
+                data-testid="bid-document-import-file-unreadable"
+                role="status"
+                className={hintClassName}
+              >
+                {unreadableBidDocumentMessage(unreadableFile.fileName, unreadableFile.kind)}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-[var(--space-1)]">
@@ -487,48 +695,71 @@ export function BidDocumentImport({
             </p>
           </div>
 
-          <div className="flex flex-col gap-[var(--space-1)]">
-            <Label htmlFor={`${fieldPrefix}-format`} className={hintClassName}>
-              Document format
-            </Label>
-            <select
-              id={`${fieldPrefix}-format`}
-              data-testid="bid-document-import-format"
-              className={selectClassName}
-              value={format}
-              disabled={submitting}
-              onChange={(event) => {
-                clearOutcome();
-                // A correction is the person's own statement about the
-                // document, so the "derived from the file" note stops
-                // applying the moment they change it.
-                setFormatDerivedFrom(null);
-                setFormatUnknownFor(null);
-                setFormat(event.target.value as BidDocumentFormat | '');
-              }}
+          {pdfSource !== null ? (
+            // A PDF has no format to confirm -- see this file's header, "A
+            // fourth outcome" -- so this whole field is replaced by a plain
+            // status sentence rather than a `<select>` with nothing correct
+            // to offer. Two sentences, not one, because "extracting" and
+            // "ready to send to a model" are different moments a person
+            // might submit into: the button stays disabled through the
+            // first (`canSubmit`'s own `!reading`) and becomes available at
+            // the second.
+            <p
+              data-testid={
+                reading ? 'bid-document-import-pdf-extracting' : 'bid-document-import-pdf-ready'
+              }
+              role="status"
+              className={hintClassName}
             >
-              <option value="">Choose a format</option>
-              {Object.entries(FORMAT_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            {formatDerivedFrom !== null ? (
-              <p data-testid="bid-document-import-format-derived" className={hintClassName}>
-                {`Taken from "${formatDerivedFrom}". Change it if that is wrong.`}
-              </p>
-            ) : null}
-            {formatUnknownFor !== null ? (
-              <p
-                data-testid="bid-document-import-format-unknown"
-                role="status"
-                className={hintClassName}
+              {reading
+                ? `Extracting text from "${pdfSource}"…`
+                : `"${pdfSource}" will be read by a model when you import it, not by Sift's own extractor -- see the text above. Nothing is verified until you check it.`}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-[var(--space-1)]">
+              <Label htmlFor={`${fieldPrefix}-format`} className={hintClassName}>
+                Document format
+              </Label>
+              <select
+                id={`${fieldPrefix}-format`}
+                data-testid="bid-document-import-format"
+                className={selectClassName}
+                value={format}
+                disabled={submitting}
+                onChange={(event) => {
+                  clearOutcome();
+                  // A correction is the person's own statement about the
+                  // document, so the "derived from the file" note stops
+                  // applying the moment they change it.
+                  setFormatDerivedFrom(null);
+                  setFormatUnknownFor(null);
+                  setUnreadableFile(null);
+                  setFormat(event.target.value as BidDocumentFormat | '');
+                }}
               >
-                {`Sift cannot tell what format "${formatUnknownFor}" is. Choose it above -- reading a CSV as JSON would import nothing at all, quietly.`}
-              </p>
-            ) : null}
-          </div>
+                <option value="">Choose a format</option>
+                {Object.entries(FORMAT_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              {formatDerivedFrom !== null ? (
+                <p data-testid="bid-document-import-format-derived" className={hintClassName}>
+                  {`Taken from "${formatDerivedFrom}". Change it if that is wrong.`}
+                </p>
+              ) : null}
+              {formatUnknownFor !== null ? (
+                <p
+                  data-testid="bid-document-import-format-unknown"
+                  role="status"
+                  className={hintClassName}
+                >
+                  {`Sift cannot tell what format "${formatUnknownFor}" is. Choose it above -- reading a CSV as JSON would import nothing at all, quietly.`}
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {caseIsFull ? (
             <p data-testid="bid-document-import-full" role="status" className={hintClassName}>

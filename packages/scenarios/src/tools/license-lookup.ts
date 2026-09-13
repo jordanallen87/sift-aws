@@ -83,6 +83,127 @@ export interface LicenseLookupInput extends LoadFixtureOptions {
 }
 
 /**
+ * Corporate-entity suffixes stripped from the END of a normalised name only
+ * (see `stripCorporateSuffixes`). "Foo Co Inc" strips to "foo" (both words
+ * removed, one at a time); "Foo Company" and "Foo Corporation" both strip to
+ * "foo" too. Deliberately does NOT include anything that could also be a
+ * real trade word this domain uses (no "group", no "services", no
+ * "contractors") -- those appear in real licence-holder names in this very
+ * registry (`Parkside Plumbing Group`, `Crestview Mechanical Services`,
+ * `Westbrook Mechanical Contractors`) and stripping them would erase a
+ * meaningful difference instead of a purely administrative one.
+ */
+const CORPORATE_SUFFIXES = new Set([
+  'inc',
+  'incorporated',
+  'llc',
+  'co',
+  'company',
+  'corp',
+  'corporation',
+  'ltd',
+  'limited',
+]);
+
+/**
+ * Strips trailing corporate-suffix words one at a time (so "Foo Co Inc"
+ * loses "inc" then "co"), plus the special case of "llc" spelled with
+ * periods ("L.L.C."), which `normalizeNameWords` below has already turned
+ * into three separate single-letter words ("l l c") by the time this runs.
+ *
+ * Never pops the last remaining word. A name that IS just "Inc" or "Co" (or,
+ * degenerately, "L L C") is a real, if odd, string to compare -- collapsing
+ * it to nothing would turn "no information" into a false match against any
+ * other single-word name stripped down to empty, which is worse than
+ * leaving the suffix word in place.
+ */
+function stripCorporateSuffixes(words: readonly string[]): string[] {
+  let result = [...words];
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    if (result.length > 3 && result.slice(-3).join(' ') === 'l l c') {
+      result = result.slice(0, -3);
+      changed = true;
+      continue;
+    }
+
+    const last = result[result.length - 1];
+    if (result.length > 1 && last !== undefined && CORPORATE_SUFFIXES.has(last)) {
+      result = result.slice(0, -1);
+      changed = true;
+    }
+  }
+  return result;
+}
+
+/**
+ * Lower-cases, then removes/replaces punctuation in two different ways on
+ * purpose:
+ *
+ *  - `. , & -` become a SPACE, because each one separates two otherwise-
+ *    distinct words in a filing name: "Smith-Jones Mechanical" must tokenize
+ *    the same as "Smith Jones Mechanical", and "Foo, Inc." the same as "Foo
+ *    Inc" -- deleting the character outright would instead fuse them into
+ *    "smithjones", merging two words that were never meant to be one.
+ *  - `'` is deleted outright, not turned into a space, because an
+ *    apostrophe in a business name is almost always a mid-word contraction
+ *    ("O'Brien") rather than a word boundary: "O'Brien Plumbing" and the
+ *    same firm spelled "OBrien Plumbing" on a different document are the
+ *    same one-word surname either way, and turning the apostrophe into a
+ *    space would wrongly split it into two tokens ("o", "brien") that would
+ *    then fail to match the no-apostrophe spelling's single "obrien" token.
+ *
+ * Whitespace is then collapsed and the result split into words. Word-level
+ * splitting is also what keeps suffix-stripping from ever touching a suffix
+ * that is merely a SUBSTRING of a longer word: "co" is stripped only when it
+ * is its own array entry, so "Ecoline Plumbing" ("ecoline", "plumbing") is
+ * untouched -- there is no "co" token to find.
+ */
+function normalizeNameWords(name: string): string[] {
+  const noApostrophes = name.replace(/'/g, '');
+  const spaced = noApostrophes.toLowerCase().replace(/[.,&-]/g, ' ');
+  const words = spaced.split(/\s+/).filter((word) => word.length > 0);
+  return stripCorporateSuffixes(words);
+}
+
+/**
+ * Does the licence registry's `licenseHolderName` refer to the same
+ * business as the name a bid document states for itself
+ * (`contractorName`)? This is the check `buildCredentialAttributes`
+ * (`apps/agent/src/services/command-service.ts`) is missing before this fix:
+ * a licence lookup by number alone tells you the licence is real, active,
+ * and insured -- never that it belongs to the bidder citing it.
+ *
+ * Deliberately NOT strict string equality: `bid-tworivers.json`'s
+ * `contractorName` is "Two Rivers Mechanical" while the registry's
+ * `licenseHolderName` for that same licence is "Two Rivers Mechanical Inc"
+ * -- a corporate suffix, not a different company, and Two Rivers already
+ * fails this bid's credential gate for a real, separate reason (its
+ * certificate of insurance names "TRM Holdings LLC", not its own licence
+ * holder). A strict-equality version of this check would hand Two Rivers a
+ * SECOND, spurious failure reason and corrupt that load-bearing demo beat.
+ * So both names are normalised (case-folded, punctuation flattened to
+ * spaces, corporate suffixes stripped from the end) before comparing --
+ * tolerant of exactly the "Inc"/"Co."/"&" noise a real filing name carries,
+ * and nothing more: two genuinely different names that happen to share one
+ * word ("Summit Mechanical Co." vs. "Summit Plumbing") still compare
+ * unequal after normalisation, because normalisation never removes or
+ * reorders a distinguishing word, only administrative decoration.
+ *
+ * Empty or whitespace-only input (on EITHER side) always returns `false`,
+ * never `true` -- two blank strings are not evidence of a match, they are
+ * an absence of the information a match requires.
+ */
+export function licenceHolderMatchesBidder(licenseHolderName: string, bidderName: string): boolean {
+  const holderWords = normalizeNameWords(licenseHolderName);
+  const bidderWords = normalizeNameWords(bidderName);
+  if (holderWords.length === 0 || bidderWords.length === 0) return false;
+  return holderWords.join(' ') === bidderWords.join(' ');
+}
+
+/**
  * Deliberately short. `scripts/check-source.ts` flags any 40+ character
  * `[A-Za-z0-9+_=-]` token whose Shannon entropy reaches 4.0 as a possible
  * secret, and it evaluates string literals -- which these ids are, both here

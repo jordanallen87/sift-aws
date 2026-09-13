@@ -118,8 +118,169 @@ export function bidDocumentFormatFromFile(
   return null;
 }
 
-/** The `accept` attribute for the file input -- both extensions and both canonical MIME types, so a picker filters correctly whichever it keys on. */
-export const BID_DOCUMENT_ACCEPT = ['.json', '.csv', ...BID_DOCUMENT_FORMATS].join(',');
+/**
+ * A file format Sift can *recognise* but deliberately does not read.
+ *
+ * `word` (`.doc`/`.docx`) and `text` (`.txt`/`text/plain`) share one reason:
+ * the document in front of the extractor would be prose, and a
+ * deterministic extractor cannot honestly read prose -- see
+ * `BID_DOCUMENT_FORMATS` in `packages/contracts/src/commands.ts`, which
+ * makes exactly this argument for `text/plain` already. `excel`
+ * (`.xls`/`.xlsx`) shares the practical half of the same reason: a
+ * worksheet is not the CSV format Sift reads until it has been exported as
+ * one.
+ *
+ * `pdf` used to belong to this list too, and no longer does: a PDF's text
+ * layer is also prose, but Sift now has a way to read prose honestly -- a
+ * model, reached through `POST /api/cases/:caseId/bid-documents/read`
+ * (`pdf-bid-document.ts`, `ReadBidDocumentInputSchema`) -- rather than
+ * pretending a deterministic extractor could. That is a genuinely different
+ * situation from a Word document or plain text, which get no such reading,
+ * so a PDF gets its own `ChosenBidDocumentFile` outcome (`{ pdf: true }`)
+ * instead of sharing this one.
+ */
+export type UnreadableBidDocumentKind = 'word' | 'excel' | 'text';
+
+/**
+ * What `classifyChosenBidDocumentFile` found. Four outcomes, not three:
+ * "Sift cannot tell what this is" (`unknown`), "Sift can tell exactly what
+ * this is, and refuses to read it" (`unreadable`), "Sift can tell exactly
+ * what this is, and a model can read it" (`pdf`), and an ordinary readable
+ * format. `unknown` is answered by picking a format; `unreadable` is not
+ * answered by picking anything; `pdf` is answered by importing it, which
+ * routes through a different command entirely (`BidDocumentImport.tsx`'s
+ * own header explains why).
+ */
+export type ChosenBidDocumentFile =
+  | { format: BidDocumentFormat }
+  | { pdf: true }
+  | { unreadable: UnreadableBidDocumentKind }
+  | { unknown: true };
+
+/**
+ * The one extension Sift reads only through a model, never through
+ * `bidDocumentFormatFromFile`'s deterministic table above: a PDF's text
+ * layer is neither `application/json` nor `text/csv`, so it was never a
+ * candidate for that table, and checking it here -- ahead of
+ * `UNREADABLE_EXTENSIONS` -- keeps the same "every kind this module knows
+ * about is checked by extension before anything falls back to MIME"
+ * precedence that table's own comment already establishes.
+ */
+const PDF_EXTENSIONS: readonly string[] = ['.pdf'];
+
+/** MIME type for a PDF, checked only when the name carries no usable extension -- same "extension first, MIME second" precedence as everywhere else in this module. */
+const PDF_MIME_TYPES: readonly string[] = ['application/pdf'];
+
+/**
+ * Extensions of formats Sift recognises but does not read. Extension only,
+ * deliberately: unlike `MIME_FORMATS` above, this table has no MIME entry
+ * for `word` or `excel`, because their common MIME types collide with the
+ * one `MIME_FORMATS` already claims for CSV (`application/vnd.ms-excel` is
+ * what a machine with Excel installed reports for an actual `.csv` export,
+ * not only for a real `.xls` file -- see that table's own comment). The
+ * extension tells the two apart; the MIME type does not, so only the
+ * extension is trusted for these two kinds.
+ */
+const UNREADABLE_EXTENSIONS: readonly (readonly [string, UnreadableBidDocumentKind])[] = [
+  ['.doc', 'word'],
+  ['.docx', 'word'],
+  ['.xls', 'excel'],
+  ['.xlsx', 'excel'],
+  ['.txt', 'text'],
+];
+
+/** MIME types checked for the two unreadable kinds whose MIME type is unambiguous. See `UNREADABLE_EXTENSIONS` for why `word` and `excel` have no entry here. */
+const UNREADABLE_MIME_TYPES: readonly (readonly [string, UnreadableBidDocumentKind])[] = [
+  ['text/plain', 'text'],
+];
+
+/**
+ * Classifies a chosen file into the four outcomes `handleFileChange` acts
+ * on.
+ *
+ * Checks the PDF and unreadable extensions *before* calling
+ * `bidDocumentFormatFromFile`, not after -- a real `.xls` file commonly
+ * reports `application/vnd.ms-excel` as its `file.type`, which is the same
+ * MIME type `bidDocumentFormatFromFile` trusts as a CSV alias (for a
+ * machine that mis-reports an actual `.csv` export the same way). Asking
+ * that function first would let a real spreadsheet slip through as
+ * "readable CSV" on that MIME collision alone. Checking the extension for
+ * every kind this function knows about -- readable, model-readable, or not
+ * readable at all -- before either falls back to MIME keeps the same
+ * "extension first, MIME second" precedence `bidDocumentFormatFromFile`
+ * states for itself.
+ */
+export function classifyChosenBidDocumentFile(
+  fileName: string,
+  mimeType: string | undefined,
+): ChosenBidDocumentFile {
+  const lowerName = fileName.toLowerCase();
+  if (PDF_EXTENSIONS.some((extension) => lowerName.endsWith(extension))) return { pdf: true };
+  for (const [extension, kind] of UNREADABLE_EXTENSIONS) {
+    if (lowerName.endsWith(extension)) return { unreadable: kind };
+  }
+
+  const format = bidDocumentFormatFromFile(fileName, mimeType);
+  if (format !== null) return { format };
+
+  const lowerMime = (mimeType ?? '').toLowerCase().split(';')[0]?.trim() ?? '';
+  if (PDF_MIME_TYPES.includes(lowerMime)) return { pdf: true };
+  for (const [mime, kind] of UNREADABLE_MIME_TYPES) {
+    if (lowerMime === mime) return { unreadable: kind };
+  }
+  return { unknown: true };
+}
+
+const UNREADABLE_KIND_LABELS: Record<UnreadableBidDocumentKind, string> = {
+  word: 'a Word document',
+  excel: 'a spreadsheet',
+  text: 'a plain text document',
+};
+
+/**
+ * The message shown for a recognised-but-unreadable file: named and
+ * reasoned rather than a bare refusal, because a person choosing a Word
+ * document has done nothing wrong and deserves the real reason and the real
+ * next step, not a "choose a format" prompt that has nothing correct to
+ * offer them.
+ *
+ * Deliberately does not say "not yet" or anything else that promises this
+ * will change: reading a bid out of a Word document or a plain text file
+ * means inventing a reading nobody checked, which is not a gap this
+ * extractor is working towards closing (see `UnreadableBidDocumentKind`).
+ * A PDF once got the same sentence and no longer does -- see that type's
+ * own comment for why it earned a real reading instead.
+ */
+export function unreadableBidDocumentMessage(
+  fileName: string,
+  kind: UnreadableBidDocumentKind,
+): string {
+  const reason =
+    kind === 'excel'
+      ? 'a worksheet is not the CSV format Sift reads until it has been exported as one'
+      : 'reading a bid out of it means interpreting prose, and Sift only ever states what a document says -- never a guess at it';
+  return `"${fileName}" is ${UNREADABLE_KIND_LABELS[kind]}, and Sift cannot read it -- ${reason}. Export or save the bid as JSON or CSV, or type its values into the form above.`;
+}
+
+/**
+ * The `accept` attribute for the file input. Lists the two readable formats
+ * by extension and canonical MIME type (so a picker filters correctly
+ * whichever it keys on), the PDF extension and MIME type (a model reads
+ * that one -- `pdf-bid-document.ts`), and the recognised-but-unreadable
+ * extensions and MIME types -- those stay *choosable* in the OS file
+ * dialog, so a person picking a Word document reaches
+ * `unreadableBidDocumentMessage` instead of finding the file simply missing
+ * from the list.
+ */
+export const BID_DOCUMENT_ACCEPT = [
+  '.json',
+  '.csv',
+  ...BID_DOCUMENT_FORMATS,
+  ...PDF_EXTENSIONS,
+  ...PDF_MIME_TYPES,
+  ...UNREADABLE_EXTENSIONS.map(([extension]) => extension),
+  ...UNREADABLE_MIME_TYPES.map(([mime]) => mime),
+].join(',');
 
 /**
  * UTF-8 byte length, matching `SubmittedBidDocumentSchema`'s own cap check

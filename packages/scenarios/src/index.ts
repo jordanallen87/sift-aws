@@ -9,6 +9,7 @@ export {
   CAR_PURCHASE_CANDIDATE_IDS,
   HOUSEHOLD_FIT_DEFINITION_ID_TRANSLATION,
   buildBidComparisonEntities,
+  buildBidComparisonSources,
   buildCarPurchaseCandidateEntities,
   buildCarPurchaseSeedEvents,
   buildHomeEnergyResponseOptionEntities,

@@ -255,7 +255,11 @@ export type {
   BidCalculatorInput,
 } from './bid-calculator.js';
 
-export { LICENSE_LOOKUP_TOOL_ID, lookupLicense } from './license-lookup.js';
+export {
+  LICENSE_LOOKUP_TOOL_ID,
+  lookupLicense,
+  licenceHolderMatchesBidder,
+} from './license-lookup.js';
 export type {
   LicenseInsuranceFacts,
   LicenseLookupFacts,

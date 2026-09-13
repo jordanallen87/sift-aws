@@ -12,7 +12,12 @@
  * whether the option it produces is comparable.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AttributeRecord, CaseState, CommandReceipt } from '@sift/contracts';
+import type {
+  AttributeRecord,
+  CaseState,
+  CommandReceipt,
+  SubmittedBidDocumentReadBy,
+} from '@sift/contracts';
 import { MAX_BID_DOCUMENT_BYTES, MAX_CASE_ENTITIES } from '@sift/contracts';
 import { compileBidComparisonPack, PackRegistry } from '@sift/packs';
 import { bidComparisonCapabilityCatalog } from '../runtime/bid-comparison-engine.js';
@@ -133,6 +138,40 @@ const PROSE_LINE_ITEMS_BID_JSON = JSON.stringify({
   ],
 });
 
+/**
+ * The exact live defect this file's fix exists to catch: "Harborline
+ * Mechanical" states Northgate Plumbing's real, active, correctly-insured
+ * licence `PL-4417-NG`. The licence itself is completely clean, so
+ * `bid.license_status` and `bid.insurance_named_insured_match` still read
+ * true facts about it -- but nothing on this document, or in the registry,
+ * says Harborline IS Northgate, so `bid.credentials_valid` must not clear.
+ */
+const IMPERSONATING_BID_JSON = JSON.stringify({
+  contractorName: 'Harborline Mechanical',
+  licenseNumber: 'PL-4417-NG',
+  total: { amount: 250000, currency: 'USD' },
+});
+
+/** A registry HIT (Northgate's real licence) with no `contractorName` stated at all -- nobody to attribute the licence to. */
+const LICENSE_NO_CONTRACTOR_BID_JSON = JSON.stringify({
+  licenseNumber: 'PL-4417-NG',
+  total: { amount: 250000, currency: 'USD' },
+});
+
+/**
+ * `bid-tworivers.json`'s own real discrepancy (see `license-lookup.ts`'s
+ * header and `licenceHolderMatchesBidder`'s own docstring): the registry's
+ * `licenseHolderName` for `PL-8801-TR` is "Two Rivers Mechanical Inc", a
+ * corporate suffix away from the name this document states. Proves the
+ * suffix-tolerant comparison end to end through the command, not just at
+ * the helper's own unit-test level.
+ */
+const SUFFIX_TOLERANT_BID_JSON = JSON.stringify({
+  contractorName: 'Two Rivers Mechanical',
+  licenseNumber: 'PL-8801-TR',
+  total: { amount: 240000, currency: 'USD' },
+});
+
 describe('CommandService.submitBidDocument', () => {
   let caseStore: MemoryCaseStore;
   let activityStore: InMemoryActivityStore;
@@ -160,7 +199,14 @@ describe('CommandService.submitBidDocument', () => {
 
   function submit(
     snapshot: CaseState,
-    document: { filename: string; format: string; text: string; sourceUrl?: string },
+    document: {
+      filename: string;
+      format: string;
+      text: string;
+      sourceUrl?: string;
+      /** Present only in the dedicated `readBy` describe block below -- every other call site omits it, exercising the identical, unchanged pre-existing behaviour. */
+      readBy?: SubmittedBidDocumentReadBy;
+    },
     overrides: { commandId?: string; optionId?: string; expectedSequence?: number } = {},
   ) {
     return service.submitBidDocument(overrides.commandId ?? 'cmd-doc', {
@@ -961,7 +1007,103 @@ describe('CommandService.submitBidDocument', () => {
       }
     });
 
-    it('on a registry miss, writes ONLY license_status: not_found -- insurance match and credentials_valid stay absent, never false', () => {
+    it('on a registry hit whose stated contractorName does NOT match the licence holder, still writes license_status/insurance_named_insured_match but leaves credentials_valid an explicit unknown -- never a fabricated false', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        filename: 'harborline-bid.json',
+        format: 'application/json',
+        text: IMPERSONATING_BID_JSON,
+      });
+      requireOk(result);
+      const updated = requireSnapshot(result.value);
+      const attributes = updated.entities[0]?.attributes ?? {};
+
+      // The licence itself is a genuinely clean record -- these two are
+      // true facts about PL-4417-NG regardless of who cited it, so they are
+      // written exactly as they would be for the real Northgate bid.
+      expect(attributes['bid.license_status']).toMatchObject({
+        origin: 'agent_proposed',
+        status: 'supported',
+        value: { type: 'enum', value: 'active' },
+      });
+      expect(attributes['bid.insurance_named_insured_match']).toMatchObject({
+        origin: 'agent_proposed',
+        status: 'supported',
+        value: { type: 'boolean', value: true },
+      });
+
+      // But the combined gate cannot be signed off either way: "Harborline
+      // Mechanical" is not "Northgate Plumbing" by any normalisation this
+      // command trusts, so this is an honest abstention, not a verdict.
+      const credentialsValid = attributes['bid.credentials_valid'];
+      expect(credentialsValid).toBeDefined();
+      expect(credentialsValid?.origin).toBe('agent_proposed');
+      expect(credentialsValid?.status).toBe('unknown');
+      expect(credentialsValid?.value).toBeUndefined();
+
+      // A reader must be able to see WHY: some source this attribute cites
+      // names both the bidder as stated and the licence holder of record.
+      const citedSources = updated.sources.filter((source) =>
+        credentialsValid?.sourceIds.includes(source.id),
+      );
+      const discrepancySource = citedSources.find(
+        (source) =>
+          source.excerpt?.includes('Harborline Mechanical') &&
+          source.excerpt?.includes('Northgate Plumbing'),
+      );
+      expect(discrepancySource).toBeDefined();
+    });
+
+    it('on a registry hit whose document states a licence but no contractorName at all, leaves credentials_valid an explicit unknown -- nobody to attribute the licence to', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        filename: 'unnamed-bidder-bid.json',
+        format: 'application/json',
+        text: LICENSE_NO_CONTRACTOR_BID_JSON,
+      });
+      requireOk(result);
+      const attributes = requireSnapshot(result.value).entities[0]?.attributes ?? {};
+
+      // Still a real, clean licence -- those facts are written.
+      expect(attributes['bid.license_status']?.value).toEqual({ type: 'enum', value: 'active' });
+      expect(attributes['bid.insurance_named_insured_match']?.value).toEqual({
+        type: 'boolean',
+        value: true,
+      });
+
+      const credentialsValid = attributes['bid.credentials_valid'];
+      expect(credentialsValid).toBeDefined();
+      expect(credentialsValid?.status).toBe('unknown');
+      expect(credentialsValid?.value).toBeUndefined();
+    });
+
+    it('tolerates the "Two Rivers Mechanical" / "Two Rivers Mechanical Inc" corporate-suffix difference end to end -- credentials_valid IS written, not left unknown', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        filename: 'two-rivers-bid.json',
+        format: 'application/json',
+        text: SUFFIX_TOLERANT_BID_JSON,
+      });
+      requireOk(result);
+      const attributes = requireSnapshot(result.value).entities[0]?.attributes ?? {};
+
+      // PL-8801-TR's own named-insured mismatch ("TRM Holdings LLC" vs.
+      // "Two Rivers Mechanical Inc") is Two Rivers' real, distinct failure
+      // reason -- so credentials_valid is written `false`, not left
+      // unknown: the suffix tolerance let this command reach a real
+      // verdict instead of abstaining on a corporate-suffix false alarm.
+      expect(attributes['bid.insurance_named_insured_match']).toMatchObject({
+        status: 'supported',
+        value: { type: 'boolean', value: false },
+      });
+      expect(attributes['bid.credentials_valid']).toMatchObject({
+        origin: 'agent_proposed',
+        status: 'supported',
+        value: { type: 'boolean', value: false },
+      });
+    });
+
+    it('on a registry miss, records not_found plus two explicit unknowns -- never a fabricated false', () => {
       const snapshot = startCase();
       const result = submit(snapshot, {
         filename: 'rustic-flow-bid.json',
@@ -979,10 +1121,23 @@ describe('CommandService.submitBidDocument', () => {
       });
       // "We could not find this licence" and "we checked and these
       // credentials are bad" are different findings -- only the second would
-      // be fair to score against a contractor, so a miss must not
+      // be fair to score against a contractor, so a miss must never
       // manufacture the other two as a fabricated `false`.
-      expect(attributes['bid.insurance_named_insured_match']).toBeUndefined();
-      expect(attributes['bid.credentials_valid']).toBeUndefined();
+      //
+      // They are written as explicit UNKNOWNS rather than left off the
+      // option, because the check genuinely ran: the registry simply holds
+      // no record to compare against. An absent attribute would read as
+      // "never attempted", which is a different and untrue thing, and it is
+      // the same distinction the extractor already draws for a field a
+      // document was searched for and did not state. Each still cites the
+      // miss source, so the case records WHAT was searched.
+      for (const definitionId of ['bid.insurance_named_insured_match', 'bid.credentials_valid']) {
+        const record = attributes[definitionId];
+        expect(record?.status).toBe('unknown');
+        expect(record?.value).toBeUndefined();
+        expect(record?.origin).toBe('agent_proposed');
+        expect(record?.sourceIds?.length).toBeGreaterThan(0);
+      }
 
       const missSource = updated.sources.find((source) =>
         source.excerpt?.includes(
@@ -1161,6 +1316,131 @@ describe('CommandService.submitBidDocument', () => {
       });
       requireOk(result);
       expect(requireSnapshot(result.value).entities).toHaveLength(1);
+    });
+  });
+
+  /**
+   * `readBy`: a model's reading of a PDF is a WEAKER claim than a labelled
+   * field in a machine-readable file, and must not borrow that field's
+   * confidence, title, or tagging -- see `SubmittedBidDocumentReadBySchema`
+   * (`@sift/contracts`) and `MODEL_READ_ATTRIBUTE_CONFIDENCE`
+   * (`command-service.ts`) for the full reasoning. This block proves the
+   * marker's every consequence, and its own absence, side by side against
+   * the identical `fullDocument`/`FULL_BID_JSON` fixture the "happy path"
+   * describe block above already exercises without it.
+   */
+  describe('readBy: a model reading of a PDF', () => {
+    const modelReadFilename = 'northgate-bid.pdf';
+    const readBy: SubmittedBidDocumentReadBy = {
+      agent: 'model',
+      modelId: 'test-model-v1',
+      originalFilename: modelReadFilename,
+      originalFormat: 'application/pdf',
+    };
+
+    it("caps every read field's confidence at the single lower model-read value (0.4), never the extractor's own tiers", () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, { ...fullDocument, readBy });
+      requireOk(result);
+      const entity = requireSnapshot(result.value).entities[0];
+
+      // Every field `FULL_BID_JSON` states would otherwise earn
+      // `STATED_FIELD_CONFIDENCE` (0.9) from the deterministic extractor --
+      // confirmed by the sibling "readBy absent" test below, which asserts
+      // exactly that value for the IDENTICAL document. With `readBy`
+      // present, every one of them is capped at 0.4 instead: lower than
+      // every tier the extractor can produce, never higher.
+      for (const definitionId of DOCUMENT_ATTRIBUTE_IDS) {
+        expect(entity?.attributes[definitionId]?.confidence).toBe(0.4);
+      }
+    });
+
+    it('leaves confidence, title, and tags exactly as before when readBy is absent (existing behaviour intact)', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, fullDocument);
+      requireOk(result);
+      const updated = requireSnapshot(result.value);
+      const entity = updated.entities[0];
+
+      for (const definitionId of DOCUMENT_ATTRIBUTE_IDS) {
+        expect(entity?.attributes[definitionId]?.confidence).toBe(0.9);
+      }
+      const source = updated.sources[0];
+      expect(source?.title).toBe(fullDocument.filename);
+      expect(source?.tags).toEqual(['bid-document', 'application/json']);
+      expect(source?.excerpt ?? '').not.toContain('model');
+    });
+
+    it('does not add a confidence to derived/registry-lookup attributes, which never carried one to begin with', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, { ...fullDocument, readBy });
+      requireOk(result);
+      const entity = requireSnapshot(result.value).entities[0];
+      // `FULL_BID_JSON` cites Northgate's own real, active licence
+      // (`PL-4417-NG`) -- the registry lookup still runs identically with
+      // `readBy` present, but `buildDerivedBidAttributes`'s `add()` never
+      // sets a `confidence` at all, with or without this marker.
+      expect(entity?.attributes['bid.license_status']).toBeDefined();
+      expect(entity?.attributes['bid.license_status']?.confidence).toBeUndefined();
+      expect(entity?.attributes['bid.credentials_valid']?.confidence).toBeUndefined();
+    });
+
+    it('titles the Source with readBy.originalFilename, never the (possibly synthesised) document.filename', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        ...fullDocument,
+        // Deliberately NOT the PDF's own name, to prove the title is read
+        // from `readBy.originalFilename` independently rather than merely
+        // happening to agree with it.
+        filename: 'imported-reading.json',
+        readBy: { ...readBy, originalFilename: 'northgate-bid-original.pdf' },
+      });
+      requireOk(result);
+      expect(requireSnapshot(result.value).sources[0]?.title).toBe('northgate-bid-original.pdf');
+    });
+
+    it('tags the Source with the ORIGINAL PDF format and a model-read marker, not the synthesised application/json format', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, { ...fullDocument, readBy });
+      requireOk(result);
+      expect(requireSnapshot(result.value).sources[0]?.tags).toEqual([
+        'bid-document',
+        'application/pdf',
+        'model-read',
+      ]);
+    });
+
+    it("states in the Source excerpt that the reading is a model's and unverified", () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, { ...fullDocument, readBy });
+      requireOk(result);
+      const excerpt = requireSnapshot(result.value).sources[0]?.excerpt ?? '';
+      expect(excerpt).toContain('test-model-v1');
+      expect(excerpt).toContain(modelReadFilename);
+      expect(excerpt.toLowerCase()).toContain('unverified');
+      expect(excerpt.toLowerCase()).toContain('model');
+    });
+
+    it('never lets a model-read attribute claim an origin other than agent_proposed, or a status of verified', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, { ...fullDocument, readBy });
+      requireOk(result);
+      const entity = requireSnapshot(result.value).entities[0];
+      for (const record of Object.values(entity?.attributes ?? {})) {
+        expect(record.origin).toBe('agent_proposed');
+        expect(record.status).not.toBe('verified');
+      }
+    });
+
+    it('still applies the zero-field guard identically when readBy is present', () => {
+      const snapshot = startCase();
+      const result = submit(snapshot, {
+        filename: 'blank.pdf',
+        format: 'application/json',
+        text: '{}',
+        readBy: { ...readBy, originalFilename: 'blank.pdf' },
+      });
+      expect(result.status).toBe('validation');
     });
   });
 });

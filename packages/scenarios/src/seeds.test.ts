@@ -9,19 +9,25 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Clock, IdGenerator } from '@sift/core';
+import { instantiateCase } from '@sift/core';
 import {
+  BID_COMPARISON_MANIFEST,
   CAR_PURCHASE_MANIFEST,
+  compileBidComparisonPack,
   compileCarPurchasePack,
   createCapabilityCatalog,
 } from '@sift/packs';
-import { notFoundResult, okResult } from './tools/index.js';
+import { SourceSchema, type DecisionPackManifest } from '@sift/contracts';
+import { BID_FIXTURE_NAMES, notFoundResult, okResult } from './tools/index.js';
 import type {
   lookupHouseholdFit,
   lookupSafetyReliability,
   SafetyReliabilityClaim,
 } from './tools/index.js';
 import {
+  BID_COMPARISON_SOURCE_TAGS,
   buildBidComparisonEntities,
+  buildBidComparisonSources,
   buildCarPurchaseCandidateEntities,
   buildCarPurchaseSeedEvents,
   CAR_PURCHASE_CANDIDATE_IDS,
@@ -38,24 +44,69 @@ function fixedIdGenerator(): IdGenerator {
   return { next: (prefix) => `${prefix ?? 'id'}-${++counter}` };
 }
 
-function carPurchaseCatalog() {
+function catalogFor(manifest: DecisionPackManifest) {
   return createCapabilityCatalog([
-    ...CAR_PURCHASE_MANIFEST.skills.map((skill) => ({
+    ...manifest.skills.map((skill) => ({
       id: skill.id,
       kind: 'skill' as const,
       version: '1.0.0',
     })),
-    ...CAR_PURCHASE_MANIFEST.specialists.map((specialist) => ({
+    ...manifest.specialists.map((specialist) => ({
       id: specialist.id,
       kind: 'specialist' as const,
       version: '1.0.0',
     })),
-    ...CAR_PURCHASE_MANIFEST.tools.map((tool) => ({
+    ...manifest.tools.map((tool) => ({
       id: tool.id,
       kind: 'tool' as const,
       version: '1.0.0',
     })),
   ]);
+}
+
+function carPurchaseCatalog() {
+  return catalogFor(CAR_PURCHASE_MANIFEST);
+}
+
+function bidComparisonCatalog() {
+  return catalogFor(BID_COMPARISON_MANIFEST);
+}
+
+/**
+ * Assembles the same seeded `bid-comparison` `CaseState.entities`/`.sources`
+ * a fresh demo case would hold, for the invariant tests below: `instantiateCase`
+ * alone always seeds `entities: []`/`sources: []` (this file's own header
+ * comment), so both real builders are folded in exactly the way a seed
+ * pipeline would.
+ */
+function seededBidComparisonCase() {
+  const pack = compileBidComparisonPack(bidComparisonCatalog(), FIXED_CLOCK);
+  const caseState = instantiateCase(
+    pack,
+    { selectedBy: 'router', reasons: ['test: seeded bid-comparison case'] },
+    FIXED_CLOCK,
+    fixedIdGenerator(),
+  );
+  return {
+    ...caseState,
+    entities: buildBidComparisonEntities(FIXED_CLOCK),
+    sources: buildBidComparisonSources(FIXED_CLOCK),
+  };
+}
+
+/** Every `sourceIds` entry every attribute on every entity cites, deduplicated. */
+function citedSourceIds(
+  entities: { attributes: Record<string, { sourceIds: readonly string[] }> }[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const entity of entities) {
+    for (const attribute of Object.values(entity.attributes)) {
+      for (const sourceId of attribute.sourceIds) {
+        ids.add(sourceId);
+      }
+    }
+  }
+  return ids;
 }
 
 describe('CAR_PURCHASE_CANDIDATE_IDS', () => {
@@ -323,6 +374,209 @@ describe('buildBidComparisonEntities', () => {
         `bid "${entity.id}" must not undercut Northgate's adjusted total`,
       ).toBeGreaterThan(northgateAdjusted!);
     }
+  });
+});
+
+describe('buildBidComparisonSources / seeded bid-comparison case sources', () => {
+  // INVARIANT, not a hardcoded id list: every `sourceIds` entry any
+  // bid-comparison entity attribute cites must resolve to a real `Source`
+  // present on the seeded case. This is the regression test for the defect
+  // where a freshly seeded case held 60 distinct cited sourceIds and zero
+  // `Source` rows -- "No sources yet" in the UI while every attribute
+  // claimed a citation.
+  it('provides a Source for every sourceIds entry every seeded entity attribute cites, and the cited set is non-empty', () => {
+    const caseState = seededBidComparisonCase();
+    const citedIds = citedSourceIds(caseState.entities);
+    const sourceIdsOnCase = new Set(caseState.sources.map((source) => source.id));
+
+    // Non-empty, so this assertion can never pass vacuously.
+    expect(citedIds.size).toBeGreaterThan(0);
+
+    for (const sourceId of citedIds) {
+      expect(
+        sourceIdsOnCase.has(sourceId),
+        `sourceId "${sourceId}" is cited by a seeded entity attribute but has no matching Source on the case`,
+      ).toBe(true);
+    }
+  });
+
+  it('never produces an orphan Source -- every Source it builds is cited by at least one seeded entity attribute', () => {
+    const caseState = seededBidComparisonCase();
+    const citedIds = citedSourceIds(caseState.entities);
+
+    for (const source of caseState.sources) {
+      expect(
+        citedIds.has(source.id),
+        `Source "${source.id}" is not cited by any seeded entity attribute`,
+      ).toBe(true);
+    }
+  });
+
+  it('builds Source records that satisfy SourceSchema (fixture origin, unverified, a real retrievedAt, a real non-empty summary)', () => {
+    const sources = buildBidComparisonSources(FIXED_CLOCK);
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(() => SourceSchema.parse(source)).not.toThrow();
+      expect(source.origin).toBe('fixture');
+      expect(source.verification).toBe('unverified');
+      expect(source.summary).toBeTruthy();
+    }
+  });
+
+  it('deduplicates: the license/named-insured Source ids are shared across entities, and each still resolves to exactly one Source', () => {
+    const sources = buildBidComparisonSources(FIXED_CLOCK);
+    const idCounts = new Map<string, number>();
+    for (const source of sources) {
+      idCounts.set(source.id, (idCounts.get(source.id) ?? 0) + 1);
+    }
+    for (const [id, count] of idCounts) {
+      expect(count, `Source id "${id}" must be built exactly once`).toBe(1);
+    }
+  });
+
+  // Regression test for the casing bug: `license-lookup.ts`'s own
+  // `licenseSourceId()` lowercases the licence number (scripts/check-source.ts
+  // flags the uppercase form as a possible secret -- see that function's own
+  // doc comment) before building the id. The seed must cite that exact
+  // lowercase id, never a re-uppercased copy of it, or the citation can
+  // never resolve against what the tool -- and a live investigation run --
+  // actually produces.
+  it("cites the license source id in the tool's own lowercase form, never the bid fixture's uppercase licence number", () => {
+    const entities = buildBidComparisonEntities(FIXED_CLOCK);
+    const northgate = entities.find((entity) => entity.id === 'bid-northgate');
+    const licenseStatusSourceIds = northgate?.attributes['bid.license_status']?.sourceIds ?? [];
+    expect(licenseStatusSourceIds).toEqual(['source-license-pl-4417-ng']);
+
+    const citedIds = citedSourceIds(entities);
+    for (const sourceId of citedIds) {
+      if (!sourceId.startsWith('source-license-')) continue;
+      expect(sourceId, `license source id "${sourceId}" must be all-lowercase`).toBe(
+        sourceId.toLowerCase(),
+      );
+    }
+  });
+
+  // Regression test for the defect this task fixes: a freshly seeded case
+  // held sixty real `Source`s but every one carried `tags: undefined`, so
+  // the Reference library rendered one flat 60-item scroll with no filter
+  // chips (the document-import path's sources DO carry tags, and the UI
+  // already renders chips for them -- the seeded sources simply did not
+  // participate). `BID_COMPARISON_SOURCE_TAGS` (seeds.ts) is the small,
+  // deliberate vocabulary this closes the gap with.
+  describe('tags', () => {
+    it('gives every seeded Source a non-empty tags array whose entries all satisfy SourceSchema', () => {
+      const sources = buildBidComparisonSources(FIXED_CLOCK);
+      expect(sources.length).toBeGreaterThan(0);
+      for (const source of sources) {
+        expect(source.tags, `Source "${source.id}" must carry tags`).toBeDefined();
+        expect(source.tags!.length).toBeGreaterThan(0);
+        // A person can filter by two or so, never a sprawling per-source
+        // taxonomy -- see BID_COMPARISON_SOURCE_TAGS's own header.
+        expect(source.tags!.length).toBeLessThanOrEqual(2);
+        for (const tag of source.tags!) {
+          // Lowercase-kebab, matching every tag `command-service.ts` mints
+          // ('bid-document', 'import-check') -- a deliberate house style,
+          // not a SourceSchema requirement (`tags` is free-form there).
+          expect(tag, `tag "${tag}" on Source "${source.id}" must be lowercase-kebab`).toMatch(
+            /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/,
+          );
+        }
+      }
+      // SourceSchema itself governs length/safety (safeString(60), max 20
+      // entries) -- exercised here via the real schema, not re-asserted by
+      // hand.
+      for (const source of sources) {
+        expect(() => SourceSchema.parse(source)).not.toThrow();
+      }
+    });
+
+    it('uses exactly the chosen five-tag vocabulary -- a future addition must be deliberate, not drift', () => {
+      const sources = buildBidComparisonSources(FIXED_CLOCK);
+      const distinctTags = new Set(sources.flatMap((source) => source.tags ?? []));
+      expect(distinctTags).toEqual(new Set(Object.values(BID_COMPARISON_SOURCE_TAGS)));
+    });
+
+    it('tags the twelve bid submissions with exactly the bid-document tag, one per bid', () => {
+      const sources = buildBidComparisonSources(FIXED_CLOCK);
+      const bidSubmissions = sources.filter((source) =>
+        source.tags?.includes(BID_COMPARISON_SOURCE_TAGS.bidDocument),
+      );
+      expect(bidSubmissions).toHaveLength(BID_FIXTURE_NAMES.length);
+      for (const source of bidSubmissions) {
+        expect(source.tags).toEqual([BID_COMPARISON_SOURCE_TAGS.bidDocument]);
+        expect(source.title.endsWith('bid submission')).toBe(true);
+      }
+    });
+
+    it("tags the bid-calculator's derivations (adjusted total AND scope completeness) with bid-calculation -- two per bid", () => {
+      const sources = buildBidComparisonSources(FIXED_CLOCK);
+      const calculations = sources.filter((source) =>
+        source.tags?.includes(BID_COMPARISON_SOURCE_TAGS.bidCalculation),
+      );
+      // Two derivations (adjusted total, scope completeness) for every bid.
+      expect(calculations).toHaveLength(BID_FIXTURE_NAMES.length * 2);
+      for (const source of calculations) {
+        expect(source.tags).toEqual([BID_COMPARISON_SOURCE_TAGS.bidCalculation]);
+        expect(source.id).toMatch(/^source-bid-calculator-/);
+      }
+      // Never overlaps the credential checks below -- a derivation is never
+      // also a registry lookup.
+      for (const source of calculations) {
+        expect(source.tags).not.toContain(BID_COMPARISON_SOURCE_TAGS.credentialCheck);
+      }
+    });
+
+    it('tags the licence registry and certificate-of-insurance records as import-check, and keeps them distinguishable from each other', () => {
+      const sources = buildBidComparisonSources(FIXED_CLOCK);
+      const credentialChecks = sources.filter((source) =>
+        source.tags?.includes(BID_COMPARISON_SOURCE_TAGS.credentialCheck),
+      );
+      // One licence record and one certificate per bid.
+      expect(credentialChecks).toHaveLength(BID_FIXTURE_NAMES.length * 2);
+
+      const licenseRecords = credentialChecks.filter((source) =>
+        source.tags?.includes(BID_COMPARISON_SOURCE_TAGS.licenseRegistry),
+      );
+      const insuranceRecords = credentialChecks.filter((source) =>
+        source.tags?.includes(BID_COMPARISON_SOURCE_TAGS.certificateOfInsurance),
+      );
+      expect(licenseRecords).toHaveLength(BID_FIXTURE_NAMES.length);
+      expect(insuranceRecords).toHaveLength(BID_FIXTURE_NAMES.length);
+      // Every credential check is exactly one of the two sub-kinds, never
+      // both and never neither.
+      expect(licenseRecords.length + insuranceRecords.length).toBe(credentialChecks.length);
+      for (const source of licenseRecords) {
+        expect(source.tags).toEqual([
+          BID_COMPARISON_SOURCE_TAGS.credentialCheck,
+          BID_COMPARISON_SOURCE_TAGS.licenseRegistry,
+        ]);
+        expect(source.id).toMatch(/^source-license-/);
+      }
+      for (const source of insuranceRecords) {
+        expect(source.tags).toEqual([
+          BID_COMPARISON_SOURCE_TAGS.credentialCheck,
+          BID_COMPARISON_SOURCE_TAGS.certificateOfInsurance,
+        ]);
+        expect(source.id).toMatch(/-named-insured$/);
+      }
+    });
+
+    it('leaves id/url/excerpt untouched by tagging -- ids stay the tool-built form and urls stay the sift:// fixture shape', () => {
+      const sources = buildBidComparisonSources(FIXED_CLOCK);
+      for (const source of sources) {
+        expect(source.url).toBe(`sift://fixtures/bid-comparison/${source.id}`);
+        expect(source.id).toMatch(/^[a-z0-9._-]+$/);
+        expect(source).not.toHaveProperty('excerpt');
+      }
+      // Spot-check the same licence id the lowercase-casing test above
+      // pins, so this file has one place that ties a concrete id to its
+      // real tag set.
+      const northgateLicense = sources.find((source) => source.id === 'source-license-pl-4417-ng');
+      expect(northgateLicense?.tags).toEqual([
+        BID_COMPARISON_SOURCE_TAGS.credentialCheck,
+        BID_COMPARISON_SOURCE_TAGS.licenseRegistry,
+      ]);
+    });
   });
 });
 

@@ -157,7 +157,7 @@ Every item below is a literal Devpost web-form field. No submission has been sen
 - [ ] Field `27729` — Submitter Type is answered truthfully. — submitter action.
 - [ ] Field `27730` — Country of Residence is answered truthfully. — submitter action.
 - [ ] Field `27731` — Organization name is completed if applicable. — submitter action.
-- [ ] Field `27732` — Competition Track is selected; intended answer is Everyday Agents. — submitter action; repository-internal positioning is consistently Everyday Agents (see "Project and track qualification" above).
+- [ ] Field `27732` — Competition Track is selected; intended answer is **Professional Agents**. — submitter action; repository-internal positioning is consistently Professional Agents since the 2026-09-07 hero switch to `bid-comparison` (see "Project and track qualification" above, and ADR 0017). This row previously said Everyday Agents, which was the pre-switch answer and would have selected the wrong track on the form.
 - [ ] Field `27733` — Public code repository URL is the final verified repository. — submitter action; the URL itself is verified public with a visible MIT license (see "Required public repository" above) — only the act of entering it into Devpost remains.
 - [ ] Field `27734` — Architecture diagram is the final allowed-format file under 35 MiB. — submitter action; the file itself passes format/size checks (see "Required architecture diagram" above). Re-derived and regenerated 2026-09-13 (four real inaccuracies found and fixed — see that section); current export is 892,149 bytes (0.8508 MiB) at sha256 `52291758a15efc483e78bb9eb8863cb982cbac01df9ca030c700822f57e8c538`, so nothing blocks the upload but the Devpost form action itself.
 - [ ] Field `27735` — AWS Builder ID is supplied and personally verified. — submitter action; no AWS identity of any kind is available in this environment to even partially corroborate (`aws sts get-caller-identity` → `NoCredentials`).
@@ -256,7 +256,7 @@ Every item below is a literal Devpost web-form field. No submission has been sen
 ## Submit and preserve
 
 - [ ] A human compares the final Devpost form with every checkbox above. — submitter action; this is the explicit final human gate this whole checklist exists to feed.
-- [ ] The submission is completed before September 14, 2026 at 5:00 p.m. PT / 8:00 p.m. ET. — submitter action; today is 2026-09-05, so the window remains open but nothing has been submitted yet.
+- [ ] The submission is completed before September 14, 2026 at 5:00 p.m. PT / 8:00 p.m. ET. — submitter action; as of 2026-09-13 the window remains open but nothing has been submitted yet. One day remains.
 - [ ] Devpost shows the project as submitted rather than saved as a draft. — submitter action.
 - [ ] Submission confirmation is saved privately. — submitter action.
 - [ ] The submitted repository commit receives an immutable release tag. — submitter action; `git tag` in this session returns no tags yet, confirming this genuinely has not happened (not merely unchecked).

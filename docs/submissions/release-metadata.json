@@ -30,9 +30,9 @@
     "webmcpFile": "artifacts/demo/sift-webmcp-demo-FINAL.mp4",
     "webmcpStatus": "final",
     "agentsForHumans": null,
-    "agentsForHumansDraft": 154.907,
-    "agentsForHumansDraftFile": "artifacts/demo/sift-aws-energy-demo-DRAFT.mp4",
-    "agentsForHumansStatus": "draft only; pending re-voicing per rec/energy/REVOICE.md, so no final duration exists yet",
+    "agentsForHumansDraft": null,
+    "agentsForHumansDraftFile": null,
+    "agentsForHumansStatus": "NOT RECORDED. The hero changed to bid-comparison on 2026-09-07 (ADR 0017), which superseded the only existing cut. artifacts/demo/sift-aws-energy-demo-DRAFT.mp4 (154.907s, measured 2026-09-05) is a Home Energy Guardian film and is NOT a draft of this submission's video -- it demonstrates a different pack and must not be uploaded. The script to record against is docs/submissions/agents-for-humans/demo-script-bid.md (nine beats, 300s). No bid-comparison footage exists yet, so no duration can be measured.",
     "measuredWith": "ffprobe -v error -show_entries format=duration, run directly against the files on 2026-09-05",
     "note": "Limits: WebMCP under 3:00 (180s), Agents for Humans 5:00 or under (300s). Both measured values are inside their limits, but neither file sits at the default path scripts/test-submission.ts probes (docs/demo/webmcp-recording.mp4, docs/demo/aws-recording.mp4), so that script still reports both video-duration checks as SKIP rather than PASS. Point SIFT_WEBMCP_VIDEO_PATH / SIFT_AWS_VIDEO_PATH at the files above to have the gate measure them itself."
   },
@@ -89,9 +89,9 @@
   "_todo": [
     "Record the WebMCP demo video (docs/submissions/webmcp/demo-script.md) and set webmcpVideoUrl once uploaded (must be under 3:00).",
     "Record the Agents for Humans demo video (docs/submissions/agents-for-humans/demo-script.md) and set agentsForHumansVideoUrl once uploaded (must be 5:00 or under).",
-    "RELEASE BLOCKER: make the repository public. `gh repo view jordanallen87/sift-aws --json visibility,licenseInfo` (2026-09-07) returns visibility PRIVATE with an MIT license on file. Run `gh repo edit jordanallen87/sift-aws --visibility public` before submitting. (The superseded 2026-09-05 note here recorded jordanallen87/sift as PUBLIC; that was the WebMCP repository, before the 2026-09-07 split.)",
+    "DONE 2026-09-13: the repository is public. `gh repo view jordanallen87/sift-aws --json visibility,licenseInfo,isPrivate` returns visibility PUBLIC, isPrivate false, with an MIT license on file. The prior RELEASE BLOCKER entry here (recorded 2026-09-07 as PRIVATE) is superseded and has been removed.",
     "List the exact WebMCP test clients/browser versions actually used in webmcpTestClients once tested (e.g. 'ChatGPT in-app browser, build X' or 'Chrome NNN with WebMCP origin trial flag Y').",
     "If AWS credentials become available, deploy to Bedrock AgentCore and fill in agentCore.deployed=true plus its own endpoint/CloudWatch correlation details."
   ],
-  "repositoryUrlNote": "Changed 2026-09-07. The Agents for Humans submission is jordanallen87/sift-aws. The earlier jordanallen87/sift carries the WebMCP Challenge submission and was restored to its submitted state (tag webmcp-submitted -> 61824c1); it is not this submission's repository. NOTE: sift-aws is PRIVATE and must be made public before submitting -- the AWS rules require a public repository with a visible license."
+  "repositoryUrlNote": "Changed 2026-09-07. The Agents for Humans submission is jordanallen87/sift-aws. The earlier jordanallen87/sift carries the WebMCP Challenge submission and was restored to its submitted state (tag webmcp-submitted -> 61824c1); it is not this submission's repository. sift-aws was verified PUBLIC with a visible MIT license on 2026-09-13, satisfying the AWS rule requiring a public repository with a visible licence. (An earlier note here said it was PRIVATE and had to be made public; that was true on 2026-09-07 and is no longer.)"
 }

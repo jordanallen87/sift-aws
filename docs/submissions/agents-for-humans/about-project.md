@@ -59,6 +59,8 @@ there. It declares exactly one dependency (`@sift/contracts`) and its source con
 call, no network, no filesystem, no environment read. That's what makes "the ranking is arithmetic
 the model never touches" a claim you can check rather than one you have to believe.
 
+**And you can watch it happen.** The demo video's penultimate beat is the live call, not a description of one: a PDF goes in on camera, and the screen reports "A model read 6 values off this document and could not read 2", with the quoted total marked *Read from the document, Confidence 40%, Not verified*, and the credential field left empty because the document does not state it. The model proposes, declines to invent, and never claims verified.
+
 **What the model does and does not do, stated plainly.** The Strands orchestration is real and
 executes for real: `Swarm`/`Graph`, the vended plugins, the interventions, the lifecycle hooks and the
 OpenTelemetry spans are all genuine SDK behaviour. The hero demo's model *responses*, however, are

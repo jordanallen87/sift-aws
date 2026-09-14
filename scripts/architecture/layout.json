@@ -61,6 +61,12 @@
       "stroke": "#b91c1c",
       "color": "#7f1d1d",
       "strokeWidth": 3
+    },
+    "live": {
+      "fill": "#fed7aa",
+      "stroke": "#c2410c",
+      "color": "#7c2d12",
+      "strokeWidth": 4
     }
   },
   "groups": [
@@ -69,7 +75,7 @@
       "label": "ChatGPT Right Pane (Browser)",
       "x": 40,
       "y": 40,
-      "w": 650,
+      "w": 596,
       "h": 300,
       "palette": "browser",
       "cols": 2,
@@ -78,9 +84,9 @@
     {
       "id": "RAILWAY",
       "label": "Railway Web/API Gateway (Express, one service)",
-      "x": 720,
+      "x": 666,
       "y": 40,
-      "w": 630,
+      "w": 578,
       "h": 300,
       "palette": "railway",
       "cols": 2,
@@ -89,9 +95,9 @@
     {
       "id": "TARGETS",
       "label": "Execution Targets (SIFT_EXECUTION_TARGET;<br/>both surfaces always live, not env-selected)",
-      "x": 1380,
+      "x": 1274,
       "y": 40,
-      "w": 650,
+      "w": 596,
       "h": 300,
       "palette": "targets",
       "cols": 2,
@@ -141,7 +147,7 @@
       "h": 650,
       "palette": "strands",
       "cols": 3,
-      "rows": 3
+      "rows": 4
     },
     {
       "id": "OBS",
@@ -167,16 +173,14 @@
     },
     {
       "id": "AWS",
-      "label": "AWS (optional, credential-gated)",
-      "x": 2060,
+      "label": "AWS (credential-gated)",
+      "x": 1900,
       "y": 40,
-      "w": 300,
+      "w": 460,
       "h": 300,
       "palette": "aws",
       "cols": 1,
-      "rows": 1,
-      "style": "dashed",
-      "caption": "Credential-gated. Only reachable once AgentCore ships to Bedrock."
+      "rows": 2
     }
   ],
   "nodes": [
@@ -489,9 +493,27 @@
       "id": "CW",
       "group": "AWS",
       "shape": "box",
-      "row": 0,
+      "row": 1,
       "col": 0,
       "label": "CloudWatch /<br/>AgentCore Observability"
+    },
+    {
+      "id": "BIDREADER",
+      "group": "STRANDS",
+      "shape": "box",
+      "row": 3,
+      "col": 0,
+      "colspan": 3,
+      "label": "Bid document reader<br/>real Strands Agent on a real BedrockModel<br/>SIFT_BID_DOCUMENT_READER_ENABLED, opt-in"
+    },
+    {
+      "id": "BEDROCK",
+      "group": "AWS",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "accent": "live",
+      "label": "Amazon Bedrock<br/>Amazon Nova Lite (amazon.nova-lite-v1:0)<br/>LIVE inference: reads a bid document,<br/>proposes values, never marks them verified"
     }
   ],
   "edges": [
@@ -823,6 +845,27 @@
       "style": "solid",
       "label": "",
       "emphasis": "normal"
+    },
+    {
+      "from": "HTTP",
+      "to": "BIDREADER",
+      "style": "solid",
+      "label": "PDF text extracted in the browser,<br/>posted as plain text",
+      "emphasis": "primary"
+    },
+    {
+      "from": "BIDREADER",
+      "to": "BEDROCK",
+      "style": "solid",
+      "label": "real model call",
+      "emphasis": "primary"
+    },
+    {
+      "from": "BIDREADER",
+      "to": "CASEPLAN",
+      "style": "solid",
+      "label": "attributes as origin: agent_proposed,<br/>never verified",
+      "emphasis": "primary"
     }
   ]
 }

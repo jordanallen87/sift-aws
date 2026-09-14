@@ -133,6 +133,7 @@ import {
   type BidComparisonSwarmResult,
 } from './bid-comparison-swarm.js';
 import { diffJsonValues, normalizeCaseStateChange, type RuntimeEvent } from './event-normalizer.js';
+import { resolveModelProvider } from './model-provider.js';
 import { deriveScoredRecommendationFields, mergeLimitations } from './recommendation-scoring.js';
 import {
   buildBidComparisonSwarmScriptedProviders,
@@ -198,6 +199,19 @@ export interface BidComparisonEngineDeps {
   readonly skillsRootDir: string;
   /** Optional demo pacing in ms per scripted model turn. Omitted/0 everywhere except a deliberate recording session -- see `ScriptedModelProvider.turnDelayMs`. */
   readonly demoPacingMs?: number;
+  /**
+   * Mirrors `SiftConfig.liveSwarmEnabled` (config.ts) exactly -- see that
+   * field's doc comment for why this must stay opt-in. When `true`,
+   * `buildBidComparisonSwarmDepsFromCase` gives every Swarm node
+   * (`modelId`/`awsRegion` below) a real model instead of the deterministic
+   * `scriptedModelFor` fixtures. Omitted/`false` everywhere except a
+   * deliberate live run.
+   */
+  readonly liveSwarmEnabled?: boolean;
+  /** `SIFT_MODEL_ID` -- only read when `liveSwarmEnabled` is `true`. */
+  readonly modelId?: string;
+  /** `AWS_REGION` -- only read when `liveSwarmEnabled` is `true`. */
+  readonly awsRegion?: string;
 }
 
 export interface BidComparisonEngine extends InvestigationEngine {
@@ -408,8 +422,49 @@ function scenarioFoldDeps(deps: BidComparisonEngineDeps): {
   clock: Clock;
   idGenerator: IdGenerator;
   skillsRootDir: string;
+  liveSwarmEnabled: boolean | undefined;
+  modelId: string | undefined;
+  awsRegion: string | undefined;
 } {
-  return { clock: deps.clock, idGenerator: deps.idGenerator, skillsRootDir: deps.skillsRootDir };
+  return {
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    skillsRootDir: deps.skillsRootDir,
+    liveSwarmEnabled: deps.liveSwarmEnabled,
+    modelId: deps.modelId,
+    awsRegion: deps.awsRegion,
+  };
+}
+
+/**
+ * Selects `BidComparisonSwarmDeps.modelFor`: the deterministic
+ * `scriptedModelFor` fixtures every release gate and the recorded demo
+ * require by default, or -- only when `BidComparisonEngineDeps
+ * .liveSwarmEnabled` is explicitly `true` -- one real model
+ * (`resolveModelProvider`, `model-provider.ts`) shared by every specialist
+ * and the decision synthesizer for this run. `SiftConfig.liveSwarmEnabled`'s
+ * doc comment (config.ts) has the full reasoning for why this must stay
+ * opt-in. Exported for the same direct-unit-testability reason
+ * `extractFavoredBidId` is.
+ */
+export function buildModelFor(
+  providers: BidComparisonSwarmScriptedProviders,
+  deps: {
+    liveSwarmEnabled?: boolean | undefined;
+    modelId?: string | undefined;
+    awsRegion?: string | undefined;
+  },
+): BidComparisonSwarmDeps['modelFor'] {
+  if (deps.liveSwarmEnabled !== true) {
+    return scriptedModelFor(providers);
+  }
+  if (deps.modelId === undefined || deps.awsRegion === undefined) {
+    throw new Error(
+      'bid-comparison-engine: liveSwarmEnabled is true but modelId/awsRegion were not provided',
+    );
+  }
+  const liveModel = resolveModelProvider({ modelId: deps.modelId, awsRegion: deps.awsRegion });
+  return () => liveModel;
 }
 
 /** `bid.<x>` obligation id each sequential Swarm node's context resolves. Mirrors `bid-comparison-swarm.test.ts`'s own mapping. */
@@ -429,13 +484,24 @@ const SEQUENTIAL_OBLIGATION_ID: Record<BidComparisonSequentialSpecialistId, stri
  * (reads only `CaseState`/`CompiledDecisionPack`/`obligationId` -- nothing
  * pack-specific) for every `ExecutionRequest`, and
  * `scripted-beats/bid-comparison.ts`'s own already-exported
- * `scriptedModelFor` for `modelFor`.
+ * `scriptedModelFor` for `modelFor` -- via this file's own `buildModelFor`,
+ * which is `scriptedModelFor(providers)` unconditionally UNLESS
+ * `BidComparisonEngineDeps.liveSwarmEnabled` is explicitly `true`
+ * (`config.ts`'s `SiftConfig.liveSwarmEnabled` doc comment has the full
+ * opt-in reasoning).
  */
 function buildBidComparisonSwarmDepsFromCase(
   caseState: CaseState,
   pack: CompiledDecisionPack,
   providers: BidComparisonSwarmScriptedProviders,
-  deps: { clock: Clock; idGenerator: IdGenerator; skillsRootDir: string },
+  deps: {
+    clock: Clock;
+    idGenerator: IdGenerator;
+    skillsRootDir: string;
+    liveSwarmEnabled?: boolean | undefined;
+    modelId?: string | undefined;
+    awsRegion?: string | undefined;
+  },
   start: BidComparisonSwarmNodeId | undefined,
 ): BidComparisonSwarmDeps {
   const specialistRequests = Object.fromEntries(
@@ -447,7 +513,7 @@ function buildBidComparisonSwarmDepsFromCase(
 
   return {
     pack,
-    modelFor: scriptedModelFor(providers),
+    modelFor: buildModelFor(providers, deps),
     skillsRootDir: deps.skillsRootDir,
     clock: deps.clock,
     idGenerator: deps.idGenerator,

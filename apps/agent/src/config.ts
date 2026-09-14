@@ -6,9 +6,9 @@
  * `SIFT_AUTHORING_ENABLED`, `SIFT_DEBUG_ENABLED`, `SIFT_TRACING_ENABLED`,
  * `SIFT_DEBUG_PAYLOAD_MODE`, `SIFT_DEBUG_RETENTION_DAYS`, `SIFT_MODEL_ID`,
  * `AWS_REGION`, `SIFT_PUBLIC_ORIGIN`, `SIFT_DEMO_PACING_MS`,
- * `SIFT_BID_DOCUMENT_READER_ENABLED`), applies exactly the defaults shown
- * there, and throws one `ConfigError` listing every invalid/missing
- * variable at once.
+ * `SIFT_BID_DOCUMENT_READER_ENABLED`, `SIFT_LIVE_SWARM_ENABLED`), applies
+ * exactly the defaults shown there, and throws one `ConfigError` listing
+ * every invalid/missing variable at once.
  *
  * `OTEL_EXPORTER_OTLP_ENDPOINT`/`OTEL_EXPORTER_OTLP_HEADERS` are documented
  * in `.env.example` as an optional passthrough to Strands's own OTEL setup
@@ -52,6 +52,7 @@ export interface RawEnv {
   AWS_REGION?: string | undefined;
   SIFT_PUBLIC_ORIGIN?: string | undefined;
   SIFT_BID_DOCUMENT_READER_ENABLED?: string | undefined;
+  SIFT_LIVE_SWARM_ENABLED?: string | undefined;
 }
 
 export interface SiftConfig {
@@ -101,6 +102,31 @@ export interface SiftConfig {
    * JSON/CSV or typing its values in directly both still work.
    */
   bidDocumentReaderEnabled: boolean;
+  /**
+   * Enables a live `bid-comparison` Swarm run: every specialist `Agent`
+   * (`runtime/bid-comparison-swarm.ts`'s scope/price/credential/schedule
+   * analysts, source challenger, and decision synthesizer) calls a real
+   * model (`SIFT_MODEL_ID`/`AWS_REGION`, `resolveModelProvider` in
+   * `runtime/model-provider.ts`) instead of the deterministic
+   * `ScriptedModelProvider` fixtures `scriptedModelFor` builds
+   * (`runtime/bid-comparison-engine.ts`'s
+   * `buildBidComparisonSwarmDepsFromCase`).
+   *
+   * Defaults to `false` and MUST stay `false` for every release gate and
+   * the recorded demo: they assert the swarm's exact scripted event
+   * sequence (specialist order, tool calls, structured handoffs) offline,
+   * and a real model's trajectory is not reproducible turn-for-turn. It
+   * also needs real AWS credentials, exactly like
+   * `bidDocumentReaderEnabled` above -- see that field's doc comment for
+   * the shared "no network, no AWS credentials" reasoning
+   * (docs/specs/architecture.md's complete local demo requirement).
+   *
+   * This is a standalone, separately-scoped experiment: turning it on does
+   * not enable `bidDocumentReaderEnabled`'s PDF-reading route or vice
+   * versa, and neither flag affects `car-purchase`'s or `home-energy`'s
+   * own still-scripted-only Swarm runs.
+   */
+  liveSwarmEnabled: boolean;
 }
 
 export class ConfigError extends Error {
@@ -172,6 +198,9 @@ const ConfigSchema = z.object({
   // Opt-in only -- see `SiftConfig.bidDocumentReaderEnabled`'s own doc
   // comment for why this must default to `false`.
   SIFT_BID_DOCUMENT_READER_ENABLED: booleanFromEnvString.default(false),
+  // Opt-in only -- see `SiftConfig.liveSwarmEnabled`'s own doc comment for
+  // why this must default to `false`.
+  SIFT_LIVE_SWARM_ENABLED: booleanFromEnvString.default(false),
 });
 
 /**
@@ -206,6 +235,7 @@ export function loadConfig(env: RawEnv = process.env): SiftConfig {
     awsRegion: parsed.AWS_REGION,
     demoPacingMs: parsed.SIFT_DEMO_PACING_MS,
     bidDocumentReaderEnabled: parsed.SIFT_BID_DOCUMENT_READER_ENABLED,
+    liveSwarmEnabled: parsed.SIFT_LIVE_SWARM_ENABLED,
   };
   if (parsed.SIFT_PUBLIC_ORIGIN !== undefined) {
     config.publicOrigin = parsed.SIFT_PUBLIC_ORIGIN;

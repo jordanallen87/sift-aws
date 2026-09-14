@@ -23,6 +23,7 @@ const DEFAULTS = {
   demoPacingMs: 0,
   publicOrigin: undefined,
   bidDocumentReaderEnabled: false,
+  liveSwarmEnabled: false,
 } as const;
 
 describe('loadConfig', () => {
@@ -58,6 +59,7 @@ describe('loadConfig', () => {
       demoPacingMs: 0,
       publicOrigin: 'https://sift.example.com',
       bidDocumentReaderEnabled: false,
+      liveSwarmEnabled: false,
     });
   });
 
@@ -69,6 +71,12 @@ describe('loadConfig', () => {
     expect(loadConfig({ SIFT_BID_DOCUMENT_READER_ENABLED: 'false' }).bidDocumentReaderEnabled).toBe(
       false,
     );
+  });
+
+  it("reads and coerces SIFT_LIVE_SWARM_ENABLED (opt-in only -- release gates assert the bid-comparison Swarm's exact scripted event sequence offline)", () => {
+    expect(loadConfig({}).liveSwarmEnabled).toBe(false);
+    expect(loadConfig({ SIFT_LIVE_SWARM_ENABLED: 'true' }).liveSwarmEnabled).toBe(true);
+    expect(loadConfig({ SIFT_LIVE_SWARM_ENABLED: 'false' }).liveSwarmEnabled).toBe(false);
   });
 
   it('treats an empty-string SIFT_MODEL_ID as unset and applies the default', () => {

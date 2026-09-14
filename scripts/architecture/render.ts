@@ -50,7 +50,7 @@ export interface LayoutNode {
   row: number;
   col: number;
   colspan?: number;
-  accent?: 'authGate';
+  accent?: 'authGate' | 'live';
 }
 
 export interface LayoutGroup {

@@ -167,6 +167,14 @@ export function startServer(options: StartServerOptions = {}): Promise<StartedSe
     idGenerator,
     skillsRootDir,
     demoPacingMs: config.demoPacingMs,
+    // Strictly opt-in -- see `SiftConfig.liveSwarmEnabled`'s own doc
+    // comment (config.ts) for the full reasoning. `modelId`/`awsRegion` are
+    // threaded through unconditionally, the same way `demoPacingMs` above
+    // is; `bid-comparison-engine.ts`'s own `buildModelFor` only reads them
+    // at all when `liveSwarmEnabled` is `true`.
+    liveSwarmEnabled: config.liveSwarmEnabled,
+    modelId: config.modelId,
+    awsRegion: config.awsRegion,
   });
   const engines: Readonly<Record<string, InvestigationEngine>> = {
     [carPurchasePack.identity.id]: carPurchaseEngine,

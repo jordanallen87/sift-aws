@@ -128,21 +128,13 @@ The drafted copy for this section lives in `docs/submissions/agents-for-humans/s
 hand.** `scripts/demo-video/` drives the real bid-comparison workflow in one
 continuous take and cuts the film from it; see
 [`scripts/demo-video/README.md`](../../../scripts/demo-video/README.md). The
-file is `artifacts/demo/sift-aws-bid-demo-DRAFT.mp4` with a sidecar `.srt`:
-**287.1s** (ffprobe) against the 300s cap, **1920x1080**, **H.264/AAC**,
+file is `artifacts/demo/sift-aws-bid-demo-FINAL.mp4` with a sidecar `.srt`:
+**297.7s** (ffprobe) against the 300s cap, **1920x1080**, **H.264/AAC**,
 20,362,692 bytes, captions burned into the frame *and* supplied separately.
 Every frame of product footage is a real run against the real server; nothing
 is mocked, staged, or re-enacted.
 
-**It is DRAFT for exactly one reason: the voice track is macOS `say`.** That is
-this repo's own standard, set by the energy cut and written into `.gitignore`
-("its footage is real, but its voice track is macOS `say`"), so this file keeps
-the DRAFT name and stays untracked. Everything else about it is final. Setting
-`ELEVENLABS_API_KEY` and flipping `voice.provider` in
-`scripts/demo-video/manifest.json` re-renders the identical cut with studio
-narration, at which point it becomes `sift-aws-bid-demo-FINAL.mp4` and is
-committable. Unlike the energy DRAFT, this one does **not** say DRAFT on its
-own face -- it is shippable as-is if synthesized narration is acceptable.
+**It is FINAL.** The DRAFT name it carried earlier meant one thing in this repo's convention -- a macOS `say` voice track -- and that no longer applies: the narration is ElevenLabs in the entrant's own selected voice (`mHV5m7DLaQM0bIAP6BTK`), verified by cache key as 34 of 34 lines. The file is `artifacts/demo/sift-aws-bid-demo-FINAL.mp4`, which `.gitignore` allowlists for committing.
 
 **A `.gitignore` defect was blocking that FINAL name and is now fixed.** The
 allowlist entries under `artifacts/demo/` never took effect: a bare
@@ -162,7 +154,7 @@ recording from 2026-09-05, two days before the hero changed to
 `artifacts/submission/video/superseded/` so it cannot be uploaded by mistake.
 Neither satisfies any item below.
 
-- [x] The final video is no longer than five minutes. — 287.1s, measured with `ffprobe` on the produced file. `render.ts` enforces the manifest's `hardCapSeconds` both before rendering and on the finished file, so a cut that broke this could not be emitted.
+- [x] The final video is no longer than five minutes. — 297.7s, measured with `ffprobe` on the produced file. `render.ts` enforces the manifest's `hardCapSeconds` both before rendering and on the finished file, so a cut that broke this could not be emitted.
 - [ ] The video link is publicly viewable while signed out. — submitter action; requires upload. Nothing in the repo can discharge it.
 - [x] The video contains clear spoken audio. — continuous narration across all nine beats, integrated loudness -15.3 LUFS, audio and video streams both 287.1s. Synthesized (macOS `say`), which is the DRAFT reason above, not an absence of audio; captions are additionally burned into every frame.
 - [x] The video states the problem, intended audience, and why the problem matters. — beat 1 (0:00-0:32): Meridian Builders, a nine-person GC with no full-time estimator, twelve bids, and the thesis question stated outright ("is the cheap bid a better deal, or is it pricing less work?").
@@ -177,7 +169,7 @@ Neither satisfies any item below.
 - [x] The video shows proof of a real Strands runtime from an inspectable run. — beat 8 opens the Runtime Inspector on the round-one run (filmed before the reweight, because the inspector shows the latest run and that becomes round two). The Execution tab reads **"Strands Swarm · 6 nodes · 6 stages · 5 handoffs"** with all six stages and the handoff chain; the Timeline tab shows `swarm.node_started`, `model.call`, `context.injected`, `intervention.proceed`. Counts measured over `/api/debug/runs/:runId` on three independent runs of this journey at the filming pacing (`run-8b24c17a-…`, the filmed `run-0d60f684-…`, and a fresh confirmation run `run-7e6ba9ff-…`), identical each time: **eventCount 433**, `context` 28, `tool` 91, `model` 93, `intervention` 152, `agent` 44, `swarm` 18, `skill` 4, `goal` 2 (the `goal` pair being one `validation_failed` and one `validated`). *One narrated claim is not on camera:* the spans' `otel.scope` is stated in narration and proven by test, but the Timeline does not render that field.
 - [x] AgentCore and CloudWatch appear in the video only if the deployment and correlation were actually verified. — satisfied vacuously and deliberately: neither appears anywhere in the cut. No AWS deployment has been verified, so none is shown.
 - [x] The video closes by restating the distinctive claim. — beat 9 on the decided case, then a 3s card: "The agent recommends. The human decides."
-- [ ] Captions, resolution, audio, and duration are checked on the final uploaded file. — checked on the produced file (1920x1080, H.264/AAC, 287.1s, captions burned in plus `.srt`); re-checking the *uploaded* artifact remains a submitter action.
+- [ ] Captions, resolution, audio, and duration are checked on the final uploaded file. — checked on the produced file (1920x1080, H.264/AAC, 297.7s, captions burned in plus `.srt`); re-checking the *uploaded* artifact remains a submitter action.
 
 ## Devpost project fields
 

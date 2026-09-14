@@ -19,17 +19,26 @@
  * It is called out rather than quietly deleted because a confident, dated,
  * false comment is worse than no comment.
  *
- * Still true: all three hero engines construct their scripted provider
- * unconditionally (`bid-comparison-engine.ts:450`'s
- * `modelFor: scriptedModelFor(providers)`, `home-energy-engine.ts`'s
- * identical call, `car-purchase-engine.ts`'s
- * `buildCarPurchaseScriptedProviders()`), with no branch on config or
- * credential availability -- so every hero *trajectory* is deterministic,
- * which is what the release gates require.
+ * Still true for `home-energy-engine.ts` (identical scripted call) and
+ * `car-purchase-engine.ts` (`buildCarPurchaseScriptedProviders()`): both
+ * construct their scripted provider unconditionally, with no branch on
+ * config or credential availability, so every trajectory of those two
+ * heroes is deterministic, which is what the release gates require.
+ *
+ * **Updated 2026-09-14 (later the same day): `bid-comparison-engine.ts`
+ * now branches, behind an opt-in flag.** Its own `buildModelFor` calls
+ * `resolveModelProvider` here -- a real `BedrockModel` -- ONLY when
+ * `BidComparisonEngineDeps.liveSwarmEnabled` is explicitly `true`
+ * (`SiftConfig.liveSwarmEnabled`, `config.ts`, defaults `false`,
+ * `SIFT_LIVE_SWARM_ENABLED` unset everywhere except a deliberate live run);
+ * otherwise it still calls `scriptedModelFor(providers)` exactly as before.
+ * The default trajectory every release gate and the recorded demo depend
+ * on is therefore unchanged -- this is additive, not a replacement of the
+ * "Still true" paragraph above, which still fully describes the other two
+ * heroes and bid-comparison's own default (flag off) behavior.
  * This is stated here rather than left to be inferred from a grep, because
  * the phrase "for live runs" above otherwise reads as a description of
- * shipped behavior. Wiring the live path is genuinely unfinished work
- * blocked on AWS credentials; see docs/specs/strands-runtime.md
+ * shipped behavior for all three. See docs/specs/strands-runtime.md
  * "What actually ships".
  *
  * `ScriptedModelProvider` is a real Strands `Model` subclass (extends the

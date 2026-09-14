@@ -113,6 +113,7 @@ flowchart TD
     INTERVENE{{"Interventions: ScopeAuthorization,<br/>ConsequenceGuard, BudgetGuard,<br/>RetrySteering, EvidenceQualitySteering<br/>(Guide / Confirm / Deny)"}}
     SESS[("Sessions and snapshots<br/>LocalFileStorage")]
     HOOKS["Lifecycle hooks"]
+    BIDREADER["Bid document reader<br/>real Strands Agent on a real BedrockModel<br/>SIFT_BID_DOCUMENT_READER_ENABLED, opt-in"]
     CTXINJ --> SKILLS --> GRAPHSWARM
     GRAPHSWARM --> GOALLOOP
     GRAPHSWARM -.->|"no-progress -> Guide"| INTERVENE
@@ -153,8 +154,9 @@ flowchart TD
     RUNTIME --> BUNDLE
   end
 
-  subgraph AWS["AWS (optional, credential-gated)"]
+  subgraph AWS["AWS (credential-gated)"]
     direction TB
+    BEDROCK["Amazon Bedrock<br/>Amazon Nova Lite (amazon.nova-lite-v1:0)<br/>LIVE inference: reads a bid document,<br/>proposes values, never marks them verified"]
     CW["CloudWatch /<br/>AgentCore Observability"]
   end
 
@@ -171,6 +173,9 @@ flowchart TD
   AGENTCOREEXEC --> STRANDS
   AGENTCOREEXEC -.->|"trace/session/request IDs<br/>(only once actually deployed)"| CW
 
+  HTTP -->|"PDF text extracted in the browser,<br/>posted as plain text"| BIDREADER
+  BIDREADER -->|"real model call"| BEDROCK
+  BIDREADER -->|"attributes as origin: agent_proposed,<br/>never verified"| CASEPLAN
   INTERVENE -->|"candidate evidence /<br/>candidate recommendation only"| EVID
   READY -->|"recommendation<br/>(a proposal, not a decision)"| HUMAN
   INTERVENE -->|"Confirm required"| HUMAN

@@ -11,6 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import type { CommandReceipt, RunReceipt } from '@sift/contracts';
 import type { Clock, IdGenerator } from '@sift/core';
 import { compileBidComparisonPack, PackRegistry } from '@sift/packs';
@@ -23,8 +24,10 @@ import { SqliteActivityStore } from '../store/activity-store.js';
 import { SqliteCaseStore } from '../store/sqlite-case-store.js';
 import { SqliteRuntimeEventStore } from '../store/runtime-event-store.js';
 import { BID_COMPARISON_SWARM_NODE_IDS } from './bid-comparison-swarm.js';
+import { ScriptedModelProvider } from './model-provider.js';
 import {
   bidComparisonCapabilityCatalog,
+  buildModelFor,
   createBidComparisonEngine,
   determineBidComparisonRound,
   extractFavoredBidId,
@@ -32,6 +35,7 @@ import {
   type BidComparisonEngine,
 } from './bid-comparison-engine.js';
 import {
+  buildBidComparisonSwarmScriptedProviders,
   DECISION_TEXT_ROUND1,
   DECISION_TEXT_ROUND2,
   ROUND2_CRITERIA_WEIGHTS,
@@ -649,5 +653,49 @@ describe('BID_COMPARISON_SWARM_NODE_IDS', () => {
         'decision-synthesizer',
       ].sort(),
     );
+  });
+});
+
+// The `SIFT_LIVE_SWARM_ENABLED` opt-in this task adds: proves the branch
+// itself (`buildModelFor`) without ever running a live Swarm end to end --
+// constructing a `BedrockModel` is a pure, offline object construction
+// (`model-provider.test.ts`'s own `resolveModelProvider` tests already
+// establish this); no network call happens until something actually calls
+// `.stream()` on it, which none of these tests do.
+describe('buildModelFor (SIFT_LIVE_SWARM_ENABLED opt-in)', () => {
+  it('returns the unmodified scripted modelFor when liveSwarmEnabled is omitted -- the default, untouched trajectory', () => {
+    const providers = buildBidComparisonSwarmScriptedProviders(0);
+    const modelFor = buildModelFor(providers, {});
+    for (const nodeId of BID_COMPARISON_SWARM_NODE_IDS) {
+      expect(modelFor(nodeId)).toBe(providers[nodeId]);
+      expect(modelFor(nodeId)).toBeInstanceOf(ScriptedModelProvider);
+    }
+  });
+
+  it('returns the unmodified scripted modelFor when liveSwarmEnabled is explicitly false', () => {
+    const providers = buildBidComparisonSwarmScriptedProviders(0);
+    const modelFor = buildModelFor(providers, { liveSwarmEnabled: false });
+    expect(modelFor('scope-analyst')).toBe(providers['scope-analyst']);
+  });
+
+  it('throws immediately when liveSwarmEnabled is true but modelId/awsRegion are missing, rather than silently falling back to scripted', () => {
+    const providers = buildBidComparisonSwarmScriptedProviders(0);
+    expect(() => buildModelFor(providers, { liveSwarmEnabled: true })).toThrow(
+      /liveSwarmEnabled is true but modelId\/awsRegion were not provided/,
+    );
+  });
+
+  it('returns one shared real BedrockModel for every node when liveSwarmEnabled is true with modelId/awsRegion', () => {
+    const providers = buildBidComparisonSwarmScriptedProviders(0);
+    const modelFor = buildModelFor(providers, {
+      liveSwarmEnabled: true,
+      modelId: 'amazon.nova-lite-v1:0',
+      awsRegion: 'us-east-1',
+    });
+    const scopeModel = modelFor('scope-analyst');
+    const synthesizerModel = modelFor('decision-synthesizer');
+    expect(scopeModel).toBeInstanceOf(BedrockModel);
+    // Same instance across nodes -- one model, not one per specialist.
+    expect(synthesizerModel).toBe(scopeModel);
   });
 });

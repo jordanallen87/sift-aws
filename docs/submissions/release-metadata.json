@@ -58,7 +58,7 @@
   },
   "agentCore": {
     "deployed": false,
-    "reason": "No AWS credentials were available in the build environment this session. The Railway deployment runs SIFT_EXECUTION_TARGET=local; the real /ping and /invocations routes (apps/agent/src/routes/agentcore.ts) are live and verified against that local-target deployment, but no AgentCore runtime/CloudWatch correlation evidence exists yet."
+    "reason": "Not deployed to Amazon Bedrock AgentCore Runtime. The /ping and /invocations routes (apps/agent/src/routes/agentcore.ts) are implemented and answer on the live Railway deployment, which runs SIFT_EXECUTION_TARGET=local. AWS credentials are available and Amazon Bedrock is reached in production (Amazon Nova Lite reads uploaded bid documents). The AgentCore container deployment was not completed before the deadline, so no AgentCore runtime or CloudWatch correlation evidence is claimed."
   },
   "liveModelPath": {
     "verified": true,

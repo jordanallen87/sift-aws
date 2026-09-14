@@ -120,3 +120,79 @@ Narration is never sped up to meet the cap, and footage is never slowed to fill
 one: `record.ts` films every beat longer than its narration needs, so `render.ts`
 only ever compresses time or, where a beat still came up short, holds its last
 frame.
+
+## Re-rendering after a narration change (handoff runbook)
+
+Written 2026-09-14 for whoever re-cuts the video after `manifest.json` changes.
+Read all of it before running anything.
+
+**What changed.** Only narration (`beats[].lines`), beat titles
+(`beats[].title`) and the close card. Beat ids, order, `minSeconds` and the
+three `still` exhibits are untouched, so **the existing take is still valid:
+do not re-run `record.ts`**. `artifacts/demo-video/take/timeline.json` and the
+take video are reused as-is. Only `render.ts` needs to run.
+
+**What `render.ts` will do.** It synthesizes one audio file per narration line,
+keyed by `sha1(voice + text)`. Every changed line is a cache miss and gets
+re-synthesized; unchanged lines are reused from `artifacts/demo-video/audio/`.
+It then measures each line, retimes the footage per beat, spends per-beat hold
+time to fit the 300s cap (`fitToCap`; it never speeds up the voice), stitches,
+loudnorms, and writes `artifacts/demo-video/sift-agents-for-humans.mp4` + `.srt`.
+
+**Step 0 — dry run with the free voice first.** With no `ELEVENLABS_API_KEY`
+in the environment the pipeline uses macOS `say`. Run that first to confirm the
+new narration fits the cap before spending ElevenLabs credits:
+
+```bash
+npx tsx scripts/demo-video/render.ts        # no key -> `say` voice, offline
+```
+
+Look for the line `total NNN.Ns against a 300s cap`. It must be under 300. If it
+is not, shorten narration lines in `manifest.json` (never raise the cap, never
+touch `fitToCap`) and run again.
+
+**Step 1 — the real voice.** The voice _id_ is already in `manifest.json`
+(`voice.elevenLabsVoiceId`). The API _key_ is a secret: it must never be
+committed, echoed, or pasted into a file that ships. Put it in `.env.local` at
+the repo root for the duration of the render only:
+
+```bash
+# .env.local  (repo root; gitignored; scripts/check-source.ts FAILS `pnpm verify` while it exists)
+ELEVENLABS_API_KEY=<paste the key here yourself>
+```
+
+```bash
+npx tsx scripts/demo-video/render.ts
+rm .env.local                               # do this immediately after; verify fails while it exists
+```
+
+`render.ts` calls `process.loadEnvFile('.env.local')` itself. Do not export the
+key in a shell profile.
+
+**Step 2 — check the output before uploading.**
+
+```bash
+ffprobe -v error -show_entries format=duration -of csv=p=0 artifacts/demo-video/sift-agents-for-humans.mp4   # <= 300
+grep -c " --> " artifacts/demo-video/sift-agents-for-humans.srt                                               # one caption per narration line
+```
+
+Watch the whole thing once. The captions come from the same measured audio
+that produced the voice track, so if a caption is out of step with the picture
+the _footage_ mark is wrong, not the caption; report that rather than editing
+the `.srt`.
+
+**Step 3 — publish.**
+
+```bash
+cp artifacts/demo-video/sift-agents-for-humans.mp4 artifacts/demo/sift-aws-bid-demo-FINAL.mp4
+```
+
+Upload to YouTube (public or unlisted), then put the URL in
+`docs/submissions/release-metadata.json` → `agentsForHumansVideoUrl`, replace
+the old URL in `docs/submissions/agents-for-humans/demo-script-bid.md` and
+`submission-details.md`, and run `pnpm test:submission`. Then paste the same URL
+into the Devpost form.
+
+**Do not:** re-record the take, change beat ids, raise `hardCapSeconds`, speed
+up audio, edit the `.srt` by hand, or commit `.env.local` or anything under
+`artifacts/demo-video/audio/`.

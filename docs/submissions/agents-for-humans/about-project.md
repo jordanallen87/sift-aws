@@ -21,11 +21,12 @@ couldn't, and keeps the decision where it belongs. With you.
 ## What it does
 
 **You name the factors, including ones nobody anticipated.** Will a dog crate fit in the boot? Does
-the deposit schedule leave you exposed? Type it in and the case defines a new attribute on the spot,
-under a `custom.` namespace enforced in `packages/core/src/extensions.ts`. From that moment it is as
-real to the engine as price: the agents go and establish it for every option, cite what they found,
-and it scores like everything else. All three packs declare their own guidance for this. You are not
-picking from a menu somebody else wrote.
+the deposit schedule leave you exposed? Type it in and the case grows a new typed attribute on the
+spot, under a `custom.` namespace enforced in `packages/core/src/extensions.ts`, carrying who asked
+for it and why. From then on it is a real column on every option. A model working through the
+WebMCP tools can fill it in across the options and has to say `unknown` where it can't; a person
+can confirm it; and an unknown is never scored as a zero. Missing data lowers coverage, not the
+score. You are not picking from a menu somebody else wrote.
 
 **It works out what to do next from the evidence, not from a script.** A decision pack declares
 the obligations that must be satisfied before an answer is allowed. The engine picks the next one

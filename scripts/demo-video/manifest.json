@@ -33,18 +33,17 @@
   "closeCard": {
     "kicker": "Sift",
     "title": "The agent recommends. The human decides.",
-    "subtitle": "Real Strands Swarm, AgentSkills, Context Injection and GoalLoop - with a deterministic core the model never touches."
+    "subtitle": "A real Strands Swarm, AgentSkills, Context Injection and GoalLoop, on top of a deterministic core the model never touches."
   },
   "beats": [
     {
       "id": "b1-what",
       "number": 1,
-      "title": "One case, a person and an agent",
+      "title": "The answer you can sign",
       "minSeconds": 18,
       "lines": [
-        "Sift is decision infrastructure: one live case that a person and a Strands agent work on together.",
-        "A decision pack declares what must be established before an answer is allowed, and the interventions that police it.",
-        "Three decision packs, one engine: bids, a car purchase, a household energy bill."
+        "Ask a chatbot which of twelve contractor bids to take and you'll have an answer in ten seconds. Confident. Plausible. And if you're the one signing the award, you can't use it.",
+        "Sift is built for the answer you can sign. You say what matters. It works out what has to be established before it answers, establishes it, and tells you what it couldn't."
       ]
     },
     {
@@ -53,7 +52,7 @@
       "title": "Two Strands topologies",
       "minSeconds": 10,
       "lines": [
-        "For work whose order is a routing problem, it runs a Strands Swarm - bids, home energy."
+        "Under the hood it's the Strands SDK, twice over. Where the order of work is a routing problem, a Swarm. That's bids, and home energy."
       ],
       "still": {
         "kind": "code",
@@ -66,7 +65,9 @@
       "number": 2,
       "title": "Two Strands topologies",
       "minSeconds": 10,
-      "lines": ["Where the order is fixed, a Strands Graph. Same pack format either way."],
+      "lines": [
+        "Where the order is fixed, a Graph. That's the car purchase. Three decision packs, one engine, and a pack is just data."
+      ],
       "still": {
         "kind": "code",
         "path": "apps/agent/src/runtime/car-purchase-graph.ts",
@@ -79,8 +80,8 @@
       "title": "The core the model never touches",
       "minSeconds": 18,
       "lines": [
-        "Scoring and ranking are a deterministic core: one dependency, its own contracts. No model, no network, no filesystem.",
-        "The arithmetic you are about to check was never produced by a model. Everything above that line is Strands."
+        "The scoring is a separate deterministic core. One dependency. No model, no network, no filesystem.",
+        "So every number you're about to check was never touched by a model. Everything above that line is Strands."
       ],
       "still": {
         "kind": "code",
@@ -93,7 +94,7 @@
       "title": "Twelve bids for the same job",
       "minSeconds": 16,
       "lines": [
-        "Twelve plumbing bids for a school renovation. Cedar and Sons is cheapest, and prices sixty-two and a half percent of the required scope.",
+        "Twelve plumbing bids for a school renovation. Cedar and Sons is cheapest, by fifty-two and a half thousand. It also prices sixty-two and a half percent of the required scope.",
         "Better deal, or pricing less work?"
       ]
     },
@@ -103,9 +104,9 @@
       "title": "A Swarm, steered mid-run",
       "minSeconds": 22,
       "lines": [
-        "One request starts a real Strands Swarm: six nodes, six stages, five handoffs, each one a real handoff event from the SDK.",
-        "Each specialist loads only the AgentSkill its obligation needs: scope normalization, price arithmetic, credential verification. Four activations here.",
-        "A Context Injector refreshes the weights, the open scope gaps and the budget every turn. Twenty-eight injections."
+        "One click starts a real Strands Swarm. Six specialists, five handoffs, each one a real handoff event from the SDK.",
+        "Each specialist loads only the skill its job needs. Four activations.",
+        "And every turn, a context injector hands it the weights, the open gaps and the budget. Twenty-eight injections."
       ]
     },
     {
@@ -114,8 +115,8 @@
       "title": "A Swarm, steered mid-run",
       "minSeconds": 13,
       "lines": [
-        "And watch the scope analyst: completed, redirected once.",
-        "It was circling the same two bids, so a Guide intervention steered it onto the third."
+        "Watch the scope analyst. Completed, redirected once.",
+        "It was circling the same two bids, so a Guide intervention pointed it at the third."
       ]
     },
     {
@@ -124,8 +125,8 @@
       "title": "Refused before it ran",
       "minSeconds": 18,
       "lines": [
-        "Here is a Deny. The price analyst reached for the licence lookup, a tool this pack grants only to the credential checker, and was refused before it ran.",
-        "Not a failure. An authority boundary, recorded as one."
+        "Here's a Deny. The price analyst reached for the licence lookup, a tool this pack grants only to the credential checker. Refused before it ran.",
+        "Not a failure. A boundary, recorded as one."
       ]
     },
     {
@@ -134,48 +135,48 @@
       "title": "The agent refuses to answer",
       "minSeconds": 30,
       "lines": [
-        "Then the one that matters. GoalLoop ran the recommendation through a callable validator, and the validator threw out attempt one.",
-        "The draft ranked twelve bids not yet on a common scope basis. Not a badly written answer - a false one.",
-        "GoalLoop handed the reason back and the synthesizer went round again. Every bid-levelling tool will happily rank an unfair comparison. This one refuses."
+        "Now the part that matters. GoalLoop runs the recommendation through a validator, and the validator throws out the first draft.",
+        "It ranked twelve bids that weren't on a common basis yet. Not a bad answer. A false one.",
+        "So it goes round again. Most tools would have shipped that ranking. This one refuses."
       ]
     },
     {
       "id": "b8-arithmetic",
       "number": 8,
-      "title": "Arithmetic you can check",
+      "title": "The cheapest bid isn't",
       "minSeconds": 22,
       "lines": [
-        "Cedar is silent on three things the others price: permits, eighteen thousand; shower-valve rough-in, thirty-one five; haul-away, six thousand.",
-        "Corrected, Cedar is two seventy-nine against Northgate's two seventy-six. The bid that looked fifty-two thousand cheaper is three thousand more expensive."
+        "Here's the maths, and you can check it. Cedar is silent on three things the others price. Permits, eighteen thousand. Shower-valve rough-in, thirty-one five. Haul-away, six thousand.",
+        "Corrected, Cedar is two seventy-nine against Northgate's two seventy-six. The bid that looked fifty-two thousand cheaper is three thousand more."
       ]
     },
     {
       "id": "b9-failclosed",
       "number": 9,
-      "title": "It won't call two questions closed",
+      "title": "Unknown stays unknown",
       "minSeconds": 14,
       "lines": [
-        "It names a winner and still will not close two questions: a scope comparison that came back incomplete, and two bids failing credential verification.",
-        "Degraded evidence does not count as settled."
+        "It names a winner and still won't close two questions: a scope comparison that came back incomplete, and two bids that failed credential checks.",
+        "Unknown doesn't get rounded up to fine."
       ]
     },
     {
       "id": "b10a-reweight",
       "number": 10,
-      "title": "A constraint that outranks a score",
+      "title": "Scores highest. Still doesn't win.",
       "minSeconds": 14,
       "lines": [
-        "Change the priorities and the ranking moves. That is the deterministic core, not the model.",
-        "The sixth criterion has no slider: credentials are set by the pack and cannot be reweighted."
+        "Change what you care about and the ranking moves. That's the deterministic core, not the model.",
+        "And the sixth criterion has no slider. Credentials are set by the pack. You can't weight your way past them."
       ]
     },
     {
       "id": "b10b-flagged",
       "number": 10,
-      "title": "A constraint that outranks a score",
+      "title": "Scores highest. Still doesn't win.",
       "minSeconds": 14,
       "lines": [
-        "Now Two Rivers scores highest of all twelve, ninety-one percent against the winner's seventy-two, and still does not win.",
+        "Now Two Rivers scores highest of all twelve. Ninety-one percent, against the winner's seventy-two. And it still doesn't win.",
         "Flagged, not removed. Still ranked, and still yours to decide."
       ]
     },
@@ -185,9 +186,9 @@
       "title": "The person decides, on camera",
       "minSeconds": 22,
       "lines": [
-        "Awarding is gated by a Confirm intervention: the proposal sits pending, with no approving actor, until a person acts.",
+        "Awarding is gated by a Confirm intervention. The proposal sits pending, with no approving actor, until a person acts.",
         "So I act. Select Northgate Plumbing.",
-        "The case is now Decided. The agent recommended it; a human awarded it, and that boundary is structural."
+        "Decided. The agent recommended. A human awarded. That line is structural."
       ]
     },
     {
@@ -196,9 +197,9 @@
       "title": "Proof it is really Strands",
       "minSeconds": 22,
       "lines": [
-        "This is the Runtime Inspector. The SDK's lifecycle hooks - every tool call, every model call, every node and every handoff - are normalized into these events and correlated by one trace id.",
-        "Four hundred and thirty-three runtime events, and a hundred and five spans - every one carrying the SDK's own instrumentation scope, which a class merely named after Strands cannot produce.",
-        "It is deployed and live, and every mechanism has a test that fails if it stops being true."
+        "This is the Runtime Inspector. Every tool call, model call, node and handoff comes through the SDK's own lifecycle hooks, under one trace id.",
+        "Four hundred and thirty-three events. A hundred and five spans, every one stamped with the SDK's own instrumentation scope.",
+        "And every mechanism you just watched has a test that fails if it stops being true."
       ]
     },
     {
@@ -207,9 +208,9 @@
       "title": "Live, on Amazon Bedrock",
       "minSeconds": 20,
       "lines": [
-        "And this is how a bid actually gets in. Drop the PDF, and a real model reads it.",
-        "That is Amazon Nova, on Amazon Bedrock. It read six values off the document, and it says plainly that it could not read two.",
-        "Quoted total, two hundred and forty-one thousand eight hundred. Read by a model. Confidence forty percent. Not verified - because only a person can verify."
+        "And here's how a bid actually gets in. Drop the PDF, and a real model reads it.",
+        "That's Amazon Nova, on Amazon Bedrock. Six values read off the document, and it says plainly it couldn't read two.",
+        "Quoted total, two hundred and forty-one thousand eight hundred. Read by a model. Confidence forty percent. Not verified. Only a person can verify."
       ]
     },
     {
@@ -218,7 +219,8 @@
       "title": "",
       "minSeconds": 10,
       "lines": [
-        "It refused to rank twelve bids until they were comparable, flagged the highest scorer instead of hiding it, and left the award to a person."
+        "It refused to rank twelve bids until they were comparable. Flagged the highest scorer instead of hiding it. Left the award to a person.",
+        "That's an answer you can sign."
       ]
     }
   ]

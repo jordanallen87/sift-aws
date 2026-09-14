@@ -98,9 +98,9 @@ Sift
 
 ### One-line summary (Devpost elevator pitch, 200 char max)
 
-Name what matters to you. Sift's Strands agents work out what to check, go and establish it for every option, cite what they find, and admit the gaps. You make the call.
+A chatbot gives you a confident answer in ten seconds. Sift gives you one you can sign: checked on the factors you named, sources shown, gaps admitted. Strands agents do the legwork. You decide.
 
-(169 characters. Leads with the thing a non-technical professional actually wants — name your own factors and have them established for every option — rather than with the bid example, which is one pack among three.)
+(194 characters. Opens on the problem the About Project opens on — the confident answer you can't sign — then says what Sift does about it.)
 
 ### Track
 

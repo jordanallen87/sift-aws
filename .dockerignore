@@ -28,3 +28,6 @@ tests/e2e/.playwright-mcp
 # `pnpm --filter @sift/web build` emits into apps/web/dist. Excluded so
 # `COPY . .` does not carry the masters into the image.
 docs/brand
+
+# Local SQLite + Strands session data (~700 MB). Never baked into an image.
+.sift-data

@@ -5,8 +5,8 @@
   "submittedCommitShaNote": "Left empty deliberately: this field must name the tagged release commit, and no tag exists yet (`git tag` returns nothing). The last complete `pnpm verify:release` ran at 7fd62c71e796d0ad9c6a88798f7016101d0ad3cf; the documentation commit that records its results is its child. Set this to the commit you actually tag and submit, then re-run `pnpm verify` so `release-verification-sha` matches it.",
   "releaseTag": "",
   "releaseTagNote": "Submitter action: tag the submitted commit so the judged tree is immutable.",
-  "awsBuilderId": "",
-  "awsBuilderIdNote": "Submitter action: requires an AWS Builder ID, which must be personally verified by the entrant. No AWS account credentials exist in the build environment.",
+  "awsBuilderId": "jordanallen87",
+  "awsBuilderIdNote": "Supplied and verified by the entrant on 2026-09-14 from the AWS Builder Center profile (builder.aws.com), where it is displayed as the alias @jordanallen87. The hackathon rules name 'AWS Builder ID' as a requirement without specifying a format, and Builder Center exposes no separate identifier, so the alias is what the submission form receives.",
   "architectureDiagram": {
     "source": "docs/architecture.mmd",
     "export": "docs/architecture.png",

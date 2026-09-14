@@ -332,6 +332,134 @@ describe('AgentCore contract: GET /ping / POST /invocations', () => {
     });
   });
 
+  describe('POST /invocations: reachable through AgentCore (no custom headers)', () => {
+    // AgentCore Runtime's InvokeAgentRuntime API forwards no custom request
+    // headers (routes/http-support.ts's `readCommandId` header comment), so
+    // every request in this block deliberately never calls `.set('Idempotency-Key', ...)`
+    // and instead relies solely on the `idempotencyKey` body field.
+    //
+    // `car-purchase`, not `bid-comparison`: `createHttpTestHarness()` wires
+    // `createRegistryWithSyntheticPack()` (fixtures/synthetic-pack.ts), whose
+    // `PackRegistry` has only the synthetic `car-purchase` manifest
+    // registered -- the same demo id this file's own top-level `startDemo()`
+    // helper already uses. A real `bid-comparison` pack exists
+    // (`command-service.bid-document.test.ts`), but only via a bespoke
+    // `CommandService` wired to its own registry, not this shared HTTP
+    // harness; registering it here too is out of scope for this task.
+
+    it('starts a demo via action "startDemo" using a body idempotencyKey instead of the header, and the created case is reachable by caseId afterward', async () => {
+      harness = await createHttpTestHarness();
+
+      const startResponse = await request(harness.server)
+        .post('/invocations')
+        .send({
+          action: 'startDemo',
+          input: { demoId: 'car-purchase' },
+          idempotencyKey: 'agentcore-start-1',
+        });
+
+      expect(startResponse.status).toBe(200);
+      const startEnvelope = asJson<InvocationEnvelope<CommandReceipt>>(startResponse.body);
+      expect(startEnvelope.status).toBe('success');
+      expect(startEnvelope.response.caseId).toBeTruthy();
+      const caseId = startEnvelope.response.caseId;
+
+      const readResponse = await request(harness.server).post('/invocations').send({ caseId });
+
+      expect(readResponse.status).toBe(200);
+      const readEnvelope = asJson<InvocationEnvelope<{ id: string }>>(readResponse.body);
+      expect(readEnvelope.status).toBe('success');
+      expect(readEnvelope.response.id).toBe(caseId);
+    });
+
+    it('is idempotent over the body idempotencyKey for action "startDemo": retrying the same key returns the same caseId', async () => {
+      harness = await createHttpTestHarness();
+      const body = {
+        action: 'startDemo',
+        input: { demoId: 'car-purchase' },
+        idempotencyKey: 'agentcore-start-2',
+      };
+
+      const first = await request(harness.server).post('/invocations').send(body);
+      const second = await request(harness.server).post('/invocations').send(body);
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(asJson<InvocationEnvelope<CommandReceipt>>(second.body).response.caseId).toBe(
+        asJson<InvocationEnvelope<CommandReceipt>>(first.body).response.caseId,
+      );
+    });
+
+    it('accepts a body idempotencyKey instead of the header for action "requestInvestigation" too', async () => {
+      harness = await createHttpTestHarness();
+
+      const startResponse = await request(harness.server)
+        .post('/invocations')
+        .send({
+          action: 'startDemo',
+          input: { demoId: 'car-purchase' },
+          idempotencyKey: 'agentcore-start-3',
+        });
+      const started = asJson<InvocationEnvelope<CommandReceipt>>(startResponse.body).response;
+
+      const response = await request(harness.server)
+        .post('/invocations')
+        .send({
+          caseId: started.caseId,
+          action: 'requestInvestigation',
+          input: { expectedSequence: started.acceptedSequence },
+          idempotencyKey: 'agentcore-invest-1',
+        });
+
+      expect(response.status).toBe(200);
+      const envelope = asJson<InvocationEnvelope<{ runId: string }>>(response.body);
+      expect(envelope.status).toBe('success');
+      expect(envelope.response.runId).toBeTruthy();
+    });
+
+    it('rejects action "startDemo" together with a caseId as a schema validation failure', async () => {
+      harness = await createHttpTestHarness();
+
+      const response = await request(harness.server)
+        .post('/invocations')
+        .send({
+          action: 'startDemo',
+          caseId: 'does-not-matter',
+          input: { demoId: 'car-purchase' },
+          idempotencyKey: 'agentcore-start-4',
+        });
+
+      expect(response.status).toBe(400);
+      expect(asJson<HttpErrorBody>(response.body).error.code).toBe('VALIDATION');
+    });
+
+    it('returns 400 for action "startDemo" when neither the header nor the body idempotencyKey is present', async () => {
+      harness = await createHttpTestHarness();
+
+      const response = await request(harness.server)
+        .post('/invocations')
+        .send({ action: 'startDemo', input: { demoId: 'car-purchase' } });
+
+      expect(response.status).toBe(400);
+      expect(asJson<HttpErrorBody>(response.body).error.code).toBe('VALIDATION');
+    });
+
+    it('rejects a malformed body idempotencyKey the same way readCommandId rejects a malformed header', async () => {
+      harness = await createHttpTestHarness();
+
+      const response = await request(harness.server)
+        .post('/invocations')
+        .send({
+          action: 'startDemo',
+          input: { demoId: 'car-purchase' },
+          idempotencyKey: 'bad key!',
+        });
+
+      expect(response.status).toBe(400);
+      expect(asJson<HttpErrorBody>(response.body).error.code).toBe('VALIDATION');
+    });
+  });
+
   describe('POST /invocations: malformed input', () => {
     it('returns 400 for a non-object (array) JSON body', async () => {
       harness = await createHttpTestHarness();

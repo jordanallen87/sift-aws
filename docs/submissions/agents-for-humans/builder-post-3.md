@@ -1,4 +1,8 @@
-# Agents for Humans: making a Strands agent prove it's really Strands
+**Title:** Agents for Humans: making a Strands agent prove it's really Strands
+
+**Description (486/512):** I built a claim-evidence matrix mapping every Strands capability I claim to a log line a reader can check. Writing it caught a capability I'd never actually seen fire: a deny intervention with zero real occurrences. The fix was in the scripted trajectory, not the intervention code. The proof: Strands' own lifecycle hooks feed one ordered event log, and all 105 OpenTelemetry spans in an export carry the SDK's own otel.scope: strands-agents, a string only the real tracer can produce.
+
+---
 
 I have a document in this repo called `claim-evidence-matrix.md`. Its job is to map every Strands
 capability I claim to a log line someone else can pull from the running app and check themselves.

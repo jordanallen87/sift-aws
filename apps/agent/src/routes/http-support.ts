@@ -50,29 +50,41 @@ const COMMAND_ORIGIN_HEADER = 'x-sift-command-origin';
  * `undefined` when the header is missing or malformed -- callers must check
  * for `undefined` and return immediately without proceeding.
  */
-export function readCommandId(req: Request, res: Response): string | undefined {
-  const header = req.get(IDEMPOTENCY_KEY_HEADER);
-  if (header === undefined || header.length === 0) {
+export function readCommandId(
+  req: Request,
+  res: Response,
+  bodyFallback?: { readonly field: string; readonly value: string | undefined },
+): string | undefined {
+  // `bodyFallback` exists for `POST /invocations` only: AgentCore Runtime's
+  // InvokeAgentRuntime API forwards no arbitrary request headers, so a
+  // caller reaching Sift through AgentCore has no way to set this header.
+  // The header still wins when both are present.
+  const key = req.get(IDEMPOTENCY_KEY_HEADER) ?? bodyFallback?.value;
+  const source =
+    bodyFallback === undefined
+      ? `"${IDEMPOTENCY_KEY_HEADER}" request header`
+      : `"${IDEMPOTENCY_KEY_HEADER}" request header or "${bodyFallback.field}" body field`;
+  if (key === undefined || key.length === 0) {
     sendError(
       res,
       400,
       'VALIDATION',
-      `A non-empty "${IDEMPOTENCY_KEY_HEADER}" request header is required as the command's idempotency key.`,
+      `A non-empty ${source} is required as the command's idempotency key.`,
       false,
     );
     return undefined;
   }
-  if (!COMMAND_ID_PATTERN.test(header)) {
+  if (!COMMAND_ID_PATTERN.test(key)) {
     sendError(
       res,
       400,
       'VALIDATION',
-      `"${IDEMPOTENCY_KEY_HEADER}" must contain only letters, digits, ".", "_", or "-" (max 200 chars).`,
+      `The ${source} must contain only letters, digits, ".", "_", or "-" (max 200 chars).`,
       false,
     );
     return undefined;
   }
-  return header;
+  return key;
 }
 
 export type CommandOriginReadResult =

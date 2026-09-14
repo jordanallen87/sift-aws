@@ -1,4 +1,8 @@
-# Agents for Humans: Swarm or Graph, and why I used both
+**Title:** Agents for Humans: Swarm or Graph, and why I used both
+
+**Description (439/512):** Sift runs three Strands decision packs: two as a Swarm, one as a Graph. The split isn't a preference, it follows from whether the next step is a routing decision or a fixed dependency. Bid comparison and car purchase show both sides. Building it taught two SDK lessons the hard way: a Swarm node's output lives inside a structured tool-use block, not plain text, and two handoff detectors racing each other can kill a run meant to recover.
+
+---
 
 Sift runs three decision packs on one engine. Two run as a Strands `Swarm`, one as a `Graph`. Both
 come from `@strands-agents/sdk/multiagent`, and which one a pack gets isn't a preference. It

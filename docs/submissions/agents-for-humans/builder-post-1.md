@@ -1,4 +1,8 @@
-# Agents for Humans: building an agent that knows when not to answer
+**Title:** Agents for Humans: building an agent that knows when not to answer
+
+**Description (412/512):** My agent's first draft ranked twelve plumbing bids by quoted total and put a $223,500 bid on top. Wrong: once missing permits, rough-in, and haul-away scope are priced in, that bid is really $279,000, $3,000 more than the $276,000 bid it appeared to beat. A Strands GoalLoop validator catches it and forces a rewrite. Scoring runs in a pure TypeScript core with no model call. And the award still needs a person.
+
+---
 
 The first draft my agent wrote was the one every bid tool on the market would have shipped.
 

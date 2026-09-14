@@ -63,10 +63,11 @@
  *
  * ```
  * {
- *   caseId: string;
+ *   caseId?: string;                                // required, except for action 'startDemo', which creates the case
  *   commandName?: one of AGENTCORE_COMMAND_NAMES;   // -> CommandService
- *   action?: 'requestInvestigation';                // -> RunService
+ *   action?: 'requestInvestigation' | 'startDemo';  // -> RunService / CommandService.startDemo
  *   input?: Record<string, unknown>;                // command/run input, minus caseId
+ *   idempotencyKey?: string;                        // body fallback for the Idempotency-Key header
  * }
  * ```
  *
@@ -148,15 +149,22 @@ export const AGENTCORE_COMMAND_NAMES = COMMAND_NAMES.filter(
 
 const AgentCoreInvocationBodySchema = z
   .object({
-    caseId: z.string().min(1, 'caseId is required'),
+    caseId: z.string().min(1, 'caseId must not be empty').optional(),
     commandName: z.enum(AGENTCORE_COMMAND_NAMES).optional(),
-    action: z.enum(['requestInvestigation']).optional(),
+    action: z.enum(['requestInvestigation', 'startDemo']).optional(),
     input: z.record(z.string(), z.unknown()).optional(),
+    // AgentCore's InvokeAgentRuntime forwards no custom headers, so this is
+    // the only idempotency channel a caller going through AgentCore has.
+    idempotencyKey: z.string().optional(),
   })
   .strict()
   .refine((body) => !(body.commandName !== undefined && body.action !== undefined), {
     message: 'commandName and action are mutually exclusive.',
     path: ['action'],
+  })
+  .refine((body) => !(body.action === 'startDemo' && body.caseId !== undefined), {
+    message: 'action "startDemo" creates the case, so it must not name one.',
+    path: ['caseId'],
   });
 
 /**
@@ -223,10 +231,28 @@ export function createAgentCoreRouter(deps: AgentCoreRouterDeps): Router {
       return;
     }
 
-    const { caseId, commandName, action, input } = parsed.data;
+    const { caseId, commandName, action, input, idempotencyKey } = parsed.data;
+    const bodyKey = { field: 'idempotencyKey', value: idempotencyKey };
+
+    // The only way to open a case through AgentCore: every other route that
+    // creates one (`POST /api/cases`, `POST /api/cases/demo`) is unreachable
+    // there, because AgentCore Runtime proxies `/invocations` and nothing else.
+    if (action === 'startDemo') {
+      const commandId = readCommandId(req, res, bodyKey);
+      if (commandId === undefined) return;
+
+      const result = deps.commandService.startDemo(commandId, input ?? {});
+      respondInvocationResult(res, result, (value) => CommandReceiptSchema.parse(value));
+      return;
+    }
+
+    if (caseId === undefined) {
+      sendError(res, 400, 'VALIDATION', 'caseId is required.', false);
+      return;
+    }
 
     if (commandName !== undefined) {
-      const commandId = readCommandId(req, res);
+      const commandId = readCommandId(req, res, bodyKey);
       if (commandId === undefined) return;
 
       const result = dispatchCommand(deps.commandService, commandName, commandId, {
@@ -238,7 +264,7 @@ export function createAgentCoreRouter(deps: AgentCoreRouterDeps): Router {
     }
 
     if (action === 'requestInvestigation') {
-      const commandId = readCommandId(req, res);
+      const commandId = readCommandId(req, res, bodyKey);
       if (commandId === undefined) return;
 
       const result = deps.runService.requestInvestigation(commandId, {

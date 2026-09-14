@@ -93,6 +93,18 @@ the captions carry the argument. Set `ELEVENLABS_API_KEY` (and a voice id, via
 `elevenlabs` to re-render with studio narration; nothing else changes, and the
 key is read from the environment only and never written to disk.
 
+**The key lives in `.env.local`, and only while a render is running.**
+`render.ts` loads that file if it is there. `scripts/check-source.ts` scans it
+and fails `pnpm verify` on a real key, which is the scanner working, not a
+false positive -- so write the file, render, delete the file. Never weaken the
+scanner to keep it.
+
+Deleting it does not cost anything already rendered: the ElevenLabs takes stay
+in `artifacts/demo-video/audio/`. But a re-render _without_ the key resolves to
+the `say` cache key instead, re-synthesizes, and quietly ships the fallback
+voice -- the run drops from 296s to 287s, which is the tell. Put the file back
+before re-rendering anything you intend to publish.
+
 Audio is cached per line under a hash of the line's own text, so rewording a
 line re-synthesizes exactly that line. Keying on the index instead would leave
 the captions reading the new words while the voice spoke the old ones.

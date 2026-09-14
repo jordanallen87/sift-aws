@@ -124,26 +124,60 @@ The drafted copy for this section lives in `docs/submissions/agents-for-humans/s
 
 ## Required demo video
 
-**BLOCKED — external blocker, not an internal gap.** No recording of the `bid-comparison` hero exists. `docs/submissions/agents-for-humans/demo-script-bid.md` (174 lines, re-measured 2026-09-10 against a live 12-bid run) is a complete, beat-by-beat shot list — nine beats summing to exactly 300s — with exact UI labels and narration cross-checked against the live product, ready to record from. Every item below requires an actual recorded, edited, and uploaded video, which is a genuine human production task (camera/screen capture, voiceover, editing, upload) that cannot be discharged by this pass. `pnpm test:submission` (run in this session) reports `video-duration:agents-for-humans` as `SKIP`, explicitly "no video file yet at `docs/demo/aws-recording.mp4`," and `docs/submissions/release-metadata.json`'s `agentsForHumansVideoUrl` field is an empty string.
+**A cut now exists, produced by a tool in this repo rather than recorded by
+hand.** `scripts/demo-video/` drives the real bid-comparison workflow in one
+continuous take and cuts the film from it; see
+[`scripts/demo-video/README.md`](../../../scripts/demo-video/README.md). The
+file is `artifacts/demo/sift-aws-bid-demo-DRAFT.mp4` with a sidecar `.srt`:
+**287.1s** (ffprobe) against the 300s cap, **1920x1080**, **H.264/AAC**,
+20,362,692 bytes, captions burned into the frame *and* supplied separately.
+Every frame of product footage is a real run against the real server; nothing
+is mocked, staged, or re-enacted.
 
-**Stale footage, not a draft of the required video.** `artifacts/demo/sift-aws-energy-demo-DRAFT.mp4` exists on disk (8,892,397 bytes; duration 154.907s = 2:35, re-measured with `ffprobe` this session) but it is a Home Energy Guardian recording made 2026-09-05, two days before the hero changed to `bid-comparison`. It satisfies none of the items below and should not be mistaken for progress toward this video. (`.gitignore` still allowlists a not-yet-existing `sift-aws-energy-demo-FINAL.mp4` under the same superseded assumption; that is a build-tooling file outside this checklist's scope, flagged here so it is not mistaken for a second source of truth.)
+**It is DRAFT for exactly one reason: the voice track is macOS `say`.** That is
+this repo's own standard, set by the energy cut and written into `.gitignore`
+("its footage is real, but its voice track is macOS `say`"), so this file keeps
+the DRAFT name and stays untracked. Everything else about it is final. Setting
+`ELEVENLABS_API_KEY` and flipping `voice.provider` in
+`scripts/demo-video/manifest.json` re-renders the identical cut with studio
+narration, at which point it becomes `sift-aws-bid-demo-FINAL.mp4` and is
+committable. Unlike the energy DRAFT, this one does **not** say DRAFT on its
+own face -- it is shippable as-is if synthesized narration is acceptable.
 
-- [ ] The final video is no longer than five minutes. — blocked; the script's nine beats sum to exactly 300s (`demo-script-bid.md` "Timing" table).
-- [ ] The video link is publicly viewable while signed out. — blocked.
-- [ ] The video contains clear spoken audio. — blocked.
-- [ ] The video states the problem, intended audience, and why the problem matters. — blocked; scripted in Beat 1 (Meridian Builders, a nine-person GC with no full-time estimator, twelve bids, the low one $52,500 under the eventual winner).
-- [ ] The working product appears immediately rather than beginning with slides. — blocked; scripted in Beat 1 (the launcher tile, then the live case reading "Bid Comparison," "LIVE," "12 options").
-- [ ] The video does not claim a background or autonomous case-opening trigger. — blocked (nothing to falsify yet, but the constraint is binding once recorded); `demo-script-bid.md`'s "What this script does not claim" states plainly "Bids arrive because you asked for them" and names Home Energy Guardian, not this pack, as the one with that property.
-- [ ] The video shows a real Strands Swarm across six specialists with a visible `Guide` redirect and `Deny` refusal. — blocked; scripted in Beat 2, independently proven by `tests/scenarios/bid-comparison.scenario.test.ts`'s single `guideEvents` assertion (`scope-analyst` → `scope-differ`) and single `denyEvents` assertion (`price-analyst` → `license-lookup`), plus its `toolFailedEvents` assertion showing exactly one tool failure, naming `scope-differ` and not the denied `license-lookup` call.
-- [ ] The video shows `GoalLoop` reject the obvious cheap-bid ranking and recover with a supported one. — blocked; scripted in Beat 3, independently proven by the same scenario test's `goalFailedEvents`/`goalPassedEvents` assertions on `decision-synthesizer`, with the failed attempt's sequence strictly before the passed one's.
-- [ ] The video shows the on-screen arithmetic that reverses the apparent low bid into the more expensive one. — blocked; scripted in Beat 4, independently proven by the same scenario test's recommendation assertion (`favoredOptionId: 'bid-northgate'`, rationale containing "279,000," "276,000," "Cedar," and "Northgate").
-- [ ] The video shows fail-closed findings that stay open even after a winner is recommended. — blocked; scripted in Beat 5, independently proven by `tests/scenarios/bid-comparison.scenario.ts`'s required `obligation_status` assertions (`bid.scope_normalization` and `bid.credential_verification` both `open` alongside a `satisfied` `bid.award_recommendation`) and, on screen, `tests/e2e/bid-comparison-journey.spec.ts`'s `findings-sheet` checkpoint.
-- [ ] The video shows a criteria reweight and a hard credential constraint that flags, rather than removes, a top-scoring bid. — blocked; scripted in Beat 6, independently proven live (2026-09-10, `scoreCaseState` over the wire) by Two Rivers Mechanical scoring highest of all twelve under the round-2 weighting (0.9132, rendered "91%") while carrying `violated: ['bid.credentials_valid']` and still ranking "#11 of 12," and asserted directly in `tests/e2e/bid-comparison-journey.spec.ts`'s round-2 test, "the highest raw scorer is flagged, not eliminated, and Northgate still wins."
-- [ ] The video shows `Confirm`-gated human award: the agent recommends, a person approves on camera. — blocked; scripted in Beat 7, independently proven by the scenario test's `confirmEvents` assertion (subject `propose_award`) together with `snapshot.proposal?.status === 'pending'`, `reviewedByActor` undefined, and `trajectory.agentApprovedProposalAttempts === 0` — the agent structurally cannot self-approve.
-- [ ] The video shows proof of a real Strands runtime from an inspectable run. — blocked; scripted in Beat 8, independently measured on 2026-09-10 (`run-a7348a98-…`: 433 runtime events, 6 swarm nodes, 5 handoffs, 28 context injections, 105 spans) with every span's `otel.scope` reading `strands-agents`, per the "Hero change" evidence above.
-- [ ] AgentCore and CloudWatch appear in the video only if the deployment and correlation were actually verified. — blocked (and moot until AWS credentials exist — see "Optional scoring and bonus" below); `demo-script-bid.md`'s closing constraints already instruct skipping this honestly if not deployed, which matches the current true state.
-- [ ] The video closes by restating the distinctive claim. — blocked; scripted in Beat 9.
-- [ ] Captions, resolution, audio, and duration are checked on the final uploaded file. — blocked.
+**A `.gitignore` defect was blocking that FINAL name and is now fixed.** The
+allowlist entries under `artifacts/demo/` never took effect: a bare
+`artifacts/` excludes the *directory*, and git does not descend into an
+excluded directory, so every `!` negation beneath it was dead. The reserved
+name `sift-aws-bid-demo-FINAL.mp4` -- allowlisted in advance specifically "so
+the recorded cut can actually be committed once it exists" -- could not have
+been added. Changed to `artifacts/*`; verified that the three FINAL names and
+`artifacts/demo/screenshots/` are now committable while every working artifact
+(`verification/`, `demo-video/`, `submission/`, and the DRAFT itself) stays
+ignored.
+
+**Superseded footage, not a draft of this video.**
+`artifacts/demo/sift-aws-energy-demo-DRAFT.mp4` is a Home Energy Guardian
+recording from 2026-09-05, two days before the hero changed to
+`bid-comparison`. A silent 114s screen grab made 2026-09-13 has been moved to
+`artifacts/submission/video/superseded/` so it cannot be uploaded by mistake.
+Neither satisfies any item below.
+
+- [x] The final video is no longer than five minutes. — 287.1s, measured with `ffprobe` on the produced file. `render.ts` enforces the manifest's `hardCapSeconds` both before rendering and on the finished file, so a cut that broke this could not be emitted.
+- [ ] The video link is publicly viewable while signed out. — submitter action; requires upload. Nothing in the repo can discharge it.
+- [x] The video contains clear spoken audio. — continuous narration across all nine beats, integrated loudness -15.3 LUFS, audio and video streams both 287.1s. Synthesized (macOS `say`), which is the DRAFT reason above, not an absence of audio; captions are additionally burned into every frame.
+- [x] The video states the problem, intended audience, and why the problem matters. — beat 1 (0:00-0:32): Meridian Builders, a nine-person GC with no full-time estimator, twelve bids, and the thesis question stated outright ("is the cheap bid a better deal, or is it pricing less work?").
+- [x] The working product appears immediately rather than beginning with slides. — frame one is the live case. The only generated card is 3s at the very end: 1.0% of runtime, against the 25% ceiling in `docs/hackathons/demo-tooling/README.md`.
+- [x] The video does not claim a background or autonomous case-opening trigger. — verifiable by reading the 41 narration lines in `scripts/demo-video/manifest.json`; no line asserts one, and the case is opened by a visible click in beat 1.
+- [x] The video shows a real Strands Swarm across six specialists with a visible `Guide` redirect and `Deny` refusal. — beat 2 holds on the INVESTIGATION TEAM panel, where the scope analyst row reads **"Completed · Redirected once"**; beat 3 shows **"ACTION BLOCKED / ScopeAuthorization: tool "license-lookup" is not in the declared allowlist for this run"**. *Correction to the script:* the Deny is not visible in the case workspace at all — `ActivityTimeline` renders only inside the Runtime Inspector's Activity tab, so the filmed cut opens the inspector for that beat.
+- [x] The video shows `GoalLoop` reject the obvious cheap-bid ranking and recover with a supported one. — beat 3 shows **"DRAFT WITHHELD / Recommendation draft rejected on attempt 1."** with **"FINDING ACCEPTED / Recorded 3 evidence item(s) for obligation "bid.scope_normalization""** directly beneath it. *Correction to the script:* only the rejection half surfaces in the UI — the engine maps `goal.validation_failed` to `draft.withheld` and drops `goal.validated`, so the recovery is evidenced by the recommendation existing in beat 4, not by a second row. The narration says so and claims no visible retry entry.
+- [x] The video shows the on-screen arithmetic that reverses the apparent low bid into the more expensive one. — beat 4 holds on the rationale, which reads "$279,000.00, not $223,500.00. That is higher than Northgate Plumbing's adjusted total of $276,000.00" and names Fieldstone's $268,000. Beat 1 sets it up on the card itself: Cedar's **SCOPE COMPLETENESS 62.5 %** against Northgate's 100 %.
+- [x] The video shows fail-closed findings that stay open even after a winner is recommended. — beat 5 opens the amber band reading **"3 findings need your attention."** while "Sift recommends Northgate Plumbing." is on the same screen, then scrolls the findings sheet.
+- [x] The video shows a criteria reweight and a hard credential constraint that flags, rather than removes, a top-scoring bid. — beats 6a-6d. The Priorities sheet is filled on camera to `ROUND2_CRITERIA_WEIGHTS` and states **"License and insurance credentials are valid is set by the pack and cannot be reweighted."**; the ranked list then shows Two Rivers Mechanical at **"#11 OF 12 · 91% SCORE"** with **"MISSES License and insurance credentials are valid"** and **"Flagged, not removed — still ranked, and still yours to decide."**, against Northgate at "#1 OF 12 · 72%".
+- [x] The video shows `Confirm`-gated human award: the agent recommends, a person approves on camera. — beat 7 shows **"YOUR APPROVAL NEEDED"** with **"Select Northgate Plumbing"**, "Pass" and "Continue investigation", the click, and the case flipping to **"Decided."** with the primary action becoming "Review what was decided".
+- [x] The video shows proof of a real Strands runtime from an inspectable run. — beat 8 opens the Runtime Inspector on the round-one run (filmed before the reweight, because the inspector shows the latest run and that becomes round two). The Execution tab reads **"Strands Swarm · 6 nodes · 6 stages · 5 handoffs"** with all six stages and the handoff chain; the Timeline tab shows `swarm.node_started`, `model.call`, `context.injected`, `intervention.proceed`. Counts measured over `/api/debug/runs/:runId` on three independent runs of this journey at the filming pacing (`run-8b24c17a-…`, the filmed `run-0d60f684-…`, and a fresh confirmation run `run-7e6ba9ff-…`), identical each time: **eventCount 433**, `context` 28, `tool` 91, `model` 93, `intervention` 152, `agent` 44, `swarm` 18, `skill` 4, `goal` 2 (the `goal` pair being one `validation_failed` and one `validated`). *One narrated claim is not on camera:* the spans' `otel.scope` is stated in narration and proven by test, but the Timeline does not render that field.
+- [x] AgentCore and CloudWatch appear in the video only if the deployment and correlation were actually verified. — satisfied vacuously and deliberately: neither appears anywhere in the cut. No AWS deployment has been verified, so none is shown.
+- [x] The video closes by restating the distinctive claim. — beat 9 on the decided case, then a 3s card: "The agent recommends. The human decides."
+- [ ] Captions, resolution, audio, and duration are checked on the final uploaded file. — checked on the produced file (1920x1080, H.264/AAC, 287.1s, captions burned in plus `.srt`); re-checking the *uploaded* artifact remains a submitter action.
 
 ## Devpost project fields
 

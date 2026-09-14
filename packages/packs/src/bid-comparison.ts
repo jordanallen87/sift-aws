@@ -846,7 +846,7 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
       id: 'bid.lens.price',
       label: 'Price',
       description:
-        'What each bid costs once every bid prices the same work -- and what it quoted before that correction.',
+        'What each bid costs once every bid prices the same work — and what it quoted before that correction.',
       attributeIds: ['bid.quoted_total', 'bid.adjusted_total', 'bid.scope_completeness'],
     },
     {

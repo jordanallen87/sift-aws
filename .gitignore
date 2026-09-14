@@ -14,7 +14,12 @@ build/
 # Generated verification/test artifacts. The demo deliverables under
 # artifacts/demo/ are submission output, not build output, so they are
 # deliberately kept.
-artifacts/
+#
+# `artifacts/*`, not `artifacts/`: git does not descend into an excluded
+# DIRECTORY, so with a bare `artifacts/` every negation below is dead and the
+# allowlisted deliverables cannot be added at all -- which is the opposite of
+# what those lines say they do.
+artifacts/*
 !artifacts/demo/
 artifacts/demo/*
 !artifacts/demo/sift-webmcp-demo-FINAL.mp4

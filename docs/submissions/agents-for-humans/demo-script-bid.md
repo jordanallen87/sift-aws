@@ -4,15 +4,51 @@ Target: **no longer than 5 minutes.** Beats below sum to exactly 300 seconds; la
 
 **Track: Professional Agents.**
 
-> **Capture toolchain — do not improvise one.** A proven narrated-video
-> pipeline already exists (ElevenLabs narration, ffmpeg segments, crossfades,
-> captions) in the `praetor` reference repository, along with a separate,
-> portable stills/clips kit. Read
-> [`docs/hackathons/demo-tooling/README.md`](../../hackathons/demo-tooling/README.md)
-> **before recording anything** — it carries the exact commands and six traps
-> confirmed in that source, including a hardcoded 240-second cap that is wrong
-> for this video and a transition-duration default mismatch that silently
-> drifts the captions.
+> **The video is produced by a tool in this repo; do not record it by hand.**
+> `scripts/demo-video/` drives the real product in one continuous take and cuts
+> the film from it: `record.ts` then `render.ts`, with `manifest.json` holding
+> the narration and the edit list. See
+> [`scripts/demo-video/README.md`](../../../scripts/demo-video/README.md) for the
+> two commands and the five things about the capture that had to be established
+> by measurement. The shipped cut is 287s against the 300s cap, 1920x1080,
+> H.264/AAC, with a matching `.srt`.
+>
+> The shot list below remains the claim-level source: every figure in it is
+> checked against a live run. Where the two disagree, the manifest is what was
+> actually filmed.
+
+## Three things this script asserted that filming disproved
+
+Found by pointing a camera at the running product, not by reading source. All
+three were corrected in `scripts/demo-video/manifest.json`; they are recorded
+here because the prose above still reads as though they were true.
+
+1. **"All 6 specialists finished." is never on screen.** It is real DOM text,
+   but it lives in a `role="status"` paragraph with the `visually-hidden` class
+   -- clipped to a 1px box for screen readers. A camera pointed at pixels will
+   never show it. What a viewer actually sees is six rows each reading
+   **"Completed"**, with the scope analyst's reading
+   **"Completed · Redirected once"**.
+2. **The Deny and the GoalLoop refusal are not in the case workspace.** The only
+   place `ActivityTimeline` renders is the Runtime Inspector's Activity tab
+   (`open-runtime-inspector` -> `runtime-inspector-tab-activity`); the workspace
+   container has no `activity-item-*` elements at any point. Beats 2 and 3 as
+   written narrate **"in the activity stream, Action blocked"** over a pane that
+   never shows it. The filmed cut opens the inspector for that beat.
+   On screen the entries read **"ACTION BLOCKED / ScopeAuthorization: tool
+   "license-lookup" is not in the declared allowlist for this run"** and
+   **"DRAFT WITHHELD / Recommendation draft rejected on attempt 1."**
+3. **Only the rejection half of the GoalLoop surfaces.** `goal.validated` has no
+   consumer-facing activity item -- the engine maps only `goal.validation_failed`
+   (to `draft.withheld`). Both events are real in the run, and the overview's
+   `countsByCategory.goal` is exactly 2, but do not narrate a visible
+   "re-attempted" entry: the recovery is evidenced by the recommendation
+   existing, not by a second row.
+
+A fourth, smaller one: the Analysis stage carries **no option cards and no
+dollar figures at all** -- its entire scroll height is about 200px. The twelve
+bids live behind the Review stage's **List** view, which is where beat 1 has to
+point if it is going to talk about twelve bids.
 
 ## Provenance of every claim in this script
 

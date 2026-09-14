@@ -40,7 +40,7 @@
     "note": "Limits: WebMCP under 3:00 (180s), Agents for Humans 5:00 or under (300s). Both measured values are inside their limits, but neither file sits at the default path scripts/test-submission.ts probes (docs/demo/webmcp-recording.mp4, docs/demo/aws-recording.mp4), so that script still reports both video-duration checks as SKIP rather than PASS. Point SIFT_WEBMCP_VIDEO_PATH / SIFT_AWS_VIDEO_PATH at the files above to have the gate measure them itself."
   },
   "webmcpVideoUrl": "",
-  "agentsForHumansVideoUrl": "",
+  "agentsForHumansVideoUrl": "https://youtu.be/T8Q0oQAExE4",
   "railway": {
     "workspace": "JAllen's Projects",
     "projectName": "sift-hackathon",
@@ -117,5 +117,6 @@
     "List the exact WebMCP test clients/browser versions actually used in webmcpTestClients once tested (e.g. 'ChatGPT in-app browser, build X' or 'Chrome NNN with WebMCP origin trial flag Y').",
     "If AWS credentials become available, deploy to Bedrock AgentCore and fill in agentCore.deployed=true plus its own endpoint/CloudWatch correlation details."
   ],
-  "repositoryUrlNote": "Changed 2026-09-07. The Agents for Humans submission is jordanallen87/sift-aws. The earlier jordanallen87/sift carries the WebMCP Challenge submission and was restored to its submitted state (tag webmcp-submitted -> 61824c1); it is not this submission's repository. sift-aws was verified PUBLIC with a visible MIT license on 2026-09-13, satisfying the AWS rule requiring a public repository with a visible licence. (An earlier note here said it was PRIVATE and had to be made public; that was true on 2026-09-07 and is no longer.)"
+  "repositoryUrlNote": "Changed 2026-09-07. The Agents for Humans submission is jordanallen87/sift-aws. The earlier jordanallen87/sift carries the WebMCP Challenge submission and was restored to its submitted state (tag webmcp-submitted -> 61824c1); it is not this submission's repository. sift-aws was verified PUBLIC with a visible MIT license on 2026-09-13, satisfying the AWS rule requiring a public repository with a visible licence. (An earlier note here said it was PRIVATE and had to be made public; that was true on 2026-09-07 and is no longer.)",
+  "agentsForHumansVideoNote": "Uploaded to YouTube and set public on 2026-09-14, which the rules require (\"Videos must be uploaded to YouTube or Vimeo and made public\"). The file is artifacts/demo/sift-aws-bid-demo-FINAL.mp4: 297.7s against the 300s cap, 1920x1080, H.264/AAC, narrated with ElevenLabs and captioned, with a matching .srt sidecar."
 }

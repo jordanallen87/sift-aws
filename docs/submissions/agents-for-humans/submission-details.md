@@ -226,7 +226,7 @@ Cover the real Strands trajectory, why deterministic readiness sits outside the 
 
 - [ ] Confirm registration and eligibility in Devpost.
 - [ ] Select `Professional Agents` in the final form.
-- [ ] Add the public repository URL and visible MIT license — **not yet true.** `https://github.com/jordanallen87/sift-aws` is private as of 2026-09-07 (`gh repo view jordanallen87/sift-aws --json visibility` → `"PRIVATE"`); an MIT `LICENSE` file exists at the repository root, but the repository must be made public (`gh repo edit jordanallen87/sift-aws --visibility public`) before it can be pasted into field `27733`. This is a release blocker.
+- [x] Add the public repository URL and visible MIT license — **done.** `https://github.com/jordanallen87/sift-aws` was verified PUBLIC on 2026-09-14 by an unauthenticated fetch (HTTP 200, i.e. what a judge without access sees), and GitHub detects the root `LICENSE` as MIT so it renders in the About panel. The earlier note here calling this a release blocker was true on 2026-09-07 and is now stale.
 - [ ] Add the AWS Builder ID.
 - [ ] Export and upload the required architecture diagram.
 - [ ] Add the verified Railway URL.

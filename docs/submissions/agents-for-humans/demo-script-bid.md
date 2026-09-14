@@ -28,6 +28,15 @@ Every quoted UI string below was read off a rendered baseline image or the compo
 
 > **Start the service with `SIFT_DEMO_PACING_MS=2000`.** Pacing changes nothing but wall-clock: identical events, counts, ordering. Use the maximum, not 250. Measured by driving the real product on 2026-09-13: at `250` the whole six-specialist investigation is over in **about 6 seconds**, which leaves beats 2 and 3 — ninety seconds of narration — talking over a screen that has already finished. At `2000` the same run takes **62.7 seconds** (scope analyst 10.1s, price analyst 18.1s, credential checker 12.0s, schedule analyst 10.0s, source check 6.0s, recommendation 6.0s), so beat 2 has live activity under it and beat 3 lands while the run is still going. `2000` is the ceiling the config allows (`apps/agent/src/config.ts`: `integerFromEnvString(0, 2000)`).
 
+> **Record in a WebMCP-enabled Chrome, or the pane says so on camera.** Launch Chrome 152+
+> with `--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport`. Without it the notice
+> bar above the action dock reads **"WebMCP unavailable in this browser — every action is
+> still available here."** in every single shot. That sentence is true and it is not a
+> product fault — it is a fact about the browser you launched — but it is the wrong first
+> impression for a submission whose sibling entry is a WebMCP one. With the flags it reads
+> **"WebMCP ready — a connected assistant can operate this page."** Verified 2026-09-13 on
+> Chrome 152.0.7977.83; `scripts/journey/host-session.ts` carries the same flag list.
+
 > **Keep the window at 390–480px.** This is a ChatGPT-right-pane product; a maximized desktop window misrepresents it.
 
 ---

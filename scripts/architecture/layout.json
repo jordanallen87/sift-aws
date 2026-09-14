@@ -1,0 +1,828 @@
+{
+  "canvas": {
+    "width": 2400,
+    "height": 1600,
+    "scale": 2
+  },
+  "palettes": {
+    "browser": {
+      "fill": "#e0f2fe",
+      "stroke": "#0369a1",
+      "color": "#0c4a6e"
+    },
+    "railway": {
+      "fill": "#ede9fe",
+      "stroke": "#6d28d9",
+      "color": "#3b0764"
+    },
+    "core": {
+      "fill": "#dcfce7",
+      "stroke": "#15803d",
+      "color": "#14532d"
+    },
+    "packcase": {
+      "fill": "#fef9c3",
+      "stroke": "#a16207",
+      "color": "#713f12"
+    },
+    "strands": {
+      "fill": "#ffe4e6",
+      "stroke": "#be123c",
+      "color": "#881337"
+    },
+    "targets": {
+      "fill": "#f1f5f9",
+      "stroke": "#334155",
+      "color": "#0f172a"
+    },
+    "persist": {
+      "fill": "#e0e7ff",
+      "stroke": "#4338ca",
+      "color": "#312e81"
+    },
+    "obs": {
+      "fill": "#fae8ff",
+      "stroke": "#a21caf",
+      "color": "#701a75"
+    },
+    "aws": {
+      "fill": "#fff7ed",
+      "stroke": "#c2410c",
+      "color": "#7c2d12"
+    },
+    "human": {
+      "fill": "#fef3c7",
+      "stroke": "#b45309",
+      "color": "#78350f",
+      "strokeWidth": 4
+    },
+    "authGate": {
+      "fill": "#fee2e2",
+      "stroke": "#b91c1c",
+      "color": "#7f1d1d",
+      "strokeWidth": 3
+    }
+  },
+  "groups": [
+    {
+      "id": "BROWSER",
+      "label": "ChatGPT Right Pane (Browser)",
+      "x": 40,
+      "y": 40,
+      "w": 650,
+      "h": 300,
+      "palette": "browser",
+      "cols": 2,
+      "rows": 3
+    },
+    {
+      "id": "RAILWAY",
+      "label": "Railway Web/API Gateway (Express, one service)",
+      "x": 720,
+      "y": 40,
+      "w": 630,
+      "h": 300,
+      "palette": "railway",
+      "cols": 2,
+      "rows": 2
+    },
+    {
+      "id": "TARGETS",
+      "label": "Execution Targets (SIFT_EXECUTION_TARGET;<br/>both surfaces always live, not env-selected)",
+      "x": 1380,
+      "y": 40,
+      "w": 650,
+      "h": 300,
+      "palette": "targets",
+      "cols": 2,
+      "rows": 1
+    },
+    {
+      "id": "CORE",
+      "label": "Deterministic Sift Core (pure functions: no model, no I/O)",
+      "x": 40,
+      "y": 370,
+      "w": 760,
+      "h": 420,
+      "palette": "core",
+      "cols": 4,
+      "rows": 2
+    },
+    {
+      "id": "PACKCASE",
+      "label": "Compiled Decision Pack vs. Mutable Case / Run Plan",
+      "x": 40,
+      "y": 820,
+      "w": 760,
+      "h": 200,
+      "palette": "packcase",
+      "cols": 2,
+      "rows": 1
+    },
+    {
+      "id": "HUMAN",
+      "label": "HUMAN-ONLY APPROVAL BOUNDARY",
+      "x": 840,
+      "y": 370,
+      "w": 720,
+      "h": 650,
+      "palette": "human",
+      "cols": 2,
+      "rows": 1,
+      "emphasis": true,
+      "caption": "The only actor who can approve a consequential decision. No pack, no agent, no automated process holds this authority \u2014 reviewProposal() rejects every actor that is not human."
+    },
+    {
+      "id": "STRANDS",
+      "label": "Strands TypeScript Runtime Adapter",
+      "x": 1600,
+      "y": 370,
+      "w": 760,
+      "h": 650,
+      "palette": "strands",
+      "cols": 3,
+      "rows": 3
+    },
+    {
+      "id": "OBS",
+      "label": "Observability Pipeline",
+      "x": 40,
+      "y": 1050,
+      "w": 1080,
+      "h": 510,
+      "palette": "obs",
+      "cols": 3,
+      "rows": 3
+    },
+    {
+      "id": "PERSIST",
+      "label": "SQLite Persistence (better-sqlite3 + Drizzle, WAL)",
+      "x": 1150,
+      "y": 1050,
+      "w": 1210,
+      "h": 510,
+      "palette": "persist",
+      "cols": 5,
+      "rows": 1
+    },
+    {
+      "id": "AWS",
+      "label": "AWS (optional, credential-gated)",
+      "x": 2060,
+      "y": 40,
+      "w": 300,
+      "h": 300,
+      "palette": "aws",
+      "cols": 1,
+      "rows": 1,
+      "style": "dashed",
+      "caption": "Credential-gated. Only reachable once AgentCore ships to Bedrock."
+    }
+  ],
+  "nodes": [
+    {
+      "id": "CHATGPT",
+      "group": "BROWSER",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "colspan": 2,
+      "label": "ChatGPT conversation frame<br/>hosts the 390-480px right pane"
+    },
+    {
+      "id": "WEBMCP",
+      "group": "BROWSER",
+      "shape": "box",
+      "row": 1,
+      "col": 0,
+      "label": "WebMCP tool calls<br/>functions registered with ChatGPT"
+    },
+    {
+      "id": "UI",
+      "group": "BROWSER",
+      "shape": "box",
+      "row": 1,
+      "col": 1,
+      "label": "React/Vite UI controls<br/>renders canonical CaseState"
+    },
+    {
+      "id": "CMDCLIENT",
+      "group": "BROWSER",
+      "shape": "box",
+      "row": 2,
+      "col": 0,
+      "colspan": 2,
+      "label": "Shared SiftCommands client<br/>one command implementation for<br/>UI controls and WebMCP callbacks"
+    },
+    {
+      "id": "HTTP",
+      "group": "RAILWAY",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "label": "HTTP + SSE routes<br/>/api/cases/*, /api/cases/:id/events"
+    },
+    {
+      "id": "PINGINV",
+      "group": "RAILWAY",
+      "shape": "box",
+      "row": 0,
+      "col": 1,
+      "label": "/ping, /invocations<br/>AgentCore-compatible contract"
+    },
+    {
+      "id": "CMDHANDLER",
+      "group": "RAILWAY",
+      "shape": "box",
+      "row": 1,
+      "col": 0,
+      "colspan": 2,
+      "label": "Command handler<br/>optimistic concurrency + idempotency keys"
+    },
+    {
+      "id": "LOCALEXEC",
+      "group": "TARGETS",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "label": "local: in-process Strands adapter<br/>reached via /api/cases/*"
+    },
+    {
+      "id": "AGENTCOREEXEC",
+      "group": "TARGETS",
+      "shape": "box",
+      "row": 0,
+      "col": 1,
+      "label": "agentcore: AgentCore-compatible contract<br/>port 8080, /ping + /invocations<br/>(built and live; not yet deployed to Bedrock)"
+    },
+    {
+      "id": "ROUTE",
+      "group": "CORE",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "label": "routePack / instantiateCase"
+    },
+    {
+      "id": "OBLIG",
+      "group": "CORE",
+      "shape": "box",
+      "row": 0,
+      "col": 1,
+      "label": "deriveObligations /<br/>selectNextObligation"
+    },
+    {
+      "id": "EVID",
+      "group": "CORE",
+      "shape": "box",
+      "row": 0,
+      "col": 2,
+      "label": "Evidence validity<br/>and source links"
+    },
+    {
+      "id": "READY",
+      "group": "CORE",
+      "shape": "box",
+      "row": 0,
+      "col": 3,
+      "label": "evaluateReadiness"
+    },
+    {
+      "id": "AUTHGATE",
+      "group": "CORE",
+      "shape": "gate",
+      "row": 1,
+      "col": 2,
+      "colspan": 2,
+      "accent": "authGate",
+      "label": "reviewProposal()<br/>rejects any actor != human"
+    },
+    {
+      "id": "PACK",
+      "group": "PACKCASE",
+      "shape": "immutable",
+      "row": 0,
+      "col": 0,
+      "label": "Compiled Decision Pack<br/>pinned id + version + compiledHash<br/>IMMUTABLE"
+    },
+    {
+      "id": "CASEPLAN",
+      "group": "PACKCASE",
+      "shape": "box",
+      "row": 0,
+      "col": 1,
+      "label": "Case-specific run plan<br/>mutable CaseState + custom.* extensions"
+    },
+    {
+      "id": "HUMANACTOR",
+      "group": "HUMAN",
+      "shape": "actor",
+      "row": 0,
+      "col": 0,
+      "label": "Human user"
+    },
+    {
+      "id": "APPROVE",
+      "group": "HUMAN",
+      "shape": "gate",
+      "row": 0,
+      "col": 1,
+      "accent": "authGate",
+      "label": "Approve / Confirm<br/>the consequential decision"
+    },
+    {
+      "id": "CTXINJ",
+      "group": "STRANDS",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "label": "Context Injector<br/>current case projection, evidence, budgets"
+    },
+    {
+      "id": "SKILLS",
+      "group": "STRANDS",
+      "shape": "box",
+      "row": 0,
+      "col": 1,
+      "label": "AgentSkills<br/>progressive activation"
+    },
+    {
+      "id": "SESS",
+      "group": "STRANDS",
+      "shape": "datastore",
+      "row": 0,
+      "col": 2,
+      "label": "Sessions and snapshots<br/>LocalFileStorage"
+    },
+    {
+      "id": "GRAPHSWARM",
+      "group": "STRANDS",
+      "shape": "box",
+      "row": 1,
+      "col": 0,
+      "colspan": 2,
+      "label": "Strands Graph (Car Pack) /<br/>bounded Strands Swarm<br/>(Energy Pack, Bid Comparison Pack)"
+    },
+    {
+      "id": "HOOKS",
+      "group": "STRANDS",
+      "shape": "box",
+      "row": 1,
+      "col": 2,
+      "label": "Lifecycle hooks"
+    },
+    {
+      "id": "GOALLOOP",
+      "group": "STRANDS",
+      "shape": "box",
+      "row": 2,
+      "col": 0,
+      "label": "GoalLoop<br/>recommendation validator, maxAttempts: 2"
+    },
+    {
+      "id": "INTERVENE",
+      "group": "STRANDS",
+      "shape": "gate",
+      "row": 2,
+      "col": 1,
+      "colspan": 2,
+      "label": "Interventions: ScopeAuthorization,<br/>ConsequenceGuard, BudgetGuard,<br/>RetrySteering, EvidenceQualitySteering<br/>(Guide / Confirm / Deny)"
+    },
+    {
+      "id": "OTELSPANS",
+      "group": "OBS",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "label": "Strands SDK spans<br/>(graph/swarm/agent/model/tool)<br/>already emitted, previously discarded"
+    },
+    {
+      "id": "NORM",
+      "group": "OBS",
+      "shape": "box",
+      "row": 0,
+      "col": 1,
+      "label": "TelemetryNormalizer<br/>Sift-minted traceId per run"
+    },
+    {
+      "id": "SPANREC",
+      "group": "OBS",
+      "shape": "box",
+      "row": 0,
+      "col": 2,
+      "label": "SiftSpanRecorder<br/>real SpanProcessor, NodeTracerProvider<br/>span_id / parent_span_id / durationMs"
+    },
+    {
+      "id": "REDACT",
+      "group": "OBS",
+      "shape": "box",
+      "row": 1,
+      "col": 0,
+      "label": "Redactor<br/>strips secrets, headers, raw reasoning"
+    },
+    {
+      "id": "OTLP",
+      "group": "OBS",
+      "shape": "box",
+      "row": 1,
+      "col": 1,
+      "label": "OTLPTraceExporter (conditional)<br/>only when OTEL_EXPORTER_OTLP_ENDPOINT is set"
+    },
+    {
+      "id": "INSPECTOR",
+      "group": "OBS",
+      "shape": "box",
+      "row": 1,
+      "col": 2,
+      "label": "Runtime Inspector SSE<br/>SIFT_DEBUG_ENABLED"
+    },
+    {
+      "id": "BUNDLE",
+      "group": "OBS",
+      "shape": "box",
+      "row": 2,
+      "col": 0,
+      "colspan": 3,
+      "label": "Sanitized JSON run bundle export"
+    },
+    {
+      "id": "CASES",
+      "group": "PERSIST",
+      "shape": "datastore",
+      "row": 0,
+      "col": 0,
+      "label": "cases<br/>latest snapshot + pinned pack ref"
+    },
+    {
+      "id": "EVENTS",
+      "group": "PERSIST",
+      "shape": "datastore",
+      "row": 0,
+      "col": 1,
+      "label": "case_events<br/>append-only canonical"
+    },
+    {
+      "id": "ACTIVITY",
+      "group": "PERSIST",
+      "shape": "datastore",
+      "row": 0,
+      "col": 2,
+      "label": "activity_events<br/>sanitized public stream"
+    },
+    {
+      "id": "RUNS",
+      "group": "PERSIST",
+      "shape": "datastore",
+      "row": 0,
+      "col": 3,
+      "label": "runs"
+    },
+    {
+      "id": "RUNTIME",
+      "group": "PERSIST",
+      "shape": "datastore",
+      "row": 0,
+      "col": 4,
+      "label": "runtime_events<br/>sanitized telemetry"
+    },
+    {
+      "id": "CW",
+      "group": "AWS",
+      "shape": "box",
+      "row": 0,
+      "col": 0,
+      "label": "CloudWatch /<br/>AgentCore Observability"
+    }
+  ],
+  "edges": [
+    {
+      "from": "CHATGPT",
+      "to": "UI",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "CHATGPT",
+      "to": "WEBMCP",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "UI",
+      "to": "CMDCLIENT",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "WEBMCP",
+      "to": "CMDCLIENT",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "CMDCLIENT",
+      "to": "HTTP",
+      "style": "solid",
+      "label": "validated command<br/>+ idempotency key",
+      "emphasis": "primary"
+    },
+    {
+      "from": "HTTP",
+      "to": "CMDHANDLER",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "PINGINV",
+      "to": "CMDHANDLER",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "CMDHANDLER",
+      "to": "ROUTE",
+      "style": "solid",
+      "label": "routes / instantiates case",
+      "emphasis": "primary"
+    },
+    {
+      "from": "PACK",
+      "to": "ROUTE",
+      "style": "solid",
+      "label": "registry lookup",
+      "emphasis": "normal"
+    },
+    {
+      "from": "ROUTE",
+      "to": "OBLIG",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "EVID",
+      "to": "READY",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "PACK",
+      "to": "CASEPLAN",
+      "style": "solid",
+      "label": "adapter compiles a bounded<br/>run plan; never rewrites the pack",
+      "emphasis": "normal"
+    },
+    {
+      "from": "OBLIG",
+      "to": "CASEPLAN",
+      "style": "solid",
+      "label": "selected obligation +<br/>read-only case snapshot",
+      "emphasis": "primary"
+    },
+    {
+      "from": "CASEPLAN",
+      "to": "CTXINJ",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "CTXINJ",
+      "to": "SKILLS",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "GRAPHSWARM",
+      "to": "GOALLOOP",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "GRAPHSWARM",
+      "to": "INTERVENE",
+      "style": "dashed",
+      "label": "no-progress -> Guide",
+      "emphasis": "normal"
+    },
+    {
+      "from": "GOALLOOP",
+      "to": "INTERVENE",
+      "style": "dashed",
+      "label": "exhausted -> feedback",
+      "emphasis": "normal"
+    },
+    {
+      "from": "GRAPHSWARM",
+      "to": "HOOKS",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "SESS",
+      "to": "GRAPHSWARM",
+      "style": "dashed",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "CMDHANDLER",
+      "to": "LOCALEXEC",
+      "style": "solid",
+      "label": "/api/cases/* path",
+      "emphasis": "primary"
+    },
+    {
+      "from": "CMDHANDLER",
+      "to": "AGENTCOREEXEC",
+      "style": "solid",
+      "label": "/invocations path",
+      "emphasis": "primary"
+    },
+    {
+      "from": "LOCALEXEC",
+      "to": "STRANDS",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "AGENTCOREEXEC",
+      "to": "STRANDS",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "AGENTCOREEXEC",
+      "to": "CW",
+      "style": "dashed",
+      "label": "trace/session/request IDs<br/>(only once actually deployed)",
+      "emphasis": "normal"
+    },
+    {
+      "from": "INTERVENE",
+      "to": "EVID",
+      "style": "solid",
+      "label": "candidate evidence /<br/>candidate recommendation only",
+      "emphasis": "normal"
+    },
+    {
+      "from": "READY",
+      "to": "HUMAN",
+      "style": "solid",
+      "label": "recommendation<br/>(a proposal, not a decision)",
+      "emphasis": "primary"
+    },
+    {
+      "from": "INTERVENE",
+      "to": "HUMAN",
+      "style": "solid",
+      "label": "Confirm required",
+      "emphasis": "primary"
+    },
+    {
+      "from": "HUMANACTOR",
+      "to": "APPROVE",
+      "style": "solid",
+      "label": "",
+      "emphasis": "primary"
+    },
+    {
+      "from": "HUMANACTOR",
+      "to": "AUTHGATE",
+      "style": "solid",
+      "label": "reviewProposal(actor: 'human')",
+      "emphasis": "primary"
+    },
+    {
+      "from": "AUTHGATE",
+      "to": "CASEPLAN",
+      "style": "solid",
+      "label": "approved decision",
+      "emphasis": "primary"
+    },
+    {
+      "from": "CMDHANDLER",
+      "to": "CASES",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "CMDHANDLER",
+      "to": "EVENTS",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "HOOKS",
+      "to": "ACTIVITY",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "STRANDS",
+      "to": "RUNS",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "HOOKS",
+      "to": "NORM",
+      "style": "dashed",
+      "label": "Strands tool/model<br/>hook events",
+      "emphasis": "normal"
+    },
+    {
+      "from": "GRAPHSWARM",
+      "to": "NORM",
+      "style": "dashed",
+      "label": "Graph/Swarm node +<br/>handoff hook events",
+      "emphasis": "normal"
+    },
+    {
+      "from": "CMDHANDLER",
+      "to": "NORM",
+      "style": "dashed",
+      "label": "Sift domain events",
+      "emphasis": "normal"
+    },
+    {
+      "from": "HTTP",
+      "to": "NORM",
+      "style": "dashed",
+      "label": "HTTP/SSE/storage events",
+      "emphasis": "normal"
+    },
+    {
+      "from": "INTERVENE",
+      "to": "NORM",
+      "style": "dashed",
+      "label": "intervention/plugin events",
+      "emphasis": "normal"
+    },
+    {
+      "from": "SESS",
+      "to": "NORM",
+      "style": "dashed",
+      "label": "session/snapshot events",
+      "emphasis": "normal"
+    },
+    {
+      "from": "GRAPHSWARM",
+      "to": "OTELSPANS",
+      "style": "dashed",
+      "label": "real OTel spans<br/>(graph/swarm/agent/model/tool)",
+      "emphasis": "normal"
+    },
+    {
+      "from": "NORM",
+      "to": "REDACT",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "OTELSPANS",
+      "to": "SPANREC",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "SPANREC",
+      "to": "OTLP",
+      "style": "dashed",
+      "label": "OTEL_EXPORTER_OTLP_ENDPOINT set",
+      "emphasis": "normal"
+    },
+    {
+      "from": "RUNTIME",
+      "to": "INSPECTOR",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    },
+    {
+      "from": "RUNTIME",
+      "to": "BUNDLE",
+      "style": "solid",
+      "label": "",
+      "emphasis": "normal"
+    }
+  ]
+}

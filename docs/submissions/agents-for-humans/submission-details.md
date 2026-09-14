@@ -129,7 +129,7 @@ None of this is asserted rather than implemented. Every recommendation's confide
 > **Every claim in this list is mapped to a log record a judge can pull themselves** -- see [`claim-evidence-matrix.md`](./claim-evidence-matrix.md), which gives the implementing file, the test that fails if the claim stops being true, and the exact event name and count in an exported run. The shortest version: every OpenTelemetry span in that export carries `"otel.scope": "strands-agents"`, the instrumentation scope of the SDK's own tracer, which a local class named after Strands cannot produce.
 
 - AgentSkills progressively load the technique the active obligation needs -- scope normalization, price arithmetic, credential verification, schedule analysis.
-- A real bounded Swarm moves among scope, price, credential, schedule, source-challenge, and synthesis specialists with model-decided handoffs.
+- A real bounded Swarm moves among scope, price, credential, schedule, source-challenge, and synthesis specialists. The Swarm, its step and timeout bounds, its repetitive-handoff detection and every `MultiAgentHandoffEvent` are genuine SDK behaviour; the trajectory itself is deterministic, because the model's responses are served by a scripted `Model` implementation so the release gates can assert an exact event sequence with no network and no credentials. Do not describe the handoffs as chosen by the model at inference time.
 - Interventions use `Guide`, `Confirm`, and `Deny` to redirect work and preserve authority. `Deny` is load-bearing here rather than decorative: the price analyst reaches for the licence registry, a tool the pack grants only to the credential checker, and is refused before it runs.
 - Context Injector supplies current criteria weights, unresolved scope gaps, and remaining budgets on each turn.
 - GoalLoop rejects the plausible premature ranking and provides bounded corrective feedback -- the single most important beat in the demo, and a genuine Strands mechanism rather than a UI state.
@@ -146,7 +146,7 @@ Most agents are optimized to finish. Sift is optimized to know when the agent ha
 The full shot-by-shot script is [`demo-script-bid.md`](./demo-script-bid.md), written against a product that was driven rather than read. The five-minute causal chain:
 
 1. **0:00–0:30 — the problem.** Twelve plumbing bids for a school renovation -- a realistic public-bid-tab count. The cheapest is $52,500 under the eventual winner. Is it a better deal, or is it pricing less work?
-2. **0:30–1:20 — a real Strands Swarm.** Six specialists, model-decided handoffs, four AgentSkills. Two interventions visible as they land: the scope analyst is **redirected** by `Guide` after circling, and an **"Action blocked"** appears when the price analyst reaches for a tool this pack grants only to the credential checker.
+2. **0:30–1:20 — a real Strands Swarm.** Six specialists, real SDK handoff events along a deterministic trajectory, four AgentSkills. Two interventions visible as they land: the scope analyst is **redirected** by `Guide` after circling, and an **"Action blocked"** appears when the price analyst reaches for a tool this pack grants only to the credential checker.
 3. **1:20–2:00 — the refusal.** GoalLoop rejects the first synthesis, which ranked on raw totals. Not badly written — false, because the bids are not on a common scope basis. Every incumbent will happily rank an unfair comparison; this one will not.
 4. **2:00–2:45 — the arithmetic.** Cedar is silent on permits ($18,000), the shower-valve rough-in ($31,500) and haul-away ($6,000). Adjusted: $279,000 against Northgate's $276,000. The cheapest bid was the most expensive one, on addition a viewer can follow.
 5. **2:45–3:15 — it still will not call two questions closed.** Fail-closed evidence keeps `bid.scope_normalization` and `bid.credential_verification` open on degraded verdicts, even with a winner named.
@@ -174,12 +174,18 @@ Replace this draft with the exact public URL, scenario control labels, AgentCore
 ## Built-with draft
 
 - Strands Agents SDK for TypeScript
-- Amazon Bedrock — **list only with the qualification below.** The Bedrock provider is built and
-  unit-tested (`apps/agent/src/runtime/model-provider.ts`, using the SDK's real `BedrockModel`), and
-  `SIFT_MODEL_ID`/`AWS_REGION` configure it, but no production code path reaches it: both hero
-  engines construct their scripted provider unconditionally, so every run — local and deployed — is
-  scripted. Listing "Amazon Bedrock" unqualified would claim a live inference path this build does
-  not have. See `docs/specs/strands-runtime.md` "What actually ships".
+- Amazon Bedrock — **verified live 2026-09-14, list with the scope below.** The Bedrock provider
+  (`apps/agent/src/runtime/model-provider.ts`, using the SDK's real `BedrockModel`) is now reached by
+  a real production code path: `POST /api/cases/:caseId/bid-documents/read`
+  (`apps/agent/src/routes/bid-documents.ts`), gated behind `SIFT_BID_DOCUMENT_READER_ENABLED=true`,
+  constructs a real `BedrockModel` at `apps/agent/src/server.ts:240` via `resolveModelProvider`. A
+  live call against **Amazon Nova Lite** (`amazon.nova-lite-v1:0`), region `us-east-1`, read an
+  unstructured bid document and returned a validated reading in 2.5 seconds, HTTP 200 — see
+  `claim-evidence-matrix.md`. Nova, not Anthropic's model, because Anthropic models on Bedrock are
+  currently blocked on this account pending AWS's "Anthropic use case details" form, and Nova is
+  ungated and cheaper. The scope is narrow: this is the opt-in document-reading path, not the hero
+  bid-comparison Swarm, which still constructs its scripted provider unconditionally. See
+  `docs/specs/strands-runtime.md` "What actually ships".
 - Amazon Bedrock AgentCore, only if actually deployed
 - TypeScript
 - React

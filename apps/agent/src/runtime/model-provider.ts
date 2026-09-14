@@ -5,13 +5,27 @@
  * for CI ("Deterministic tests use a scripted `ModelProvider` test double
  * and never call Bedrock").
  *
- * **`createBedrockModel`/`resolveModelProvider` are not wired into any
- * production path as of 2026-09-05.** Their only callers are in
- * `model-provider.test.ts`. Both hero engines construct their scripted
- * provider unconditionally (`home-energy-engine.ts`'s
- * `modelFor: scriptedModelFor(providers)`, `car-purchase-engine.ts`'s
+ * **Corrected 2026-09-14: `resolveModelProvider` IS reached in production.**
+ * `server.ts:240` calls it to build the bid-document reader whenever
+ * `SIFT_BID_DOCUMENT_READER_ENABLED=true`, and that path was verified end to
+ * end against Amazon Bedrock on 2026-09-14: Amazon Nova Lite
+ * (`amazon.nova-lite-v1:0`, `us-east-1`) read a bid document's text and
+ * created a real option on the case, every extracted attribute carrying
+ * `origin: 'agent_proposed'` and never `verified`.
+ *
+ * The previous version of this comment said the opposite -- "not wired into
+ * any production path", "their only callers are in `model-provider.test.ts`"
+ * -- and stayed wrong long enough to be read as fact and repeated downstream.
+ * It is called out rather than quietly deleted because a confident, dated,
+ * false comment is worse than no comment.
+ *
+ * Still true: all three hero engines construct their scripted provider
+ * unconditionally (`bid-comparison-engine.ts:450`'s
+ * `modelFor: scriptedModelFor(providers)`, `home-energy-engine.ts`'s
+ * identical call, `car-purchase-engine.ts`'s
  * `buildCarPurchaseScriptedProviders()`), with no branch on config or
- * credential availability -- so every run, local and deployed, is scripted.
+ * credential availability -- so every hero *trajectory* is deterministic,
+ * which is what the release gates require.
  * This is stated here rather than left to be inferred from a grep, because
  * the phrase "for live runs" above otherwise reads as a description of
  * shipped behavior. Wiring the live path is genuinely unfinished work

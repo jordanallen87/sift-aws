@@ -12,7 +12,13 @@ const DEFAULTS = {
   tracingEnabled: true,
   debugPayloadMode: 'metadata-only',
   debugRetentionDays: 7,
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  // Deliberate default change (2026-09-14, config.ts's own SIFT_MODEL_ID
+  // comment has the full reasoning): the previous Anthropic default
+  // (`global.anthropic.claude-sonnet-4-6`) returns a Bedrock
+  // ResourceNotFoundException on this account demanding an Anthropic
+  // use-case form; Amazon's own Nova Lite has no such gate and was
+  // verified working end to end the same day.
+  modelId: 'amazon.nova-lite-v1:0',
   awsRegion: 'us-east-1',
   demoPacingMs: 0,
   publicOrigin: undefined,

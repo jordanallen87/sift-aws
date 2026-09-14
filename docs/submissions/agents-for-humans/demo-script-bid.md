@@ -17,6 +17,29 @@ Target: **no longer than 5 minutes.** Beats below sum to exactly 300 seconds; la
 > checked against a live run. Where the two disagree, the manifest is what was
 > actually filmed.
 
+> **Correction, 2026-09-14: the handoffs are not the model's choice.** This script originally read
+> "the handoffs are the model's decision, not a script." That is false, and it reached the first cut
+> of the video before being caught. The `Swarm` is real — real nodes, real step and timeout bounds,
+> real repetitive-handoff detection, real `MultiAgentHandoffEvent`s — but
+> `bid-comparison-swarm.ts`'s own header states the six specialists "run as a strict sequential
+> handoff chain in the shipped scripted trajectory", because the model's responses are served by a
+> scripted `Model` implementation so the release gates can assert an exact event sequence offline.
+> Describe the handoffs as real events along a deterministic trajectory. Never as routing the model
+> chose at inference time.
+
+> **Added 2026-09-14: the video now names the live Bedrock path.** Beat 12 states
+> that document intake runs on Amazon Bedrock — Amazon Nova Lite
+> (`amazon.nova-lite-v1:0`, `us-east-1`) reads a bid document and *proposes* its
+> values, never marks them verified. That is a real capability, verified end to
+> end: the model created an option on a live case with
+> `bid.quoted_total` = $241,800 and `origin: "agent_proposed"`, HTTP 200 in 2.5s.
+> Anyone can reproduce it with `pnpm verify:bedrock`, which drives one real
+> Strands `Agent.invoke()` through Bedrock (measured 486ms).
+>
+> Keep the two scopes distinct when narrating: **document intake is live
+> inference; the recorded hero trajectory is deterministic.** Both are true, and
+> conflating them is the mistake this note exists to prevent.
+
 ## Three things this script asserted that filming disproved
 
 Found by pointing a camera at the running product, not by reading source. All
@@ -106,7 +129,7 @@ Press **"Have Sift investigate"**. With pacing on, the **"INVESTIGATION TEAM"** 
 - In the activity stream, **"Action blocked"**. That is a `Deny`: the price analyst reached for the licence registry, a tool this pack grants only to the credential checker.
 
 **Narration:**
-> "Six specialists, and the handoffs are the model's decision, not a script. Two things worth watching. The scope analyst got redirected — it was going in circles, and the system steered it. And here, an action was blocked: the price analyst tried to pull licence records, which it isn't allowed to touch. Not because it failed. Because it wasn't permitted."
+> "Six specialists, and every handoff is a real SDK handoff event. Two things worth watching. The scope analyst got redirected — it was going in circles, and the system steered it. And here, an action was blocked: the price analyst tried to pull licence records, which it isn't allowed to touch. Not because it failed. Because it wasn't permitted."
 
 **Why this matters and is worth the 20 seconds:** a refusal is not an error, and the product says so. There is no failure message anywhere naming that tool — asserted in both the scenario and e2e suites.
 

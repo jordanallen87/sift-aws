@@ -53,7 +53,7 @@
       "title": "Two Strands topologies",
       "minSeconds": 10,
       "lines": [
-        "Where handoffs should be the model's call, it runs a Strands Swarm - bids, home energy."
+        "For work whose order is a routing problem, it runs a Strands Swarm - bids, home energy."
       ],
       "still": {
         "kind": "code",
@@ -103,7 +103,7 @@
       "title": "A Swarm, steered mid-run",
       "minSeconds": 22,
       "lines": [
-        "One request starts the Swarm: six nodes, six stages, five handoffs - and the handoffs are the model's decision.",
+        "One request starts a real Strands Swarm: six nodes, six stages, five handoffs, each one a real handoff event from the SDK.",
         "Each specialist loads only the AgentSkill its obligation needs: scope normalization, price arithmetic, credential verification. Four activations here.",
         "A Context Injector refreshes the weights, the open scope gaps and the remaining budget every turn. Twenty-eight injections."
       ]
@@ -198,6 +198,7 @@
       "lines": [
         "This is the Runtime Inspector. The SDK's lifecycle hooks, before and after every tool call and model call, on every node and every handoff, are normalized into these events and correlated by one trace id.",
         "Four hundred and thirty-three runtime events, and a hundred and five spans - every one carrying the SDK's own instrumentation scope, which a class merely named after Strands cannot produce.",
+        "Document intake runs on Amazon Bedrock: Amazon Nova reads a bid document and proposes its values. It never marks them verified - only a person can.",
         "It is deployed and live, and every mechanism has a test that fails if it stops being true."
       ]
     },

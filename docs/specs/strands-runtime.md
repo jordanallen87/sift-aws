@@ -314,26 +314,42 @@ Every authoring action emits the same normalized skill, tool, intervention, vali
 - Deterministic tests use a scripted `ModelProvider` test double and never call Bedrock.
 - Live tests use low temperature, bounded tokens, and invariant assertions rather than exact prose matching.
 
-**What actually ships, as of 2026-09-05.** The Bedrock provider is built and unit-tested
+**What actually ships, as of 2026-09-14.** The Bedrock provider is built and unit-tested
 (`apps/agent/src/runtime/model-provider.ts`'s `createBedrockModel`/`resolveModelProvider`, backed by
-the real `BedrockModel` class from `@strands-agents/sdk`) but **is not reached by any production code
-path**. Both hero engines construct their scripted provider unconditionally —
-`home-energy-engine.ts` passes `modelFor: scriptedModelFor(providers)` and `car-purchase-engine.ts`
-calls `buildCarPurchaseScriptedProviders()` — with no branch on `SIFT_MODEL_ID`, `AWS_REGION`, or
-credential availability. `resolveModelProvider`'s only callers are in
-`model-provider.test.ts`. So "default runtime provider" above describes the configured intent and the
-code that exists to honor it, not the behavior of a running deployment: **every run, local and
-deployed, is scripted**.
+the real `BedrockModel` class from `@strands-agents/sdk`), and it **is now reached by one production
+code path**: `POST /api/cases/:caseId/bid-documents/read` (`apps/agent/src/routes/bid-documents.ts`,
+via `apps/agent/src/runtime/bid-document-reader.ts`), gated behind
+`SIFT_BID_DOCUMENT_READER_ENABLED` (default `false`). When that flag is `true`,
+`apps/agent/src/server.ts:240` constructs a real `BedrockModel` through `resolveModelProvider` exactly
+once at startup and hands it to that one route. Verified live on 2026-09-14 against **Amazon Nova
+Lite** (`amazon.nova-lite-v1:0`) on Amazon Bedrock, region `us-east-1`: a real model call read an
+unstructured bid document's text and returned a validated reading in 2.5 seconds, HTTP 200 — see
+`docs/submissions/agents-for-humans/claim-evidence-matrix.md` for the full record. Nova was used
+rather than an Anthropic model because Anthropic models on Bedrock are currently blocked on this AWS
+account pending AWS's "Anthropic use case details" form; Nova is ungated and markedly cheaper, so it
+is the model this path actually calls.
 
-This is deliberate for the deterministic release gates (CLAUDE.md: "Fixture mode must execute the
-complete product without network access after installation", and a local fake "may replace the model
-and external data, but it may not replace the Strands orchestration being claimed" — which holds
-here, since the scripted provider is a real Strands `Model` subclass driving the actual `Agent`
-loop, tool-calling, and structured-output validation). It is **not** deliberate that no live path is
-wired at all; that remains genuinely unfinished work, blocked on AWS credentials that do not exist in
-this build environment. Anything published about Sift must therefore not claim a live Bedrock
-inference path — see `docs/submissions/agents-for-humans/submission-details.md`'s Built-with entry,
-which is qualified accordingly.
+**Both hero engines still construct their scripted provider unconditionally** —
+`home-energy-engine.ts` passes `modelFor: scriptedModelFor(providers)` and `car-purchase-engine.ts`
+calls `buildCarPurchaseScriptedProviders()`, and `bid-comparison-engine.ts` does the same
+(`modelFor: scriptedModelFor(providers)`) — with no branch on `SIFT_MODEL_ID`, `AWS_REGION`, or
+credential availability. So "default runtime provider" above describes the configured intent and the
+code that exists to honor it, not the behavior of the hero trajectory: **every hero run, local and
+deployed, is still scripted.** The live Bedrock path above is real but narrow — one opt-in document-
+reading route, not the hero Swarm or Graph.
+
+The scripted hero trajectory remains deliberate, for the deterministic release gates (CLAUDE.md:
+"Fixture mode must execute the complete product without network access after installation", and a
+local fake "may replace the model and external data, but it may not replace the Strands orchestration
+being claimed" — which holds here, since the scripted provider is a real Strands `Model` subclass
+driving the actual `Agent` loop, tool-calling, and structured-output validation). Wiring a live path
+into the hero engines themselves remains unfinished work; it is no longer true that no live path is
+wired anywhere, or that one is blocked on AWS credentials that do not exist — credentials exist and a
+live path is reached, just not by the hero. Anything published about Sift should state that scope
+precisely: a real Bedrock inference path exists and runs in production on the bid-document-reading
+route; the hero bid-comparison and Home Energy Guardian trajectories remain scripted by design. See
+`docs/submissions/agents-for-humans/about-project.md`'s "One tag deliberately omitted" /
+`submission-details.md`'s Built-with entry, both updated accordingly.
 
 ## AgentCore contract
 

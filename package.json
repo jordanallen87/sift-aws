@@ -30,11 +30,13 @@
     "webmcp:bridge": "tsx scripts/webmcp-bridge.ts",
     "test:submission": "tsx scripts/test-submission.ts",
     "check:source": "tsx scripts/check-source.ts",
-    "docs:diagram": "tsx scripts/generate-diagram.ts",
+    "docs:diagram": "tsx scripts/architecture/conformance.ts && tsx scripts/architecture/render.ts",
     "sift": "tsx scripts/sift-cli.ts",
     "verify": "tsx scripts/verify.ts",
     "verify:release": "tsx scripts/verify-release.ts",
-    "contact:sheet": "tsx scripts/contact-sheet.ts"
+    "verify:bedrock": "tsx scripts/verify-bedrock.ts",
+    "contact:sheet": "tsx scripts/contact-sheet.ts",
+    "docs:diagram:mermaid": "tsx scripts/generate-diagram.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

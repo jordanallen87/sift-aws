@@ -22,7 +22,7 @@ captured 2026-09-07 through `POST /invocations` — full breakdown in
       (`scope-analyst` → `scope-differ`), `intervention.confirm` × 1 (`decision-synthesizer` →
       `propose_award`), and `goal.validation_failed` → `goal.validated`. Alongside 134
       `intervention.proceed`: the guards evaluate every call and allowed 134 of 137 through.
-- [x] Real bounded Swarm with model-decided handoffs — `swarm.node_started` × 6,
+- [x] Real bounded Swarm emitting real SDK handoff events along a deterministic trajectory — `swarm.node_started` × 6,
       `swarm.node_completed` × 6, `swarm.handoff` × 5.
 - [x] AgentSkills progressive activation — `skill.activated` × 4, one per obligation.
 - [x] Context Injector — `context.injected` × 28.

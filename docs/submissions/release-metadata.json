@@ -11,14 +11,17 @@
     "source": "docs/architecture.mmd",
     "export": "docs/architecture.png",
     "exportFormat": "PNG",
-    "exportBytes": 892149,
-    "exportMiB": 0.8508,
-    "exportSha256": "52291758a15efc483e78bb9eb8863cb982cbac01df9ca030c700822f57e8c538",
+    "exportBytes": 1416500,
+    "exportMiB": 1.3509,
+    "exportSha256": "d9601f5622872e9dffd94633f3a93c425241dcc3f7d596d78b3df1529ac16415",
     "sourceSha256": "e4f3115d5bbdc82da2a2519155c03a1a8282d8c88846c7f6fd111196c724c478",
     "withinDevpost35MiBLimit": true,
-    "regeneratedAt": "2026-09-13",
+    "regeneratedAt": "2026-09-14",
     "showsOtelSpanPath": true,
-    "note": "Re-derived and regenerated 2026-09-13 after an independent line-by-line audit against the real code (not on the strength of the prior audit's claim). The 2026-09-05 OTel span path remains accurate and unchanged. Four inaccuracies found and fixed: (1) a BUDGET node was drawn inside the deterministic core subgraph as if run/tool budget and steering enforcement were pure, model-free functions, when BudgetGuard/RetrySteering/EvidenceQualitySteering (apps/agent/src/runtime/interventions.ts) import @strands-agents/sdk directly and extend its InterventionHandler -- moved to the Strands runtime adapter's Interventions node, where the code actually lives; (2) the Sessions node named S3Storage as a session backend, but grep confirms zero production callers construct it anywhere in apps/agent/src -- only LocalFileStorage is wired, so S3Storage was removed from the label; (3) the Strands Graph/Swarm node omitted the bid-comparison pack (apps/agent/src/runtime/bid-comparison-swarm.ts), which is now the Agents for Humans hero -- added; (4) the Execution Targets subgraph drew SIFT_EXECUTION_TARGET as a live runtime switch between two paths, but grep confirms the config value is validated and logged once (server.ts) and never read to branch a request -- both HTTP surfaces are simply always mounted together -- relabeled to say so. No background loop, watcher, or scheduler (Standing Watch) is depicted; none exists in the runtime (docs/hackathon-enhancements.md's own audit: 'No background loop exists anywhere in the runtime')."
+    "note": "Re-derived and regenerated 2026-09-13 after an independent line-by-line audit against the real code (not on the strength of the prior audit's claim). The 2026-09-05 OTel span path remains accurate and unchanged. Four inaccuracies found and fixed: (1) a BUDGET node was drawn inside the deterministic core subgraph as if run/tool budget and steering enforcement were pure, model-free functions, when BudgetGuard/RetrySteering/EvidenceQualitySteering (apps/agent/src/runtime/interventions.ts) import @strands-agents/sdk directly and extend its InterventionHandler -- moved to the Strands runtime adapter's Interventions node, where the code actually lives; (2) the Sessions node named S3Storage as a session backend, but grep confirms zero production callers construct it anywhere in apps/agent/src -- only LocalFileStorage is wired, so S3Storage was removed from the label; (3) the Strands Graph/Swarm node omitted the bid-comparison pack (apps/agent/src/runtime/bid-comparison-swarm.ts), which is now the Agents for Humans hero -- added; (4) the Execution Targets subgraph drew SIFT_EXECUTION_TARGET as a live runtime switch between two paths, but grep confirms the config value is validated and logged once (server.ts) and never read to branch a request -- both HTTP surfaces are simply always mounted together -- relabeled to say so. No background loop, watcher, or scheduler (Standing Watch) is depicted; none exists in the runtime (docs/hackathon-enhancements.md's own audit: 'No background loop exists anywhere in the runtime').",
+    "renderer": "scripts/architecture/render.ts (authored layout); docs/architecture.mmd remains the semantic source of truth",
+    "conformance": "scripts/architecture/conformance.ts fails the build if any node, label, edge or group in docs/architecture.mmd is missing from or extra to the authored layout. Run by pnpm docs:diagram before every render.",
+    "layoutNote": "Replaced the mermaid auto-layout export on 2026-09-14. The mermaid render wasted 68.6% of its top-left quadrant and was 4368x4972, so a judge had to zoom and scroll past empty canvas; LR, tuned spacing and the ELK renderer were each tried and none improved it. The authored export is 4800x3200 (3:2) with 13-17% blank per quadrant. Content is unchanged and mechanically verified identical."
   },
   "reportPaths": {
     "completionReport": "docs/completion-report.md",
@@ -56,6 +59,26 @@
   "agentCore": {
     "deployed": false,
     "reason": "No AWS credentials were available in the build environment this session. The Railway deployment runs SIFT_EXECUTION_TARGET=local; the real /ping and /invocations routes (apps/agent/src/routes/agentcore.ts) are live and verified against that local-target deployment, but no AgentCore runtime/CloudWatch correlation evidence exists yet."
+  },
+  "liveModelPath": {
+    "verified": true,
+    "verifiedAt": "2026-09-14",
+    "route": "POST /api/cases/:caseId/bid-documents/read",
+    "gatingEnvVar": "SIFT_BID_DOCUMENT_READER_ENABLED",
+    "gatingEnvVarDefault": false,
+    "modelId": "amazon.nova-lite-v1:0",
+    "modelName": "Amazon Nova Lite",
+    "provider": "Amazon Bedrock",
+    "awsRegion": "us-east-1",
+    "constructedAt": "apps/agent/src/server.ts:240",
+    "implementingFiles": [
+      "apps/agent/src/runtime/model-provider.ts",
+      "apps/agent/src/routes/bid-documents.ts",
+      "apps/agent/src/runtime/bid-document-reader.ts"
+    ],
+    "result": "HTTP 200 in 2.5s. The model read an unstructured bid document's text and created one new option (label \"Harborview Mechanical LLC\") with bid.quoted_total ({money, amount 241800, USD}) and bid.deposit_percent populated. Every extracted attribute carried origin: \"agent_proposed\", status: \"supported\", confidence: 0.4, and a sourceIds link -- never verified, per packages/core/src/attributes.ts's rule that only origin: 'user' may claim verified. The case's event sequence advanced from 19 to 20.",
+    "whyNovaNotAnthropic": "Anthropic models on Bedrock are currently blocked on this AWS account pending AWS's own 'Anthropic use case details' form. Amazon Nova has no such gate and is also markedly cheaper, so it is the model this path actually calls -- a deliberate engineering choice, not a fallback taken by accident.",
+    "scope": "This is one opt-in document-reading route, verified live. It is not the hero path: bid-comparison-engine.ts still wires modelFor: scriptedModelFor(providers) unconditionally, and the same is true of the other two engines, so the hero Swarm/Graph trajectory in the demo remains scripted and deterministic by design. See docs/specs/strands-runtime.md 'What actually ships' and docs/submissions/agents-for-humans/claim-evidence-matrix.md row S12 for the full record."
   },
   "webmcpTestClients": [
     {

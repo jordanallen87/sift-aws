@@ -72,6 +72,22 @@ cp .env.example .env
 authoring toggles, model ID, AWS region, public origin). **Every default is correct for local
 development** — you do not need to fill anything in, and there are no secrets to supply.
 
+### Enabling the live Bedrock reader (optional)
+
+Everything above runs fully offline. One route, bid-document reading, can instead call a real
+model on Amazon Bedrock: set `SIFT_BID_DOCUMENT_READER_ENABLED=true`, put real AWS credentials in
+your environment, and optionally override `AWS_REGION`/`SIFT_MODEL_ID` (defaults: `us-east-1` and
+`amazon.nova-lite-v1:0`, Amazon Nova Lite — chosen because it needs no per-provider use-case form
+and was verified working end to end). Then confirm that exact model/region actually answers before
+trusting the route to it:
+
+```bash
+npx tsx scripts/verify-bedrock.ts
+```
+
+It prints the model id, region, latency, and response text on success, or the AWS error verbatim
+on failure.
+
 ### Run it
 
 Sift runs as two processes in development: the Express/Strands agent service, and the Vite dev

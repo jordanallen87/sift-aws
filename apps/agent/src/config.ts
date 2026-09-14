@@ -142,9 +142,24 @@ const ConfigSchema = z.object({
   // a floor of 1 is this loader's own judgment call (a non-positive
   // retention window is not a meaningful configuration).
   SIFT_DEBUG_RETENTION_DAYS: integerFromEnvString(1, 30).default(7),
+  // Default changed 2026-09-14 from `global.anthropic.claude-sonnet-4-6` to
+  // Amazon's own `amazon.nova-lite-v1:0` (Amazon Nova Lite). The Anthropic
+  // default does NOT work on this account: Bedrock rejects it with
+  // `ResourceNotFoundException: Model use case details have not been
+  // submitted for this account. Fill out the Anthropic use case details
+  // form before using the model.` -- a per-provider gate Amazon's own model
+  // family has no equivalent of. Nova Lite was verified working end to end
+  // that same day (a bid document's text in, a real option created on the
+  // case with `origin: 'agent_proposed'`, HTTP 200 in 2.5s) and costs less
+  // than the model it replaced. `amazon.nova-micro-v1:0` also works and is
+  // cheaper still, but it is text-only and lower quality for the structured
+  // extraction `bid-document-reader.ts` needs, so Nova Lite is the default,
+  // not Nova Micro. Run `npx tsx scripts/verify-bedrock.ts` to prove
+  // whatever model/region this resolves to actually works against live
+  // Bedrock, with real AWS credentials.
   SIFT_MODEL_ID: z
     .preprocess(emptyToUndefined, z.string().min(1).optional())
-    .default('global.anthropic.claude-sonnet-4-6'),
+    .default('amazon.nova-lite-v1:0'),
   AWS_REGION: z.string().min(1, 'must not be empty').default('us-east-1'),
   // Demo pacing: milliseconds to wait before each scripted model turn.
   // 0 (the default, and what every test and gate uses) means no added
@@ -187,7 +202,7 @@ export function loadConfig(env: RawEnv = process.env): SiftConfig {
     tracingEnabled: parsed.SIFT_TRACING_ENABLED,
     debugPayloadMode: parsed.SIFT_DEBUG_PAYLOAD_MODE,
     debugRetentionDays: parsed.SIFT_DEBUG_RETENTION_DAYS,
-    modelId: parsed.SIFT_MODEL_ID ?? 'global.anthropic.claude-sonnet-4-6',
+    modelId: parsed.SIFT_MODEL_ID ?? 'amazon.nova-lite-v1:0',
     awsRegion: parsed.AWS_REGION,
     demoPacingMs: parsed.SIFT_DEMO_PACING_MS,
     bidDocumentReaderEnabled: parsed.SIFT_BID_DOCUMENT_READER_ENABLED,

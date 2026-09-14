@@ -59,11 +59,34 @@ there. It declares exactly one dependency (`@sift/contracts`) and its source con
 call, no network, no filesystem, no environment read. That's what makes "the ranking is arithmetic
 the model never touches" a claim you can check rather than one you have to believe.
 
+**What the model does and does not do, stated plainly.** The Strands orchestration is real and
+executes for real: `Swarm`/`Graph`, the vended plugins, the interventions, the lifecycle hooks and the
+OpenTelemetry spans are all genuine SDK behaviour. The hero demo's model *responses*, however, are
+served by a scripted `Model` implementation, so that trajectory is deterministic and reproducible — the
+same 433 events every run, with no network and no credentials, which is what the release gates require.
+The handoffs you see in the demo are therefore real Swarm handoff events along a fixed trajectory, not
+routing the model chose at inference time.
+
+Separately, a live `BedrockModel` path is now reached in production, not just unit-tested: the opt-in
+bid-document reader (`SIFT_BID_DOCUMENT_READER_ENABLED=true`, `apps/agent/src/server.ts:240`) built a
+real `BedrockModel` through `resolveModelProvider` and read an unstructured bid PDF's text into a
+proposed option — real field extraction, real inference, HTTP 200 in 2.5 seconds. I ran Amazon Nova
+Lite (`amazon.nova-lite-v1:0`) rather than Anthropic's model on Bedrock because the Anthropic models are
+currently blocked on this AWS account pending their "Anthropic use case details" form; Nova has no such
+gate and is also cheaper, so it's what I actually used. Every attribute that call produced came back
+`origin: "agent_proposed"` and `status: "supported"` — never `verified` — because `packages/core/src/attributes.ts`
+rejects a `verified` claim from anything but `origin: 'user'`. The model can propose; only a person can
+attest. That boundary held on the first real inference call I ran against it.
+
+What's still true: the hero bid-comparison Swarm does not use this path. `bid-comparison-engine.ts`
+still constructs its scripted provider unconditionally, so the trajectory you watch in the demo is
+still fixture-driven, on purpose, for the reasons above.
+
 **Everything non-deterministic sits behind a Strands adapter,** using the SDK where it does real
 work:
 
 - Two multi-agent topologies from `@strands-agents/sdk/multiagent`, chosen per problem shape:
-  a bounded **`Swarm`** where the handoffs should be the model's call — six specialists across
+  a bounded **`Swarm`** for work whose ordering is a routing decision rather than a fixed pipeline — six specialists across
   scope, price, credential, schedule, source check and synthesis (6 nodes, 6 stages, 5 handoffs in
   a measured run), used by bid comparison and Home Energy Guardian — and a **`Graph`** where the
   order is fixed, used by car purchase.
@@ -174,28 +197,32 @@ refusal read as rigor rather than failure.
 ## Built With (Devpost tags, comma-separated)
 
 ```
-strands-agents-sdk, typescript, react, vite, tailwindcss, radix-ui, express, node.js, zod, drizzle-orm, sqlite, better-sqlite3, opentelemetry, webmcp, playwright, vitest, docker, railway
+strands-agents-sdk, typescript, react, vite, tailwindcss, radix-ui, express, node.js, zod, drizzle-orm, sqlite, better-sqlite3, opentelemetry, webmcp, playwright, vitest, docker, railway, amazon-bedrock, amazon-nova
 ```
 
 Every tag above is a real, load-bearing dependency, verified against `package.json` on 2026-09-13:
 `@strands-agents/sdk` ^1.14.0, TypeScript ^6.0.3, React 19, Vite (via `@vitejs/plugin-react` ^6.1.0),
 Tailwind CSS ^4.3.3, `radix-ui` ^1.6.7, Express ^5.2.1, Zod ^4.4.3, `drizzle-orm` ^0.45.2,
 `better-sqlite3` ^13.0.3, `@opentelemetry/api` ^1.9.1, `@playwright/test` ^1.62.1, Vitest ^4.1.11,
-plus the repo's own `Dockerfile` and the Railway deployment.
+plus the repo's own `Dockerfile` and the Railway deployment. `amazon-bedrock` and `amazon-nova`
+reach the service through the same SDK, via its `BedrockModel` class — not a separate npm
+dependency — and are verified live rather than by `package.json`: on 2026-09-14, with
+`SIFT_BID_DOCUMENT_READER_ENABLED=true`, `POST /api/cases/:caseId/bid-documents/read` constructed a
+real `BedrockModel` for **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) on **Amazon Bedrock**, region
+`us-east-1`, and returned a genuine model-read bid in 2.5 seconds. See "How we built it" above and
+`claim-evidence-matrix.md` for the full record.
 
-### Two tags deliberately omitted
-
-**Amazon Bedrock.** The provider is built and unit-tested (`apps/agent/src/runtime/model-provider.ts`,
-using the SDK's real `BedrockModel`), and `SIFT_MODEL_ID`/`AWS_REGION` configure it — but no
-production code path reaches it. Both hero engines construct their scripted provider
-unconditionally, so every run, local and deployed, is scripted. A Devpost tag carries no room for
-that qualification, and an unqualified "Amazon Bedrock" would claim a live inference path this build
-does not have. Add it only if you first wire a real inference path. See `docs/specs/strands-runtime.md`
-"What actually ships".
+### One tag deliberately omitted
 
 **Amazon Bedrock AgentCore.** The `/ping` and `/invocations` routes are implemented and verified
 against the local target, but `release-metadata.json` records `agentCore.deployed: false` — no AWS
 credentials existed in this build environment. Add this tag only if you deploy before submitting.
 
-Judges do check these against the repository. Both omissions are recoverable later; a claim that
-does not survive inspection is not.
+**Amazon Bedrock is no longer on this list.** As of 2026-09-14 it is a real, verified tag: live
+inference reaches the bid-document-reading path described above. The scope is honest, not total —
+the hero bid-comparison trajectory you watch in the demo is still deterministic by design, for the
+release gates' no-network, no-credentials requirement, and does not use Bedrock. The tag is truthful
+for the capability it names; it does not claim the hero trajectory is model-chosen.
+
+Judges do check these against the repository. The AgentCore omission is recoverable later; a claim
+that does not survive inspection is not.

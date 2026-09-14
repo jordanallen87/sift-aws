@@ -103,6 +103,13 @@ values off the document, said plainly that it couldn't read two, and marked ever
 `agent_proposed` at 40% confidence, not verified. `packages/core/src/attributes.ts` rejects a
 `verified` claim from anything but a user. The model proposes. Only a person attests.
 
+**It runs on Amazon Bedrock AgentCore.** The same service is deployed as an AgentCore Runtime,
+built for arm64 from the repo's own Dockerfile. Through AgentCore's own invoke API it opened the
+twelve-bid case, ran the full Strands investigation, and handed back a ready recommendation for
+Northgate, with the Cedar scope correction in its rationale. Getting there caught a real bug:
+AgentCore forwards no custom headers, so every mutating call had been failing on a missing
+idempotency key. The key can now travel in the request body.
+
 **All of it is checkable.** `claim-evidence-matrix.md` maps each capability to its implementing
 file, the test that fails if the claim stops being true, and the event count in an exported run. On
 the run that appears in the video: 433 runtime events, 28 context injections, 4 skill activations,
@@ -154,9 +161,8 @@ refusal read as rigor rather than failure.
 
 ## What's next for Sift
 
-- Deploy onto Amazon Bedrock AgentCore. `/ping` and `/invocations` are implemented and answer on the
-  live deployment. Credentials exist now, so the honest reason this isn't done is that I didn't do
-  it.
+- Route the public deployment's execution through the AgentCore runtime, and correlate AgentCore traces
+  with the Runtime Inspector.
 - Contextual checks for the bid pack: bid bonds, prevailing wage, retainage. The mechanism exists;
   this pack declares none yet.
 - More jurisdictions in the pack-declared regulatory layer, with the same citation-and-responsibility

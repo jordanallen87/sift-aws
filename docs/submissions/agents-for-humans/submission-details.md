@@ -188,7 +188,7 @@ Replace this draft with the exact public URL, scenario control labels, AgentCore
   ungated and cheaper. The scope is narrow: this is the opt-in document-reading path, not the hero
   bid-comparison Swarm, which still constructs its scripted provider unconditionally. See
   `docs/specs/strands-runtime.md` "What actually ships".
-- Amazon Bedrock AgentCore, only if actually deployed
+- Amazon Bedrock AgentCore
 - TypeScript
 - React
 - Vite
@@ -228,9 +228,7 @@ real `BedrockModel` for **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) on **Amaz
 
 #### One tag deliberately omitted
 
-**Amazon Bedrock AgentCore.** The `/ping` and `/invocations` routes are implemented and verified
-against the local target, but `release-metadata.json` records `agentCore.deployed: false` — no AWS
-credentials existed in this build environment. Add this tag only if you deploy before submitting.
+**Amazon Bedrock AgentCore.** Deployed 2026-09-14 as AgentCore Runtime `sift_agentcore` (us-east-1), arm64 image built by CodeBuild from the repo's Dockerfile. Proven through AgentCore's own InvokeAgentRuntime API: startDemo opened the twelve-bid case, requestInvestigation ran the Strands investigation, and a read returned a ready recommendation for Northgate. Evidence in `release-metadata.json` `agentCore`. The public Railway deployment still executes locally; it does not proxy to AgentCore.
 
 **Amazon Bedrock is no longer on this list.** As of 2026-09-14 it is a real, verified tag: live
 inference reaches the bid-document-reading path described above. The scope is honest, not total —
@@ -270,7 +268,7 @@ Cover the real Strands trajectory, why deterministic readiness sits outside the 
 - [ ] Add the AWS Builder ID.
 - [ ] Export and upload the required architecture diagram.
 - [ ] Add the verified Railway URL.
-- [ ] Deploy and verify AgentCore when credentials permit; describe any honest blocker.
+- [x] Deploy and verify AgentCore (runtime `sift_agentcore`, verified through InvokeAgentRuntime on 2026-09-14).
 - [ ] Record exact setup and deterministic testing instructions.
 - [ ] Record a public demo video no longer than five minutes.
 - [ ] Show the working product rather than slides or mockups.

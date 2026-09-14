@@ -57,8 +57,14 @@
     "latestDeploymentStatus": "SUCCESS"
   },
   "agentCore": {
-    "deployed": false,
-    "reason": "Not deployed to Amazon Bedrock AgentCore Runtime. The /ping and /invocations routes (apps/agent/src/routes/agentcore.ts) are implemented and answer on the live Railway deployment, which runs SIFT_EXECUTION_TARGET=local. AWS credentials are available and Amazon Bedrock is reached in production (Amazon Nova Lite reads uploaded bid documents). The AgentCore container deployment was not completed before the deadline, so no AgentCore runtime or CloudWatch correlation evidence is claimed."
+    "deployed": true,
+    "verifiedAt": "2026-09-14T23:38:00Z",
+    "region": "us-east-1",
+    "agentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:462199921352:runtime/sift_agentcore-lcPoZjFCme",
+    "image": "462199921352.dkr.ecr.us-east-1.amazonaws.com/sift-agentcore:2eb5af1-1789428577",
+    "build": "linux/arm64, built by AWS CodeBuild from the repo's own Dockerfile at commit 2eb5af1",
+    "evidence": "Three calls through AgentCore's InvokeAgentRuntime API in one runtime session: action startDemo opened the twelve-bid case (case-90251168-b0a1-4083-b955-a3f8d5bad606); action requestInvestigation queued run run-f43d68a6-c005-4473-8d89-c276cb92aebf; a read returned the case with recommendation status 'ready' favoring bid-northgate, rationale correcting Cedar & Sons for the three missing scope items. The runtime's CloudWatch log (/aws/bedrock-agentcore/runtimes/sift_agentcore-lcPoZjFCme-DEFAULT) records 'agent listening on port 8080 (executionTarget=agentcore, dataDir=/tmp/sift-data)'.",
+    "limits": "The public Railway deployment still executes locally (SIFT_EXECUTION_TARGET=local); it does not proxy to the AgentCore runtime. AgentCore trace correlation with the Runtime Inspector is not claimed."
   },
   "liveModelPath": {
     "verified": true,

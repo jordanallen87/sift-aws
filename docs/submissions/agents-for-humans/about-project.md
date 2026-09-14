@@ -1,34 +1,53 @@
 ## Inspiration
 
-I wanted to build an agent that could say "not yet."
+I wanted to build software that could say "not yet."
 
-Bid comparison was the test case. Twelve bids come in for the same job. One is $52,500 cheaper than
-the next. You can't tell whether that's a better deal or just less work, because bids don't arrive
-comparable. Each one draws its own scope line, and the cheap one is usually cheap because it left
-something out.
+Everything that compares options for you works from a fixed checklist. It ranks on the factors it
+was built to know about, and it ranks whether or not the comparison is fair. If the thing that
+matters to you isn't on the list, that's your problem. If the options aren't really comparable yet,
+you get an answer anyway.
 
-Bid levelling is already a product category. MeltPlan, Struvia, Buildr and Procore all sell it. None
-of them refuse. They produce a ranking and hand you the judgment — "verify and adjust" is the pitch.
-They'll rank an unfair comparison without mentioning that it's unfair.
+That's the wrong shape for any decision you have to justify afterwards — awarding a contract,
+picking a vehicle the business depends on, deciding whether a utility bill is worth acting on. The
+person signing needs to know what's been established, what hasn't, and why.
 
-That's what I wanted to change. It turned out to be an agent problem, not a UI one. An agent that
-won't answer looks broken, unless it can say exactly why it stopped.
+So Sift is built the other way round. You say what matters. It works out what has to be established,
+goes and establishes it, tells you plainly what it couldn't, and leaves the decision with you.
 
 ## What it does
 
-Sift puts twelve plumbing bids for a school renovation on one scope basis before it ranks anything.
+**You name the factors, including ones nobody anticipated.** Will a dog crate fit in the boot? Does
+the deposit schedule leave you exposed? Type it in and the case defines a new attribute on the spot,
+under a `custom.` namespace enforced in `packages/core/src/extensions.ts`. From that moment it is as
+real to the engine as price: the agents go and establish it for every option, cite what they found,
+and it scores like everything else. All three packs declare their own guidance for this. You are not
+picking from a menu somebody else wrote.
 
-A Strands Swarm reads the bids, normalizes scope, checks the price arithmetic, verifies licences and
-insurance, and tests the schedule. Then the part I care about. The synthesis drafts the obvious
-answer — rank by quoted total — and GoalLoop throws it out, because the bids aren't on a common
-basis yet, so that ranking would be false. The run emits `goal.validation_failed`, then
-`goal.validated`, in the same pass.
+**It works out what to do next, from evidence rather than a script.** A decision pack declares the
+obligations that must be satisfied before an answer is allowed. The engine selects the next one from
+the current state of the evidence, and loads only the AgentSkill that obligation needs. As findings
+land, what it does next changes. Reweight your priorities and only the affected question reopens —
+one specialist, one revised pass, not a rerun.
+
+**It shows its working and marks its own limits.** Every value carries where it came from. Anything
+a model produced is `agent_proposed`, never `verified` — only a person can attest. Where it couldn't
+establish something, it says so instead of guessing.
+
+**The same engine runs three packs** — subcontractor bids, a car purchase, a household energy bill.
+The pack is data. Neither the deterministic core nor the Strands adapter knows anything about
+plumbing.
+
+### The worked example: twelve bids
+
+Twelve plumbing bids for a school renovation. A Strands Swarm reads them, normalizes scope, checks
+the price arithmetic, verifies licences and insurance, and tests the schedule. Then the part I care
+about. The synthesis drafts the obvious answer — rank by quoted total — and GoalLoop throws it out,
+because the bids aren't on a common basis yet, so that ranking would be false. The run emits
+`goal.validation_failed`, then `goal.validated`, in the same pass.
 
 Once the gaps are priced in you can check the maths by hand. The $223,500 bid says nothing about
 permits ($18,000), the shower-valve rough-in ($31,500), or haul-away ($6,000). Add them and it's
 $279,000. That's more than the $276,000 bid it appeared to beat.
-
-Two things hold all the way through.
 
 **Credentials are a hard constraint, not a weighting.** Reweight toward warranty and deposit and Two
 Rivers scores highest of all twelve: 91%, against the winner's 72%. It still doesn't win. Its

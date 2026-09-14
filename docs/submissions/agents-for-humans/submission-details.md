@@ -96,9 +96,11 @@ The Grand Prize also lists an AWS social feature and a meeting with AWS technica
 
 Sift
 
-### One-line summary
+### One-line summary (Devpost elevator pitch, 200 char max)
 
-Sift is a supervised adaptive agent system that refuses to rank competing bids until they are actually comparable -- normalizing scope, holding the gaps open as explicit unknowns, and handing the award decision to the person who has to sign it.
+Name what matters to you. Sift's Strands agents work out what to check, go and establish it for every option, cite what they find, and admit the gaps. You make the call.
+
+(169 characters. Leads with the thing a non-technical professional actually wants — name your own factors and have them established for every option — rather than with the bid example, which is one pack among three.)
 
 ### Track
 

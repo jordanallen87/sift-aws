@@ -391,7 +391,50 @@ async function main(): Promise<void> {
   }
   endBeat();
 
-  // ---------------------------------------------------------------- 13
+  // --------------------------------------------------------------- 13
+  // Filmed last, deliberately. This adds a thirteenth option to a case the
+  // narration has been calling twelve, so it has to come after every beat that
+  // says so. It is the one place a real model runs: Amazon Nova on Bedrock,
+  // reading a PDF nobody structured.
+  await page.getByTestId('workspace-app-bar-create-menu').click();
+  await hold(page, 1.2);
+  await page.getByTestId('workspace-app-bar-add-option').click();
+  await hold(page, 2);
+  const importTrigger = page.getByTestId('option-editor-import-trigger');
+  if ((await importTrigger.count()) > 0) {
+    await importTrigger.click();
+    await hold(page, 1.5);
+  }
+  beginBeat('b13-bedrock');
+  await hold(page, 2);
+  const fileInput = page.getByTestId('bid-document-import-file');
+  if ((await fileInput.count()) > 0) {
+    await fileInput.setInputFiles(
+      join(process.cwd(), 'artifacts/demo-video/fixtures/harborview-bid.pdf'),
+    );
+    await hold(page, 4);
+    await note(page, 'importPicked', '[data-testid="bid-document-import-form"]');
+    const submit = page.getByTestId('bid-document-import-submit');
+    if ((await submit.count()) > 0) {
+      await submit.click();
+      // A real Bedrock round trip, not a fixture: this genuinely waits on us-east-1.
+      await page
+        .getByTestId('bid-document-import-summary')
+        .waitFor({ timeout: 90_000 })
+        .catch(() => console.log('  (import summary never appeared)'));
+      await hold(page, 6);
+      await note(page, 'bedrockSummary', '[data-testid="bid-document-import-summary"]');
+      await note(page, 'bedrockReader', '[data-testid="bid-document-import-summary-reader"]');
+      await hold(page, 10);
+    }
+  } else {
+    console.log('  (no import affordance found; Bedrock beat has no footage)');
+    await hold(page, 24);
+  }
+  endBeat();
+  await closeAnySheet(page);
+
+  // ---------------------------------------------------------------- 14
   beginBeat('b13-close');
   await jump(page, 0);
   await hold(page, 13);

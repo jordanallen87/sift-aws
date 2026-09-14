@@ -43,7 +43,7 @@
       "minSeconds": 18,
       "lines": [
         "Sift is decision infrastructure: one live case that a person and a Strands agent work on together.",
-        "A decision pack declares what has to be established before an answer is allowed - the obligations, the criteria, and the interventions that police them.",
+        "A decision pack declares what must be established before an answer is allowed, and the interventions that police it.",
         "Three decision packs, one engine: bids, a car purchase, a household energy bill."
       ]
     },
@@ -105,7 +105,7 @@
       "lines": [
         "One request starts a real Strands Swarm: six nodes, six stages, five handoffs, each one a real handoff event from the SDK.",
         "Each specialist loads only the AgentSkill its obligation needs: scope normalization, price arithmetic, credential verification. Four activations here.",
-        "A Context Injector refreshes the weights, the open scope gaps and the remaining budget every turn. Twenty-eight injections."
+        "A Context Injector refreshes the weights, the open scope gaps and the budget every turn. Twenty-eight injections."
       ]
     },
     {
@@ -135,7 +135,7 @@
       "minSeconds": 30,
       "lines": [
         "Then the one that matters. GoalLoop ran the recommendation through a callable validator, and the validator threw out attempt one.",
-        "The draft ranked twelve bids that were not yet on a common scope basis. That is not a badly written answer, it is a false one.",
+        "The draft ranked twelve bids not yet on a common scope basis. Not a badly written answer - a false one.",
         "GoalLoop handed the reason back and the synthesizer went round again. Every bid-levelling tool will happily rank an unfair comparison. This one refuses."
       ]
     },
@@ -196,15 +196,25 @@
       "title": "Proof it is really Strands",
       "minSeconds": 22,
       "lines": [
-        "This is the Runtime Inspector. The SDK's lifecycle hooks, before and after every tool call and model call, on every node and every handoff, are normalized into these events and correlated by one trace id.",
+        "This is the Runtime Inspector. The SDK's lifecycle hooks - every tool call, every model call, every node and every handoff - are normalized into these events and correlated by one trace id.",
         "Four hundred and thirty-three runtime events, and a hundred and five spans - every one carrying the SDK's own instrumentation scope, which a class merely named after Strands cannot produce.",
-        "Document intake runs on Amazon Bedrock: Amazon Nova reads a bid document and proposes its values. It never marks them verified - only a person can.",
         "It is deployed and live, and every mechanism has a test that fails if it stops being true."
       ]
     },
     {
-      "id": "b13-close",
+      "id": "b13-bedrock",
       "number": 13,
+      "title": "Live, on Amazon Bedrock",
+      "minSeconds": 20,
+      "lines": [
+        "And this is how a bid actually gets in. Drop the PDF, and a real model reads it.",
+        "That is Amazon Nova, on Amazon Bedrock. It read six values off the document, and it says plainly that it could not read two.",
+        "Quoted total, two hundred and forty-one thousand eight hundred. Read by a model. Confidence forty percent. Not verified - because only a person can verify."
+      ]
+    },
+    {
+      "id": "b13-close",
+      "number": 14,
       "title": "",
       "minSeconds": 10,
       "lines": [

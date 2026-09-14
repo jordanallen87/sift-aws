@@ -1,20 +1,27 @@
-# Builder posts — Agents for Humans
+# Builder post — Agents for Humans
 
-**Where these go:** builder.aws.com (AWS Builder Center), as separate Blog Posts.
+**Where it goes:** builder.aws.com (AWS Builder Center), as a Blog Post, then the URL goes in the
+Devpost "Bonus Builder post URL" field.
 
-**Why they exist:** the hackathon rules let a submission that advances to Stage Two earn up to
-0.6 additional points by publishing a builder.aws Blog Post about the build. Each post is worth
-0.2 points, up to three posts. Every title below already contains "Agents for Humans" per the
-rule's title requirement.
+**The rule (re-read 2026-09-14 from agentsforhumans.devpost.com/rules):** the content must cover
+the journey of building and implementing AWS for this hackathon, must be publicly posted to
+builder.aws, and should use "Agents for Humans" in the title. It is worth 0.2 bonus points on the
+Stage Two score.
 
-**Before publishing:** Jordan should read each draft in full before it goes out. These are written
-in first person under his name, and they describe things he did — a wrong comment he read and
-repeated, a model swap he made, a bug he found in his own evidence log. He should confirm every
-claim still matches what's true by the time he publishes, not just what was true when this was last
-checked against the repo (2026-09-14).
+## The post to publish
 
-## The posts
+[Agents for Humans: building Sift, an agent that knows when not to answer](./builder-post-1.md) —
+the whole build story in one article: the problem, the pure core, Strands Swarm and Graph, the
+GoalLoop rejection, interventions, the Strands hooks and OpenTelemetry evidence, Nova Lite on
+Bedrock, the AgentCore deployment, and what is not claimed.
 
-1. [Agents for Humans: building an agent that knows when not to answer](./builder-post-1.md)
-2. [Agents for Humans: Swarm or Graph, and why I used both](./builder-post-2.md)
-3. [Agents for Humans: making a Strands agent prove it's really Strands](./builder-post-3.md)
+## Optional extras
+
+The rules allow more than one post (0.2 points each, 0.6 maximum). These two are deeper cuts of
+material the main post already covers, so they overlap with it:
+
+- [Agents for Humans: Swarm or Graph, and why I used both](./builder-post-2.md)
+- [Agents for Humans: making a Strands agent prove it's really Strands](./builder-post-3.md)
+
+**Before publishing:** Jordan should read the post in full before it goes out. It is written in
+first person under his name. Every claim was checked against the repo on 2026-09-14.

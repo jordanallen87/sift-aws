@@ -24,7 +24,7 @@
     {
       "id": "close",
       "headline": "Most agents are optimized to finish.",
-      "subhead": "Sift is optimized to know when it has earned the right to answer.",
+      "subhead": "Sift is optimized to know when it has not earned the right to answer.",
       "visual": "A restrained final card with Sift wordmark and Approved stamp; no extra feature list.",
       "durationSeconds": 8
     }

@@ -154,7 +154,7 @@
       "sourceType": "slide",
       "source": "slides/cards.json#close",
       "visual": "Final card; no animation beyond a short fade.",
-      "narration": "Most agents are optimized to finish. Sift is optimized to know when it has earned the right to answer.",
+      "narration": "Most agents are optimized to finish. Sift is optimized to know when it has not earned the right to answer.",
       "acceptance": ["Final runtime is 300 seconds or less after transitions."
       ]
     }

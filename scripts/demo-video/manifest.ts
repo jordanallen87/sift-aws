@@ -56,6 +56,13 @@ export interface Beat {
   /** Floor for the finished segment, so an action stays legible even when the narration is short. */
   readonly minSeconds: number;
   readonly lines: readonly string[];
+  /** A beat with no product footage: the visual is a still exhibit read from this repo-relative path. */
+  readonly still?: {
+    readonly kind: 'image' | 'code';
+    readonly path: string;
+    /** 1-based inclusive line range, for showing the one block that proves the claim. */
+    readonly lines?: readonly [number, number];
+  };
 }
 
 export interface Manifest {

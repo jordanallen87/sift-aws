@@ -22,7 +22,7 @@ import { chromium, type Browser } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import {
   AUDIO_DIR,
   loadManifest,
@@ -38,6 +38,9 @@ import {
 const CANVAS = { width: 1920, height: 1080 } as const;
 const PANE = { x: 1299, y: 40, width: 511, height: 1000 } as const;
 const LEFT = { x: 110, y: 520, width: 1110, height: 430 } as const;
+/** Where a still beat's exhibit (image or code) is centred, and where its caption sits below it. */
+const STILL_BOX = { x: 210, y: 316, width: 1500, height: 520 } as const;
+const STILL_CAPTION = { x: 210, y: 880, width: 1500, height: 150 } as const;
 const RADIUS = 26;
 /** Caption dissolve, and the film's open and close. Kept here so the three read together. */
 const CAPTION_FADE = 0.18;
@@ -106,10 +109,23 @@ function escapeHtml(text: string): string {
 
 // ---------------------------------------------------------------- narration
 
+function resolvedVoiceId(manifest: Manifest): string {
+  return process.env['ELEVENLABS_VOICE_ID'] ?? manifest.voice.elevenLabsVoiceId;
+}
+
+/** True only when the ElevenLabs path will actually be taken this run. */
+function usesElevenLabs(manifest: Manifest): boolean {
+  return (
+    manifest.voice.provider === 'elevenlabs' &&
+    process.env['ELEVENLABS_API_KEY'] !== undefined &&
+    resolvedVoiceId(manifest) !== ''
+  );
+}
+
 async function speak(manifest: Manifest, text: string, out: string): Promise<void> {
   const key = process.env['ELEVENLABS_API_KEY'];
-  const voiceId = process.env['ELEVENLABS_VOICE_ID'] ?? manifest.voice.elevenLabsVoiceId;
-  if (manifest.voice.provider === 'elevenlabs' && key !== undefined && voiceId !== '') {
+  const voiceId = resolvedVoiceId(manifest);
+  if (usesElevenLabs(manifest) && key !== undefined) {
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
       {
@@ -159,10 +175,19 @@ async function narrate(manifest: Manifest): Promise<PlannedBeat[]> {
   for (const beat of manifest.beats) {
     const lines: Line[] = [];
     for (const [index, text] of beat.lines.entries()) {
-      // The cache key carries the line's own text. Keying on the index alone
-      // would silently keep stale audio after any rewording -- the captions
-      // would then read the new line while the voice spoke the old one.
-      const key = createHash('sha1').update(text).digest('hex').slice(0, 10);
+      // The cache key carries the line's own text AND the voice that spoke it.
+      // Keying on the index alone would keep stale audio after a rewording --
+      // the captions would read the new line while the voice spoke the old one
+      // -- and keying on text alone would let a `say` take survive a switch to
+      // ElevenLabs, rendering the whole film in the fallback voice silently.
+      // Mirrors `speak`'s own condition, not just the declared provider: with
+      // `elevenlabs` declared but no key present the run silently falls back to
+      // `say`, and a key that claimed ElevenLabs would then pin that fallback
+      // take in place for the real render.
+      const voiceKey = usesElevenLabs(manifest)
+        ? `elevenlabs:${resolvedVoiceId(manifest)}`
+        : `say:${manifest.voice.sayVoice}:${String(manifest.voice.sayRateWpm)}`;
+      const key = createHash('sha1').update(`${voiceKey}\n${text}`).digest('hex').slice(0, 10);
       const out = join(AUDIO_DIR, `${beat.id}-${String(index).padStart(2, '0')}-${key}.wav`);
       if (!existsSync(out)) await speak(manifest, text, out);
       lines.push({ text, audio: out, seconds: probeSeconds(out) });
@@ -240,13 +265,18 @@ function shell(body: string, width: number, height: number, background: string):
   </style></head><body>${body}</body></html>`;
 }
 
-function backgroundHtml(beat: Beat, total: number, manifest: Manifest): string {
-  return shell(
-    `<div style="position:absolute;left:${String(LEFT.x)}px;top:96px">
+/** Top-left wordmark and hackathon/track kicker, shared by every full-canvas panel. */
+function wordmarkHtml(manifest: Manifest): string {
+  return `<div style="position:absolute;left:${String(LEFT.x)}px;top:96px">
        <div style="font-size:30px;font-weight:800;letter-spacing:.20em;color:${TEXT}">SIFT</div>
        <div style="font-size:17px;letter-spacing:.13em;color:${MUTED};margin-top:10px;text-transform:uppercase">
          ${escapeHtml(manifest.hackathon)} &middot; ${escapeHtml(manifest.track)}</div>
-     </div>
+     </div>`;
+}
+
+function backgroundHtml(beat: Beat, total: number, manifest: Manifest): string {
+  return shell(
+    `${wordmarkHtml(manifest)}
      <div style="position:absolute;left:${String(LEFT.x)}px;bottom:${String(CANVAS.height - (LEFT.y - 52))}px;width:${String(LEFT.width)}px">
        <div style="font-size:19px;font-weight:700;letter-spacing:.16em;color:${ACCENT}">
          ${String(beat.number).padStart(2, '0')} / ${String(total).padStart(2, '0')}</div>
@@ -270,6 +300,20 @@ function captionHtml(text: string): string {
        font-weight:450;letter-spacing:-.004em">${escapeHtml(forDisplay(text))}</div>`,
     LEFT.width,
     LEFT.height,
+    'transparent',
+  );
+}
+
+/** A still beat's caption: centred in the bottom strip below the exhibit, not the left panel. */
+function stillCaptionHtml(text: string): string {
+  return shell(
+    `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+       text-align:center">
+       <div style="font-size:36px;line-height:1.44;color:${TEXT};font-weight:450;letter-spacing:-.004em">
+         ${escapeHtml(forDisplay(text))}</div>
+     </div>`,
+    STILL_CAPTION.width,
+    STILL_CAPTION.height,
     'transparent',
   );
 }
@@ -312,6 +356,93 @@ function bezelHtml(): string {
   );
 }
 
+const CODE_FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+const CODE_PADDING = 28;
+const CODE_HEADER_HEIGHT = 60;
+
+/**
+ * The largest font size, from 22px down, at which both the longest line and
+ * the full line count fit inside the still box. Computed from character and
+ * line counts rather than measured in the browser: Playwright's screenshot is
+ * a single synchronous shot, with no render-then-shrink-to-fit pass available
+ * before it.
+ */
+function fitCodeFontSize(lines: readonly string[]): number {
+  const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const maxWidth = STILL_BOX.width - CODE_PADDING * 2;
+  const maxHeight = STILL_BOX.height - CODE_PADDING * 2 - CODE_HEADER_HEIGHT;
+  for (let size = 22; size > 8; size -= 1) {
+    // 0.6em is a standard advance-width approximation for a monospace face.
+    if (longest * size * 0.6 <= maxWidth && lines.length * size * 1.5 <= maxHeight) return size;
+  }
+  return 8;
+}
+
+const IMAGE_MIME: Record<string, string> = {
+  png: 'png',
+  jpg: 'jpeg',
+  jpeg: 'jpeg',
+  gif: 'gif',
+  webp: 'webp',
+  svg: 'svg+xml',
+};
+
+/** A still beat's exhibit: an embedded image or a rendered source file, centred in STILL_BOX. */
+function exhibitHtml(still: NonNullable<Beat['still']>): string {
+  const path = join(process.cwd(), still.path);
+  if (still.kind === 'image') {
+    const ext = extname(path).slice(1).toLowerCase();
+    const mime = IMAGE_MIME[ext] ?? 'png';
+    const dataUri = `data:image/${mime};base64,${readFileSync(path).toString('base64')}`;
+    return `<div style="background:#fff;border-radius:18px;padding:24px;
+        box-shadow:0 46px 110px rgba(0,0,0,.62),0 4px 18px rgba(0,0,0,.4);
+        max-width:${String(STILL_BOX.width)}px;max-height:${String(STILL_BOX.height)}px;display:flex">
+        <img src="${dataUri}" style="max-width:100%;max-height:100%;object-fit:contain;display:block"/>
+      </div>`;
+  }
+  const all = readFileSync(path, 'utf8').split('\n');
+  // A whole file shrinks to illegibility. Naming the range keeps the exhibit at
+  // a readable size and tells a judge exactly where to look it up.
+  const [from, to] = still.lines ?? [1, all.length];
+  const lines = all.slice(from - 1, to);
+  const label =
+    still.lines === undefined ? still.path : `${still.path}:${String(from)}-${String(to)}`;
+  const width = String(all.slice(from - 1, to).length + from).length;
+  const numbered = lines.map((line, i) => `${String(from + i).padStart(width, ' ')}  ${line}`);
+  const size = fitCodeFontSize(numbered);
+  return `<div style="background:#0F1C18;border-radius:14px;overflow:hidden;
+      max-width:${String(STILL_BOX.width)}px;max-height:${String(STILL_BOX.height)}px;
+      box-shadow:0 46px 110px rgba(0,0,0,.62),0 4px 18px rgba(0,0,0,.4)">
+      <div style="padding:16px ${String(CODE_PADDING)}px;background:#132A22;color:${MUTED};
+        font-size:19px;letter-spacing:.02em">${escapeHtml(label)}</div>
+      <div style="padding:${String(CODE_PADDING)}px;font-family:${CODE_FONT};
+        font-size:${String(size)}px;line-height:1.5;color:${TEXT};white-space:pre">${escapeHtml(numbered.join('\n'))}</div>
+    </div>`;
+}
+
+/** Full-canvas still panel: wordmark, beat number/title, and the beat's exhibit centred in STILL_BOX. */
+function stillHtml(beat: Beat, total: number, manifest: Manifest): string {
+  const still = beat.still;
+  if (still === undefined) throw new Error(`stillHtml called for beat with no still: ${beat.id}`);
+  return shell(
+    `${wordmarkHtml(manifest)}
+     <div style="position:absolute;left:${String(LEFT.x)}px;top:196px;width:1600px">
+       <div style="font-size:19px;font-weight:700;letter-spacing:.16em;color:${ACCENT}">
+         ${String(beat.number).padStart(2, '0')} / ${String(total).padStart(2, '0')}</div>
+       <div style="font-size:44px;font-weight:700;line-height:1.16;color:${TEXT};margin-top:14px;
+         white-space:nowrap">${escapeHtml(beat.title)}</div>
+     </div>
+     <div style="position:absolute;left:${String(STILL_BOX.x)}px;top:${String(STILL_BOX.y)}px;
+       width:${String(STILL_BOX.width)}px;height:${String(STILL_BOX.height)}px;
+       display:flex;align-items:center;justify-content:center">
+       ${exhibitHtml(still)}
+     </div>`,
+    CANVAS.width,
+    CANVAS.height,
+    INK,
+  );
+}
+
 async function renderPanels(manifest: Manifest, planned: readonly PlannedBeat[]): Promise<void> {
   rmSync(PANEL_DIR, { recursive: true, force: true });
   mkdirSync(PANEL_DIR, { recursive: true });
@@ -332,17 +463,30 @@ async function renderPanels(manifest: Manifest, planned: readonly PlannedBeat[])
   await shoot(bezelHtml(), 'bezel.png', { width: PANE.width, height: PANE.height }, true);
   await shoot(cardHtml(manifest.closeCard), 'card-close.png', { ...CANVAS }, false);
   for (const plan of planned) {
-    await shoot(
-      backgroundHtml(plan.beat, groupCount(manifest), manifest),
-      `bg-${plan.beat.id}.png`,
-      { ...CANVAS },
-      false,
-    );
+    if (plan.beat.still === undefined) {
+      await shoot(
+        backgroundHtml(plan.beat, groupCount(manifest), manifest),
+        `bg-${plan.beat.id}.png`,
+        { ...CANVAS },
+        false,
+      );
+    } else {
+      await shoot(
+        stillHtml(plan.beat, groupCount(manifest), manifest),
+        `still-${plan.beat.id}.png`,
+        { ...CANVAS },
+        false,
+      );
+    }
+    const captionSize =
+      plan.beat.still === undefined
+        ? { width: LEFT.width, height: LEFT.height }
+        : { width: STILL_CAPTION.width, height: STILL_CAPTION.height };
     for (const [index, line] of plan.lines.entries()) {
       await shoot(
-        captionHtml(line.text),
+        plan.beat.still === undefined ? captionHtml(line.text) : stillCaptionHtml(line.text),
         `cap-${plan.beat.id}-${String(index).padStart(2, '0')}.png`,
-        { width: LEFT.width, height: LEFT.height },
+        captionSize,
         true,
       );
     }
@@ -385,79 +529,58 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
     // each part can align to its own footage. Fading the pane at those joins
     // would read as a flicker in the middle of a continuous thought.
     const opensGroup = previous?.beat.title !== plan.beat.title;
-    const mark = timeline.marks.find((m) => m.id === plan.beat.id);
-    if (mark === undefined) throw new Error(`no footage recorded for beat ${plan.beat.id}`);
-    const from = mark.startMs / 1000;
-    const raw = mark.endMs / 1000 - from;
-    // Only ever compress time, never stretch it: slowed UI footage reads as a
-    // stutter. When a beat came up shorter than its narration -- every beat
-    // here ends on a held, static view -- clone the last frame to cover the
-    // remainder instead. Without this the pane simply vanishes for the
-    // shortfall and the panel plays on over an empty canvas.
-    const rate = raw >= plan.seconds ? raw / plan.seconds : 1;
-    const shortfall = Math.max(0, plan.seconds - raw / rate);
-    const pad =
-      shortfall > 0 ? `,tpad=stop_mode=clone:stop_duration=${(shortfall + 0.2).toFixed(3)}` : '';
-    const slice = join(SEGMENT_DIR, `raw-${plan.beat.id}.mp4`);
-    // `-ss`/`-t` are INPUT options here, and that placement is load-bearing.
-    // As output options they are applied after the filter graph, so `setpts`
-    // has already rescaled the timestamps by the time the duration limit is
-    // read: the retime silently does nothing and the final beat, whose shifted
-    // timestamps land past its own limit, comes out as an empty file.
-    ffmpeg([
-      '-ss',
-      from.toFixed(3),
-      '-t',
-      raw.toFixed(3),
-      '-i',
-      timeline.video,
-      '-an',
-      '-vf',
-      `setpts=PTS/${rate.toFixed(6)},fps=30${pad}`,
-      '-t',
-      plan.seconds.toFixed(3),
-      '-c:v',
-      'libx264',
-      '-preset',
-      'veryfast',
-      '-crf',
-      '14',
-      '-pix_fmt',
-      'yuv420p',
-      slice,
-    ]);
+    const still = plan.beat.still;
 
     const out = join(SEGMENT_DIR, `${plan.beat.id}.mp4`);
-    const inputs = [
-      '-loop',
-      '1',
-      '-framerate',
-      '30',
-      '-t',
-      plan.seconds.toFixed(3),
-      '-i',
-      join(PANEL_DIR, `bg-${plan.beat.id}.png`),
-      '-i',
-      slice,
-      '-loop',
-      '1',
-      '-framerate',
-      '30',
-      '-t',
-      plan.seconds.toFixed(3),
-      '-i',
-      join(PANEL_DIR, 'bezel.png'),
-    ];
-    // 0 background, 1 footage, 2 bezel, then one caption image per line.
-    const steps = [
-      `[1:v]scale=${String(PANE.width)}:${String(PANE.height)},format=yuva420p,` +
-        `${opensGroup ? 'fade=t=in:st=0:d=0.35:alpha=1,' : ''}setsar=1[pane]`,
-      `[0:v][pane]overlay=${String(PANE.x)}:${String(PANE.y)}:shortest=0[p0]`,
-      `[p0][2:v]overlay=${String(PANE.x)}:${String(PANE.y)}[p1]`,
-    ];
-    let label = 'p1';
-    for (const [index, window] of plan.windows.entries()) {
-      const stream = 3 + index;
+    const inputs: string[] = [];
+    const steps: string[] = [];
+    let label: string;
+    let raw = 0;
+    let rate = 1;
+
+    if (still === undefined) {
+      const mark = timeline.marks.find((m) => m.id === plan.beat.id);
+      if (mark === undefined) throw new Error(`no footage recorded for beat ${plan.beat.id}`);
+      const from = mark.startMs / 1000;
+      raw = mark.endMs / 1000 - from;
+      // Only ever compress time, never stretch it: slowed UI footage reads as a
+      // stutter. When a beat came up shorter than its narration -- every beat
+      // here ends on a held, static view -- clone the last frame to cover the
+      // remainder instead. Without this the pane simply vanishes for the
+      // shortfall and the panel plays on over an empty canvas.
+      rate = raw >= plan.seconds ? raw / plan.seconds : 1;
+      const shortfall = Math.max(0, plan.seconds - raw / rate);
+      const pad =
+        shortfall > 0 ? `,tpad=stop_mode=clone:stop_duration=${(shortfall + 0.2).toFixed(3)}` : '';
+      const slice = join(SEGMENT_DIR, `raw-${plan.beat.id}.mp4`);
+      // `-ss`/`-t` are INPUT options here, and that placement is load-bearing.
+      // As output options they are applied after the filter graph, so `setpts`
+      // has already rescaled the timestamps by the time the duration limit is
+      // read: the retime silently does nothing and the final beat, whose shifted
+      // timestamps land past its own limit, comes out as an empty file.
+      ffmpeg([
+        '-ss',
+        from.toFixed(3),
+        '-t',
+        raw.toFixed(3),
+        '-i',
+        timeline.video,
+        '-an',
+        '-vf',
+        `setpts=PTS/${rate.toFixed(6)},fps=30${pad}`,
+        '-t',
+        plan.seconds.toFixed(3),
+        '-c:v',
+        'libx264',
+        '-preset',
+        'veryfast',
+        '-crf',
+        '14',
+        '-pix_fmt',
+        'yuv420p',
+        slice,
+      ]);
+
       inputs.push(
         '-loop',
         '1',
@@ -466,7 +589,64 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
         '-t',
         plan.seconds.toFixed(3),
         '-i',
-        join(PANEL_DIR, `cap-${plan.beat.id}-${String(index).padStart(2, '0')}.png`),
+        join(PANEL_DIR, `bg-${plan.beat.id}.png`),
+        '-i',
+        slice,
+        '-loop',
+        '1',
+        '-framerate',
+        '30',
+        '-t',
+        plan.seconds.toFixed(3),
+        '-i',
+        join(PANEL_DIR, 'bezel.png'),
+      );
+      // 0 background, 1 footage, 2 bezel, then one caption image per line.
+      steps.push(
+        `[1:v]scale=${String(PANE.width)}:${String(PANE.height)},format=yuva420p,` +
+          `${opensGroup ? 'fade=t=in:st=0:d=0.35:alpha=1,' : ''}setsar=1[pane]`,
+        `[0:v][pane]overlay=${String(PANE.x)}:${String(PANE.y)}:shortest=0[p0]`,
+        `[p0][2:v]overlay=${String(PANE.x)}:${String(PANE.y)}[p1]`,
+      );
+      label = 'p1';
+    } else {
+      // No footage to retime: the visual is a single baked frame held for the
+      // beat's full measured duration, so there is no slice, scale or bezel --
+      // only the caption overlays below apply on top of it.
+      inputs.push(
+        '-loop',
+        '1',
+        '-framerate',
+        '30',
+        '-t',
+        plan.seconds.toFixed(3),
+        '-i',
+        join(PANEL_DIR, `still-${plan.beat.id}.png`),
+      );
+      // `-map` needs a filtergraph-defined pad, not a raw input reference, so
+      // this input is named through a no-op filter even though nothing about
+      // it changes -- a still beat with no captions would otherwise map an
+      // input stream through link-label syntax, which ffmpeg rejects.
+      steps.push('[0:v]null[still]');
+      label = 'still';
+    }
+
+    // Non-still beats caption the left panel; still beats caption the bottom
+    // strip below the exhibit instead. Caption stream numbering starts right
+    // after whatever base inputs the branch above already pushed.
+    const captionOrigin = still === undefined ? LEFT : STILL_CAPTION;
+    const baseInputs = still === undefined ? 3 : 1;
+    for (const [capIndex, window] of plan.windows.entries()) {
+      const stream = baseInputs + capIndex;
+      inputs.push(
+        '-loop',
+        '1',
+        '-framerate',
+        '30',
+        '-t',
+        plan.seconds.toFixed(3),
+        '-i',
+        join(PANEL_DIR, `cap-${plan.beat.id}-${String(capIndex).padStart(2, '0')}.png`),
       );
       // Dissolve rather than pop. Each caption's own alpha is animated, so the
       // overlay needs no `enable` window: the image is fully transparent
@@ -474,15 +654,17 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
       // `from`, so the outgoing fade finishes exactly as the incoming one
       // starts -- they never double-expose, and no transition duration has to
       // be kept in step with a separate caption timing sheet.
-      const faded = `f${String(index)}`;
-      const next = `c${String(index)}`;
+      const faded = `f${String(capIndex)}`;
+      const next = `c${String(capIndex)}`;
       const out1 = Math.max(window.from, window.to - CAPTION_FADE);
       steps.push(
         `[${String(stream)}:v]format=rgba,` +
           `fade=t=in:st=${window.from.toFixed(3)}:d=${CAPTION_FADE.toFixed(3)}:alpha=1,` +
           `fade=t=out:st=${out1.toFixed(3)}:d=${CAPTION_FADE.toFixed(3)}:alpha=1[${faded}]`,
       );
-      steps.push(`[${label}][${faded}]overlay=${String(LEFT.x)}:${String(LEFT.y)}[${next}]`);
+      steps.push(
+        `[${label}][${faded}]overlay=${String(captionOrigin.x)}:${String(captionOrigin.y)}[${next}]`,
+      );
       label = next;
     }
     // The film opens out of black rather than cutting in cold.
@@ -491,7 +673,7 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
       label = 'opened';
     }
     inputs.push('-i', plan.audio);
-    const audioStream = 3 + plan.windows.length;
+    const audioStream = baseInputs + plan.windows.length;
     ffmpeg([
       ...inputs,
       '-filter_complex',
@@ -508,13 +690,21 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
       out,
     ]);
     files.push(out);
-    console.log(
-      `  ${plan.beat.id}: ${raw.toFixed(1)}s footage -> ${plan.seconds.toFixed(1)}s at ${rate.toFixed(2)}x`,
-    );
+    if (still === undefined) {
+      console.log(
+        `  ${plan.beat.id}: ${raw.toFixed(1)}s footage -> ${plan.seconds.toFixed(1)}s at ${rate.toFixed(2)}x`,
+      );
+    } else {
+      console.log(`  ${plan.beat.id}: still (${still.kind}) -> ${plan.seconds.toFixed(1)}s`);
+    }
   }
 
-  const card = join(SEGMENT_DIR, 'card-close.mp4');
+  // A manifest whose last beat is itself the close needs no separate card, and
+  // asks for zero seconds of one. Appending it anyway builds a zero-length
+  // segment whose fade starts before its own first frame.
   const seconds = manifest.timing.cardSeconds;
+  if (seconds <= 0) return files;
+  const card = join(SEGMENT_DIR, 'card-close.mp4');
   ffmpeg([
     '-loop',
     '1',

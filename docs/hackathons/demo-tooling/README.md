@@ -98,9 +98,15 @@ These are the reasons to read this page rather than just the filenames.
    avfoundation screen index at runtime, because that index shifts when
    virtual cameras connect or disconnect; never hardcode it.
 5. **`manifest.json` ships `voice.voiceId: "REPLACE_ME"`** — the real voice id
-   was not preserved. `narrate.mjs` fails until one is supplied via `--voice`
-   or `ELEVENLABS_VOICE_ID`. The key itself is read from the environment only:
-   never write it to disk, and never put it in a manifest.
+   was not preserved *there*, and `REPLACE_ME` is the only value that has ever
+   existed in that file across its whole history. It is preserved here now:
+   the narration voice is **`mHV5m7DLaQM0bIAP6BTK`**, recorded in
+   `scripts/demo-video/manifest.json` (`voice.elevenLabsVoiceId`) so it never
+   has to be fetched from the ElevenLabs UI again. (praetor's own `narrate.mjs`
+   still fails until an id is supplied via `--voice` or `ELEVENLABS_VOICE_ID`.)
+   The voice id is a selector, not a credential. The API **key** is the secret:
+   it is read from the environment only, never written to disk, and never put
+   in a manifest.
 6. **`drive-ag.mjs` and `approve.mjs` import Playwright by absolute path**
    (`drive-ag.mjs:3`, `approve.mjs:2`), and `drive-ag.mjs:5` hardcodes its
    output directory. The other six scripts contain no absolute paths. Those

@@ -14,16 +14,16 @@
     "height": 940
   },
   "voice": {
-    "provider": "say",
+    "provider": "elevenlabs",
     "sayVoice": "Samantha",
     "sayRateWpm": 166,
-    "elevenLabsVoiceId": ""
+    "elevenLabsVoiceId": "mHV5m7DLaQM0bIAP6BTK"
   },
   "timing": {
     "leadInSeconds": 0.7,
     "lineGapSeconds": 0.42,
     "tailSeconds": 1.0,
-    "cardSeconds": 3.0
+    "cardSeconds": 0.0
   },
   "titleCard": {
     "kicker": "Agents for Humans - Professional Agents",
@@ -37,175 +37,184 @@
   },
   "beats": [
     {
-      "id": "b1a-case",
+      "id": "b1-what",
       "number": 1,
-      "title": "Twelve bids, and no estimator",
-      "minSeconds": 15,
+      "title": "One case, a person and an agent",
+      "minSeconds": 18,
       "lines": [
-        "Meridian Builders is a nine-person general contractor, and nobody there is a full-time estimator.",
-        "They put a school plumbing package out to the regional plan room, and twelve bids came back.",
-        "The person picking this sub is also running the job."
+        "Sift is decision infrastructure: one live case that a person and a Strands agent work on together.",
+        "A decision pack declares what has to be established before an answer is allowed - the obligations, the criteria, and the interventions that police them.",
+        "Three decision packs share one engine here: subcontractor bids, a car purchase, and a household energy bill. This is the bids one."
       ]
     },
     {
-      "id": "b1b-twelve",
-      "number": 1,
-      "title": "Twelve bids, and no estimator",
-      "minSeconds": 17,
-      "lines": [
-        "Twelve bids is where you stop reading and sort by the bottom number.",
-        "And that is the trap. Cedar and Sons prices sixty-two and a half percent of the required scope. Northgate prices all of it.",
-        "Is the cheap bid a better deal, or is it pricing less work?"
-      ]
-    },
-    {
-      "id": "b2-swarm",
+      "id": "b2a-swarm-import",
       "number": 2,
-      "title": "A real Swarm, and it gets steered",
-      "minSeconds": 36,
-      "lines": [
-        "Six specialists, and the handoffs are the model's decision, not a script.",
-        "Scope, price, credentials, schedule, a source check, and a recommendation - each loading only the skill its own obligation needs.",
-        "Watch the scope analyst. It finishes: completed, redirected once.",
-        "It was comparing the same two bids again with no new angle, so the run steered it onto the third.",
-        "That is a Guide intervention, landing on a live handoff.",
-        "Every specialist reports what it actually did - nine price lookups, two credential lookups, five on schedule."
-      ]
-    },
-    {
-      "id": "b3a-stream",
-      "number": 3,
-      "title": "Blocked, then refused",
-      "minSeconds": 8,
-      "lines": [
-        "This is the run's own activity stream, and two entries in it are the whole submission."
-      ]
-    },
-    {
-      "id": "b3b-blocked",
-      "number": 3,
-      "title": "Blocked, then refused",
-      "minSeconds": 17,
-      "lines": [
-        "Action blocked. The price analyst reached for the licence lookup - a tool that is not in its allowlist for this run.",
-        "Not a failure. A refusal, recorded as one, and the run carried straight on without it."
-      ]
-    },
-    {
-      "id": "b3c-withheld",
-      "number": 3,
-      "title": "Blocked, then refused",
-      "minSeconds": 23,
-      "lines": [
-        "And then this. Draft withheld - recommendation draft rejected on attempt one.",
-        "The validator threw out the first answer because Cedar's scope was not normalized yet, and ranking twelve bids on different scope bases would have been a lie.",
-        "Every bid-levelling tool will happily rank an unfair comparison. This one refused, and went back round."
-      ]
-    },
-    {
-      "id": "b4-arithmetic",
-      "number": 4,
-      "title": "Arithmetic you can check yourself",
-      "minSeconds": 32,
-      "lines": [
-        "Cedar's two-twenty-three-five is silent on three things the others price.",
-        "Permits and inspections, eighteen thousand. Shower-valve rough-in, thirty-one five. Debris haul-away, six thousand.",
-        "Add them: Cedar is two seventy-nine, against Northgate's two seventy-six.",
-        "The bid that looked fifty-two thousand cheaper is three thousand more expensive - arithmetic you can check yourself.",
-        "And the one bid genuinely under Northgate once corrected, Fieldstone at two sixty-eight, doesn't win either. It tells you why."
-      ]
-    },
-    {
-      "id": "b5-fail-closed",
-      "number": 5,
-      "title": "It won't call two questions closed",
-      "minSeconds": 23,
-      "lines": [
-        "It recommended a winner and it still won't mark two of these questions answered.",
-        "Cedar's scope comparison came back incomplete, and two of the twelve fail credential verification on two different grounds.",
-        "A certificate naming the wrong company, and a licence class with no plumbing endorsement.",
-        "Evidence here is fail-closed: a degraded answer doesn't get to count as settled just because everything else passed."
-      ]
-    },
-    {
-      "id": "b6a-reweight",
-      "number": 6,
-      "title": "A constraint that outranks a score",
-      "minSeconds": 17,
-      "lines": [
-        "Say you care less about price and more about warranty and a sane deposit.",
-        "Change the weights - the ranking is arithmetic the model never touches.",
-        "And the sixth criterion has no slider: credentials are set by the pack and cannot be reweighted."
-      ]
-    },
-    {
-      "id": "b6b-round2",
-      "number": 6,
-      "title": "A constraint that outranks a score",
-      "minSeconds": 11,
-      "lines": [
-        "Save it, and only the question the reweight actually affects reopens - one specialist, one revised pass."
-      ]
-    },
-    {
-      "id": "b6c-ranked",
-      "number": 6,
-      "title": "A constraint that outranks a score",
+      "title": "Two Strands topologies",
       "minSeconds": 10,
       "lines": [
-        "And now Two Rivers scores highest of all twelve - ninety-one percent, against the winner's seventy-two."
-      ]
+        "Where the handoffs should be the model's call, that engine runs a Strands Swarm - bids, home energy."
+      ],
+      "still": {
+        "kind": "code",
+        "path": "apps/agent/src/runtime/bid-comparison-swarm.ts",
+        "lines": [
+          79,
+          85
+        ]
+      }
     },
     {
-      "id": "b6d-flagged",
-      "number": 6,
-      "title": "A constraint that outranks a score",
+      "id": "b2b-graph-import",
+      "number": 2,
+      "title": "Two Strands topologies",
+      "minSeconds": 10,
+      "lines": [
+        "Where the order is fixed, it runs a Strands Graph instead. Same pack format either way."
+      ],
+      "still": {
+        "kind": "code",
+        "path": "apps/agent/src/runtime/car-purchase-graph.ts",
+        "lines": [
+          65,
+          70
+        ]
+      }
+    },
+    {
+      "id": "b3-core",
+      "number": 3,
+      "title": "The core the model never touches",
+      "minSeconds": 18,
+      "lines": [
+        "Scoring and ranking are a deterministic core: one dependency, its own contracts. No model, no network, no filesystem.",
+        "The arithmetic you are about to check was never produced by a model. Everything above that line is Strands."
+      ],
+      "still": {
+        "kind": "code",
+        "path": "packages/core/package.json"
+      }
+    },
+    {
+      "id": "b4-case",
+      "number": 4,
+      "title": "Twelve bids for the same job",
       "minSeconds": 16,
       "lines": [
-        "It still doesn't win. Its insurance names TRM Holdings, not Two Rivers Mechanical, and credentials are a hard constraint.",
-        "Eleventh of twelve, ninety-one percent still showing, and it says: flagged, not removed - still ranked, and still yours to decide."
+        "Twelve plumbing bids for a school renovation. Cedar and Sons is cheapest, and prices sixty-two and a half percent of the required scope.",
+        "Better deal, or pricing less work?"
       ]
     },
     {
-      "id": "b7-human-award",
+      "id": "b5a-swarm",
+      "number": 5,
+      "title": "A Swarm, steered mid-run",
+      "minSeconds": 22,
+      "lines": [
+        "One request starts the Swarm: six nodes, six stages, five handoffs - and the handoffs are the model's decision.",
+        "Each specialist loads only the AgentSkill its obligation needs: scope normalization, price arithmetic, credential verification, schedule analysis. Four activations in this run.",
+        "A Context Injector refreshes the weights, the open scope gaps and the remaining budget every turn. Twenty-eight injections."
+      ]
+    },
+    {
+      "id": "b5b-guide",
+      "number": 5,
+      "title": "A Swarm, steered mid-run",
+      "minSeconds": 13,
+      "lines": [
+        "And watch the scope analyst: completed, redirected once.",
+        "It was circling the same two bids, so a Guide intervention steered it onto the third."
+      ]
+    },
+    {
+      "id": "b6-deny",
+      "number": 6,
+      "title": "Refused before it ran",
+      "minSeconds": 18,
+      "lines": [
+        "Here is a Deny. The price analyst reached for the licence lookup, a tool this pack grants only to the credential checker, and was refused before it ran.",
+        "Not a failure. An authority boundary, recorded as one."
+      ]
+    },
+    {
+      "id": "b7-goalloop",
       "number": 7,
-      "title": "It recommends; it never awards",
-      "minSeconds": 20,
+      "title": "The agent refuses to answer",
+      "minSeconds": 30,
       "lines": [
-        "Awarding a contract is real money leaving a real business.",
-        "So this is gated - a Confirm intervention, and the proposal sits pending with no approving actor until a person acts.",
-        "The agent got to recommend. I'm the one who awards.",
-        "That boundary is structural, not a setting I could switch off."
+        "Then the one that matters. GoalLoop ran the recommendation through a callable validator, and the validator threw out attempt one.",
+        "The draft ranked twelve bids that were not yet on a common scope basis. That is not a badly written answer, it is a false one.",
+        "GoalLoop handed the reason back and the synthesizer went round again. Every bid-levelling tool will happily rank an unfair comparison. This one refuses."
       ]
     },
     {
-      "id": "b8a-execution",
+      "id": "b8-arithmetic",
       "number": 8,
-      "title": "Proof it is really Strands",
-      "minSeconds": 11,
+      "title": "Arithmetic you can check",
+      "minSeconds": 22,
       "lines": [
-        "And underneath, everything you just watched is real Strands.",
-        "Four hundred and thirty-three runtime events in that first run: six swarm nodes, six stages, five handoffs."
+        "Cedar is silent on three things the others price: permits, eighteen thousand; shower-valve rough-in, thirty-one five; haul-away, six thousand.",
+        "Corrected, Cedar is two seventy-nine against Northgate's two seventy-six. The bid that looked fifty-two thousand cheaper is three thousand more expensive."
       ]
     },
     {
-      "id": "b8b-timeline",
-      "number": 8,
-      "title": "Proof it is really Strands",
-      "minSeconds": 11,
-      "lines": [
-        "Twenty-eight context injections, four skill activations, and every span carrying the SDK's own instrumentation scope.",
-        "Which is the one thing a class you named after Strands cannot fake."
-      ]
-    },
-    {
-      "id": "b9-close",
+      "id": "b9-failclosed",
       "number": 9,
-      "title": "Optimized to know when it hasn't earned an answer",
-      "minSeconds": 9,
+      "title": "It won't call two questions closed",
+      "minSeconds": 14,
       "lines": [
-        "Most agents are optimized to finish.",
-        "This one is optimized to know when it hasn't earned the right to answer yet."
+        "It names a winner and still will not close two questions: a scope comparison that came back incomplete, and two bids failing credential verification.",
+        "Degraded evidence does not count as settled."
+      ]
+    },
+    {
+      "id": "b10a-reweight",
+      "number": 10,
+      "title": "A constraint that outranks a score",
+      "minSeconds": 14,
+      "lines": [
+        "Change the priorities and the ranking moves. That is the deterministic core, not the model.",
+        "The sixth criterion has no slider: credentials are set by the pack and cannot be reweighted."
+      ]
+    },
+    {
+      "id": "b10b-flagged",
+      "number": 10,
+      "title": "A constraint that outranks a score",
+      "minSeconds": 14,
+      "lines": [
+        "Now Two Rivers scores highest of all twelve, ninety-one percent against the winner's seventy-two, and still does not win.",
+        "Flagged, not removed. Still ranked, and still yours to decide."
+      ]
+    },
+    {
+      "id": "b11-decide",
+      "number": 11,
+      "title": "The person decides, on camera",
+      "minSeconds": 22,
+      "lines": [
+        "Awarding is gated by a Confirm intervention: the proposal sits pending, with no approving actor, until a person acts.",
+        "So I act. Select Northgate Plumbing.",
+        "The case is now Decided. The agent recommended it; a human awarded it, and that boundary is structural."
+      ]
+    },
+    {
+      "id": "b12-proof",
+      "number": 12,
+      "title": "Proof it is really Strands",
+      "minSeconds": 22,
+      "lines": [
+        "This is the Runtime Inspector. The SDK's lifecycle hooks, before and after every tool call and model call, on every node and every handoff, are normalized into these events and correlated by one trace id.",
+        "Four hundred and thirty-three runtime events in that first run. It is deployed and live, and every mechanism you just watched has a test that fails if it stops being true."
+      ]
+    },
+    {
+      "id": "b13-close",
+      "number": 13,
+      "title": "",
+      "minSeconds": 10,
+      "lines": [
+        "It refused to rank twelve bids until they were comparable, flagged the highest scorer instead of hiding it, and left the award to a person."
       ]
     }
   ]

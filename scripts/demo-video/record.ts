@@ -191,159 +191,147 @@ async function main(): Promise<void> {
   const page = context.pages()[0] ?? (await context.newPage());
   t0 = Date.now();
 
-  // --------------------------------------------------------------- 1a
-  beginBeat('b1a-case');
+  // ----------------------------------------------------------------- 1
+  // Opens on the launcher so the pack tiles are on screen while the narration
+  // says "three packs, one engine" -- the claim and the pixels together.
+  beginBeat('b1-what');
   await page.goto(BASE);
   await page.getByText('Start a Sift case').waitFor({ timeout: 30_000 });
-  await hold(page, 4);
+  await hold(page, 9);
+  await note(page, 'launcher', 'body');
   await page.getByRole('button', { name: /Compare these bids/ }).click();
   await page.getByText('Bid Comparison').first().waitFor({ timeout: 30_000 });
-  await hold(page, 9);
-  await note(page, 'caseOpened', SCROLLER);
-  await glide(page, 0, 205, 4);
-  await hold(page, 2);
+  await hold(page, 8);
   endBeat();
 
-  // --------------------------------------------------------------- 1b
-  // The twelve bids and their money are NOT on the Analysis stage: that
-  // stage's whole scroll height is about 200px and contains no option cards
-  // and no dollar figures at all. The cards live behind the Review stage's
-  // List view, so that is where beat 1 has to point the camera -- narrating
-  // "twelve bids" over the Analysis stage describes something not on screen.
+  // ----------------------------------------------------------------- 4
+  // The twelve bids and their money are NOT on the Analysis stage: its whole
+  // scroll height is about 200px and it carries no option cards at all. The
+  // cards live behind the Review stage's List view.
   await goToStep(page, 'review');
-  const listTabEarly = page.getByTestId('workspace-view-tab-list');
-  if ((await listTabEarly.count()) > 0) {
-    await listTabEarly.click();
+  const listEarly = page.getByTestId('workspace-view-tab-list');
+  if ((await listEarly.count()) > 0) {
+    await listEarly.click();
     await hold(page, 1.5);
   }
-  beginBeat('b1b-twelve');
+  beginBeat('b4-case');
   await jump(page, 620);
   await hold(page, 3);
-  await glide(page, 620, 1150, 7);
-  await hold(page, 4);
+  await glide(page, 620, 1150, 8);
+  await hold(page, 5);
   await note(page, 'twelveBids', SCROLLER);
-  await glide(page, 1150, 2700, 8);
-  await hold(page, 2);
+  await glide(page, 1150, 1900, 3);
   endBeat();
 
-  // ---------------------------------------------------------------- 2
-  // The INVESTIGATION TEAM panel lives on Analysis, so go back before
-  // starting the run. Runs until the swarm is actually done: the scope
-  // analyst's "Completed · Redirected once" -- the Guide intervention the
-  // narration points at -- renders in that panel with no scrolling at all.
+  // ---------------------------------------------------------------- 5a
   await goToStep(page, 'analysis');
-  beginBeat('b2-swarm');
+  beginBeat('b5a-swarm');
   await page.getByTestId('request-investigation').click();
   await hold(page, 2);
   await glide(page, 0, 340, 2.5);
-  await hold(page, 22);
+  await hold(page, 12);
   await glide(page, 340, 560, 3);
+  await hold(page, 7);
+  endBeat();
+
+  // ---------------------------------------------------------------- 5b
+  // Held until the run is genuinely finished, so "completed, redirected once"
+  // is on the scope analyst's row while the narration points at it.
   await page
     .getByTestId('specialist-activity-live')
     .filter({ hasText: 'All 6 specialists finished' })
     .waitFor({ timeout: 150_000 })
     .catch(() => console.log('  (completion status never landed; continuing)'));
-  await hold(page, 4);
+  await hold(page, 2);
+  await glide(page, 560, 300, 2);
+  beginBeat('b5b-guide');
   await note(page, 'specialistPanel', '[data-testid="specialist-activity-panel"]');
+  await hold(page, 16);
   endBeat();
 
-  // --------------------------------------------------------------- 3a
+  // ---------------------------------------------------------------- 6
   // The Deny and the GoalLoop refusal are NOT in the case workspace -- the
   // only place `ActivityTimeline` renders is the Runtime Inspector's Activity
-  // tab. So the camera goes where the evidence actually is.
+  // tab, so that is where the camera has to be for these two beats.
   await page.getByTestId('open-runtime-inspector').first().click();
   await hold(page, 2);
   await page.getByTestId('runtime-inspector-tab-activity').click();
-  await hold(page, 2);
-  beginBeat('b3a-stream');
-  await note(page, 'activityStream', '[data-testid="runtime-inspector-activity"]');
-  await hold(page, 10);
-  endBeat();
-
+  await hold(page, 2.5);
   const items = page.getByTestId('runtime-inspector-activity').locator('li');
   // Item ids carry a per-run UUID, so these have to be found by their content.
   const blocked = items.filter({ hasText: 'not in the declared allowlist' }).first();
   if ((await blocked.count()) > 0) await blocked.scrollIntoViewIfNeeded();
   await hold(page, 1);
-  beginBeat('b3b-blocked');
+  beginBeat('b6-deny');
   await note(page, 'actionBlocked', '[data-testid="runtime-inspector-activity"]');
-  await hold(page, 19);
+  await hold(page, 21);
   endBeat();
 
+  // ---------------------------------------------------------------- 7
   const withheld = items.filter({ hasText: 'rejected on attempt' }).first();
   if ((await withheld.count()) > 0) await withheld.scrollIntoViewIfNeeded();
   await hold(page, 1);
-  beginBeat('b3c-withheld');
-  await hold(page, 26);
+  beginBeat('b7-goalloop');
+  await hold(page, 34);
   endBeat();
 
-  // ------------------------------------------- 8a/8b, filmed out of order
-  // The Runtime Inspector shows the *latest* run, and by the end of the
-  // journey that is round two, a short synthesis-only pass. The run with the
-  // whole Swarm in it is round one, so it has to be filmed before the
-  // reweight starts another. `render.ts` puts it back in narration order.
-  const execTab = page.getByTestId('runtime-inspector-tab-execution');
-  if ((await execTab.count()) > 0) {
-    await execTab.click();
+  // ---------------------------------------------------------------- 12
+  // Filmed here, out of order: the inspector shows the *latest* run, and by
+  // the end of the journey that is round two, a short synthesis-only pass.
+  // The run carrying the whole Swarm is round one. render.ts puts it back.
+  beginBeat('b12-proof');
+  for (const [tab, seconds] of [
+    ['overview', 9],
+    ['execution', 10],
+    ['timeline', 9],
+  ] as const) {
+    const locator = page.getByTestId(`runtime-inspector-tab-${tab}`);
+    if ((await locator.count()) === 0) continue;
+    await locator.click();
     await hold(page, 2);
-    beginBeat('b8a-execution');
-    await note(page, 'inspectorExecution', '[role="dialog"]');
-    await hold(page, 8);
-    await page.mouse.wheel(0, 240);
-    await hold(page, 6);
-    endBeat();
+    await note(page, `inspector-${tab}`, '[role="dialog"]');
+    await hold(page, seconds - 2);
   }
-  const timelineTab = page.getByTestId('runtime-inspector-tab-timeline');
-  if ((await timelineTab.count()) > 0) {
-    await timelineTab.click();
-    await hold(page, 2);
-    beginBeat('b8b-timeline');
-    await hold(page, 8);
-    await page.mouse.wheel(0, 240);
-    await hold(page, 6);
-    endBeat();
-  }
+  endBeat();
   await closeAnySheet(page);
 
-  // ---------------------------------------------------------------- 4
+  // ---------------------------------------------------------------- 8
   await jump(page, 0);
   await hold(page, 1);
-  beginBeat('b4-arithmetic');
-  await hold(page, 4);
-  await glide(page, 0, 900, 15);
+  beginBeat('b8-arithmetic');
   await hold(page, 3);
-  await glide(page, 900, 1750, 13);
+  await glide(page, 0, 900, 11);
   await hold(page, 3);
+  await glide(page, 900, 1750, 8);
+  await hold(page, 2);
   await note(page, 'recommendation', SCROLLER);
   endBeat();
 
-  // ---------------------------------------------------------------- 5
+  // ---------------------------------------------------------------- 9
   await jump(page, 0);
   await hold(page, 1);
-  beginBeat('b5-fail-closed');
+  beginBeat('b9-failclosed');
   const findings = page.getByTestId('workspace-alert-banner-action-findings');
   if ((await findings.count()) > 0) {
     await hold(page, 3);
     await note(page, 'findingsBanner', '[data-testid="workspace-alert-banner"]');
     await findings.click();
-    await hold(page, 7);
+    await hold(page, 6);
     await page.mouse.wheel(0, 420);
-    await hold(page, 8);
-    await page.mouse.wheel(0, 420);
-    await hold(page, 8);
+    await hold(page, 9);
   } else {
-    await hold(page, 28);
+    await hold(page, 19);
   }
   endBeat();
   await closeAnySheet(page);
 
-  // --------------------------------------------------------------- 6a
+  // -------------------------------------------------------------- 10a
   await page.getByTestId('workspace-app-bar-create-menu').click();
   await hold(page, 1.2);
   await page.getByRole('menuitem', { name: /Adjust priorities/ }).click();
   await hold(page, 2);
-  beginBeat('b6a-reweight');
-  await hold(page, 3);
+  beginBeat('b10a-reweight');
+  await hold(page, 2);
   // ROUND2_CRITERIA_WEIGHTS. The round-2 rationale is a fixed scripted string
   // keyed to this weighting; any other weighting still ranks correctly but the
   // prose on screen would be describing a different run.
@@ -358,20 +346,16 @@ async function main(): Promise<void> {
     await page.getByTestId(`criteria-editor-weight-${id}`).fill(value);
     await hold(page, 1.6);
   }
-  await hold(page, 5);
+  await hold(page, 9);
   await note(page, 'criteriaSheet', '[role="dialog"]');
   endBeat();
 
-  // --------------------------------------------------------------- 6b
+  // -------------------------------------------------------------- 10b
   await page.getByRole('button', { name: /Save weights/ }).click();
   await hold(page, 1.5);
   await closeAnySheet(page);
-  beginBeat('b6b-round2');
   await page.getByTestId('request-investigation').click();
   await hold(page, 15);
-  endBeat();
-
-  // --------------------------------------------------------------- 6c
   await jump(page, 0);
   await goToStep(page, 'review');
   const listTab = page.getByTestId('workspace-view-tab-list');
@@ -379,49 +363,47 @@ async function main(): Promise<void> {
     await listTab.click();
     await hold(page, 1.5);
   }
-  await centre(page, 'option-rank-position-bid-northgate');
-  beginBeat('b6c-ranked');
-  await note(page, 'rankedList', SCROLLER);
-  await hold(page, 12);
-  endBeat();
-
-  // --------------------------------------------------------------- 6d
   await centre(page, 'option-rank-constraint-flags-bid-tworivers');
-  beginBeat('b6d-flagged');
+  beginBeat('b10b-flagged');
   await note(page, 'twoRiversFlag', '[data-testid="option-rank-constraint-flags-bid-tworivers"]');
   await hold(page, 19);
   endBeat();
 
-  // ---------------------------------------------------------------- 7
+  // ---------------------------------------------------------------- 11
+  // The decision itself, and the beat the whole video exists to reach: the
+  // pending proposal, a person pressing the approval, and the case flipping
+  // to Decided. Filmed long so none of the three is a blink.
   await goToStep(page, 'decide');
   await centre(page, 'approval-card-approve');
-  beginBeat('b7-human-award');
+  beginBeat('b11-decide');
   await note(page, 'approvalCard', SCROLLER);
   await hold(page, 12);
   const approve = page.getByTestId('approval-card-approve');
   if ((await approve.count()) > 0) {
     await approve.click();
-    await hold(page, 4);
+    await hold(page, 5);
     await jump(page, 0);
-    await hold(page, 6);
+    await hold(page, 8);
     await note(page, 'decided', SCROLLER);
   } else {
-    console.log('  (no approval control found)');
-    await hold(page, 10);
+    console.log('  (no approval control found -- the decision beat is empty)');
+    await hold(page, 13);
   }
   endBeat();
 
-  // ---------------------------------------------------------------- 9
-  beginBeat('b9-close');
+  // ---------------------------------------------------------------- 13
+  beginBeat('b13-close');
   await jump(page, 0);
-  await hold(page, 12);
+  await hold(page, 13);
   endBeat();
 
   const video = page.video();
   const rawPath = video === null ? null : await video.path();
   await context.close();
 
-  const declared = new Set(manifest.beats.map((b) => b.id));
+  // Beats whose visual is a still (an exhibit image or a source file) have no
+  // footage by design, so they are not expected in the take.
+  const declared = new Set(manifest.beats.filter((b) => !('still' in b)).map((b) => b.id));
   const recorded = new Set(marks.map((m) => m.id));
   for (const id of declared) if (!recorded.has(id)) throw new Error(`beat never filmed: ${id}`);
 

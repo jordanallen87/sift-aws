@@ -481,6 +481,22 @@ test.describe('Bid Comparison -- full demo journey', () => {
     await page.getByTestId('sheet-close').click();
     await expect(page.getByTestId('workspace-priorities-sheet')).not.toBeVisible();
 
+    // Closing the Sheet is not the end of the interaction. "Adjust priorities"
+    // is reached through the app bar's "Add or adjust" dropdown, and Radix
+    // returns focus to that trigger as the Sheet unmounts -- so the menu can
+    // still be painted afterwards. `SiftPage.updateCriteria` already documents
+    // this and presses Escape for the save path; this is the cancel path, which
+    // missed it. Left open, the menu overlaps `request-investigation` and the
+    // integrity assertion below fails with "must not be covered by a
+    // fixed/sticky control" -- observed under a loaded machine, and confirmed
+    // as exactly that by the failure screenshot showing the open menu.
+    //
+    // Escape closes the menu if it opened and does nothing if it did not, which
+    // makes this deterministic either way. This settles a real race rather than
+    // relaxing what the assertion checks.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('workspace-app-bar-create-menu-content')).toBeHidden();
+
     // --- Round 1: real live streaming investigation, driven by the visible control ---
     const round1 = await sift.requestInvestigation();
     await expect(page.getByTestId('live-run-status')).toBeVisible();

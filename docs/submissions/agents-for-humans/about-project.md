@@ -1,18 +1,22 @@
 ## Inspiration
 
-I wanted to build software that could say "not yet."
+Ask a chatbot which of twelve contractor bids to take and you'll have an answer in ten seconds.
+Confident. Plausible. Useless.
 
-Everything that compares options for you works from a fixed checklist. It ranks on the factors it
-was built to know about, and it ranks whether or not the comparison is fair. If the thing that
-matters to you isn't on the list, that's your problem. If the options aren't really comparable yet,
-you get an answer anyway.
+Useless because you're the one signing the award, and "the AI said so" isn't a reason you can give
+anyone. Because when you ask why the third bid lost, it makes something up. Because when you say
+"actually, the deposit schedule matters more to me," it starts over and hands you a different
+answer with the same confidence. And because it never once said "these bids aren't comparable yet."
+It just ranked them.
 
-That's the wrong shape for any decision you have to justify afterwards — awarding a contract,
-picking a vehicle the business depends on, deciding whether a utility bill is worth acting on. The
-person signing needs to know what's been established, what hasn't, and why.
+That's the gap. Not the first answer — models are good at first answers. The answer you can come
+back to tomorrow, challenge, change one input on, and put your name to. That takes a record of what
+was checked, what wasn't, and who decided. A model won't build that on its own. So I built the
+thing around the model that does.
 
-So Sift is built the other way round. You say what matters. It works out what has to be established,
-goes and establishes it, tells you plainly what it couldn't, and leaves the decision with you.
+Sift works the other way round from a chatbot. You say what matters. It works out what has to be
+established before an answer is even allowed, goes and establishes it, tells you plainly what it
+couldn't, and keeps the decision where it belongs. With you.
 
 ## What it does
 
@@ -23,11 +27,18 @@ real to the engine as price: the agents go and establish it for every option, ci
 and it scores like everything else. All three packs declare their own guidance for this. You are not
 picking from a menu somebody else wrote.
 
-**It works out what to do next, from evidence rather than a script.** A decision pack declares the
-obligations that must be satisfied before an answer is allowed. The engine selects the next one from
-the current state of the evidence, and loads only the AgentSkill that obligation needs. As findings
-land, what it does next changes. Reweight your priorities and only the affected question reopens —
-one specialist, one revised pass, not a rerun.
+**It works out what to do next from the evidence, not from a script.** A decision pack declares
+the obligations that must be satisfied before an answer is allowed. The engine picks the next one
+from the current state of the evidence and loads only the AgentSkill that obligation needs. As
+findings land, what it does next changes.
+
+**Change one thing and it doesn't start over.** Reweight your priorities and Sift works out which
+obligation that touched, reopens only that one, and recomputes from there. One specialist, one
+revised pass. It does not ask the model to "answer again."
+
+**It refuses to answer before it's earned the right to.** If the options aren't on a common basis
+yet, the draft is withheld and the missing questions are listed. Unknown never becomes zero.
+Disputed never becomes settled.
 
 **It shows its working and marks its own limits.** Every value carries where it came from. Anything
 a model produced is `agent_proposed`, never `verified` — only a person can attest. Where it couldn't

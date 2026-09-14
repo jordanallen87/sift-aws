@@ -872,7 +872,7 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
 
   compliance: {
     disclaimer:
-      'These are informational minimums on the party making the award -- not a cap on how many bids may be received, and not a claim that any particular number is typical. They are not legal advice: confirm which rules actually govern this award in your own jurisdiction before relying on them.',
+      'These are informational minimums on the party making the award — not a cap on how many bids may be received, and not a claim that any particular number is typical. They are not legal advice: confirm which rules actually govern this award in your own jurisdiction before relying on them.',
     standards: [
       {
         id: 'far-13-104-b-simplified-acquisitions',
@@ -882,7 +882,7 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
         citation: 'FAR 13.104(b) (48 C.F.R. § 13.104(b))',
         authority: 'U.S. Federal Acquisition Regulation',
         humanResponsibility:
-          'Confirm whether this award is a federal simplified acquisition subject to FAR Part 13, and that the required number of sources was actually solicited -- Sift can show how many bids are recorded in this case, not how many sources were invited to bid.',
+          'Confirm whether this award is a federal simplified acquisition subject to FAR Part 13, and that the required number of sources was actually solicited — Sift can show how many bids are recorded in this case, not how many sources were invited to bid.',
       },
       {
         id: 'nc-gs-143-132-public-construction',
@@ -902,7 +902,7 @@ export const BID_COMPARISON_MANIFEST: DecisionPackManifest = {
         citation: 'Idaho Code § 67-2805; 62 Pa. Cons. Stat. § 3902; La. Rev. Stat. § 38:2212',
         authority: 'Idaho, Pennsylvania, and Louisiana state legislatures',
         humanResponsibility:
-          "Confirm which state's threshold, if any, actually governs this award -- the trigger dollar amount and the required bid count both differ by state, and none of them is assumed to apply by default.",
+          "Confirm which state's threshold, if any, actually governs this award — the trigger dollar amount and the required bid count both differ by state, and none of them is assumed to apply by default.",
       },
       {
         id: 'license-and-insurance-verification',

@@ -513,7 +513,19 @@ export function deriveNextMoves(caseState: CaseState, pack: CompiledDecisionPack
   // unanswered soft topic is not: it is nice to know, and offering it ahead
   // of the actual gate would tell someone the wrong thing about what their
   // next step is.
-  if (requiredComplete && !readiness.coverage.blindSpotReviewComplete) {
+  //
+  // It is only a gate when the pack actually declares a contextual check that
+  // applies to this case. A pack that declares none -- `bid-comparison` has no
+  // `blindSpots` at all -- used to offer this move anyway, which made "Check
+  // for anything missed" the pane's primary action and opened a sheet reading
+  // "This decision pack does not declare any contextual checks for this case
+  // yet." That is precisely the dead end the fallback at the bottom of this
+  // function exists to prevent, arrived at through the front door.
+  if (
+    requiredComplete &&
+    !readiness.coverage.blindSpotReviewComplete &&
+    readiness.applicableBlindSpotIds.length > 0
+  ) {
     moves.push({
       kind: 'review_blind_spots',
       label: 'Check for anything missed',

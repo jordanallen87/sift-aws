@@ -393,6 +393,13 @@ export interface WorkspaceAppBarProps {
    * "render nothing" reasoning.
    */
   compliance?: PackCompliance | null | undefined;
+  /**
+   * The active case's Decision Pack id, forwarded straight to `HelpButton`
+   * (and from there to `HowSiftWorksContent`) so "Talking to your
+   * assistant" shows examples shaped for the pack actually on screen. Same
+   * optional/pass-through shape as `compliance` immediately above.
+   */
+  packId?: string | null | undefined;
   layout: 'narrow' | 'expanded';
 }
 
@@ -531,6 +538,7 @@ export function WorkspaceAppBar({
   resetPending = false,
   helpButtonRef,
   compliance,
+  packId,
   layout,
 }: WorkspaceAppBarProps) {
   const connection = CONNECTION_META[connectionState];
@@ -859,6 +867,7 @@ export function WorkspaceAppBar({
           <HelpButton
             {...(helpButtonRef !== undefined ? { ref: helpButtonRef } : {})}
             compliance={compliance}
+            packId={packId}
           />
 
           {/* Icon-only at every width, so this one was already wrapped

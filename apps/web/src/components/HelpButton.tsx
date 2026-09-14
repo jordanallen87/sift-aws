@@ -81,9 +81,19 @@ export interface HelpButtonProps {
    * absent value produces.
    */
   readonly compliance?: PackCompliance | null | undefined;
+  /**
+   * The active case's Decision Pack id, forwarded straight to
+   * `HowSiftWorksContent` so "Talking to your assistant" shows examples
+   * shaped for the pack actually on screen. Optional for the same reason
+   * `compliance` is: the two callers that render this before any case
+   * exists have no pack id to give it, and omitting it correctly falls
+   * back to the default example set -- see
+   * `HowSiftWorksContentProps.packId`'s own doc comment.
+   */
+  readonly packId?: string | null | undefined;
 }
 
-export function HelpButton({ ref, compliance }: HelpButtonProps = {}) {
+export function HelpButton({ ref, compliance, packId }: HelpButtonProps = {}) {
   return (
     <Sheet>
       {/*
@@ -147,7 +157,7 @@ export function HelpButton({ ref, compliance }: HelpButtonProps = {}) {
           role="region"
           aria-label={HOW_SIFT_WORKS_TITLE}
         >
-          <HowSiftWorksContent compliance={compliance} />
+          <HowSiftWorksContent compliance={compliance} packId={packId} />
         </SheetBody>
       </SheetContent>
     </Sheet>

@@ -6,10 +6,13 @@ import { InMemoryModelContextAdapter } from '../model-context/adapter.js';
 import { SIFT_WEBMCP_TOOL_NAMES } from '../model-context/register-sift-tools.js';
 import {
   ASSISTANT_PHRASES,
+  BID_COMPARISON_ASSISTANT_PHRASES,
   HOW_SIFT_WORKS_SUMMARY,
   HOW_SIFT_WORKS_TITLE,
   HowSiftWorksContent,
+  resolveAssistantPhrases,
 } from './HowSiftWorks.js';
+import { DEMO_OPTIONS } from './demo-options.js';
 
 /** WebMCP present: the real `InMemoryModelContextAdapter.supported()` returns `true`. */
 function renderWithWebMcp(props: Parameters<typeof HowSiftWorksContent>[0] = {}) {
@@ -90,10 +93,10 @@ describe('HowSiftWorks shared content', () => {
   it('names the real visible controls, exactly as they render', () => {
     renderWithWebMcp();
     const controls = screen.getByTestId('how-sift-works-controls');
-    // Every string below is a live label: RecommendationHero.tsx ("Ask Sift
-    // to look into this", "Inspect run"), WorkspaceAppBar.tsx ("Findings",
+    // Every string below is a live label: RecommendationHero.tsx ("Have Sift
+    // investigate", "Inspect run"), WorkspaceAppBar.tsx ("Findings",
     // CREATE_MENU_LABEL "Add or adjust"), DemoLauncher.tsx.
-    expect(within(controls).getByText('Ask Sift to look into this')).toBeInTheDocument();
+    expect(within(controls).getByText('Have Sift investigate')).toBeInTheDocument();
     expect(within(controls).getByText('Findings')).toBeInTheDocument();
     expect(within(controls).getByText('Add or adjust')).toBeInTheDocument();
     expect(within(controls).getByText('Inspect run')).toBeInTheDocument();
@@ -104,6 +107,18 @@ describe('HowSiftWorks shared content', () => {
     const start = screen.getByTestId('how-sift-works-start');
     expect(within(start).getByText('Compare vehicles')).toBeInTheDocument();
     expect(within(start).getByText(/Or try a finished example/)).toBeInTheDocument();
+  });
+
+  // Regression gate: this line hard-coded "two ready-made cases" long after
+  // a third (`bid-comparison`) demo card existed. Reading it off
+  // `DEMO_OPTIONS.length` instead -- the exact array `DemoLauncher.tsx`
+  // renders the cards from -- means it cannot go stale again.
+  it('names the real number of ready-made examples, not a hard-coded count', () => {
+    renderWithWebMcp();
+    const start = screen.getByTestId('how-sift-works-start');
+    expect(
+      within(start).getByText(new RegExp(`${DEMO_OPTIONS.length} ready-made cases`)),
+    ).toBeInTheDocument();
   });
 
   it('renders every copy-paste assistant phrase with what it does', () => {
@@ -162,6 +177,80 @@ describe('HowSiftWorks shared content', () => {
 
     const unsupported = renderWithoutWebMcp();
     expect(await axe(unsupported.container)).toHaveNoViolations();
+  });
+});
+
+// Pack-aware "Talking to your assistant" examples (defect: the sheet showed
+// hardcoded car examples -- "I need a dog crate to fit", "the seat position
+// felt wrong on the test drive" -- on every pack, including a
+// bid-comparison case where they read as nonsense next to subcontractor
+// bids). `resolveAssistantPhrases` is the fix; these tests cover both the
+// pure resolver and what it actually renders.
+describe('HowSiftWorks: pack-aware assistant phrases (packId)', () => {
+  it('resolves to the default (car-flavoured) phrases when no pack id is given', () => {
+    expect(resolveAssistantPhrases(null)).toBe(ASSISTANT_PHRASES);
+    expect(resolveAssistantPhrases(undefined)).toBe(ASSISTANT_PHRASES);
+  });
+
+  it('resolves to the default phrases for a pack with no dedicated list of its own', () => {
+    expect(resolveAssistantPhrases('car-purchase')).toBe(ASSISTANT_PHRASES);
+    expect(resolveAssistantPhrases('home-energy-guardian')).toBe(ASSISTANT_PHRASES);
+    expect(resolveAssistantPhrases('some-future-pack-id')).toBe(ASSISTANT_PHRASES);
+  });
+
+  it("resolves to bid-comparison's own phrases for a bid-comparison case", () => {
+    expect(resolveAssistantPhrases('bid-comparison')).toBe(BID_COMPARISON_ASSISTANT_PHRASES);
+  });
+
+  it('cites only tools that are genuinely registered, for the bid-comparison set too', () => {
+    const registered = new Set<string>(SIFT_WEBMCP_TOOL_NAMES);
+    for (const phrase of BID_COMPARISON_ASSISTANT_PHRASES) {
+      expect(phrase.tools.length).toBeGreaterThan(0);
+      for (const tool of phrase.tools) {
+        expect(registered.has(tool), `${tool} is not in SIFT_WEBMCP_TOOL_NAMES`).toBe(true);
+      }
+    }
+  });
+
+  it('never cites an approval-shaped tool in the bid-comparison set, because none exists', () => {
+    const approvalShaped = /approve|reject|review_proposal|reviewProposal/i;
+    for (const phrase of BID_COMPARISON_ASSISTANT_PHRASES) {
+      for (const tool of phrase.tools) {
+        expect(approvalShaped.test(tool)).toBe(false);
+      }
+    }
+  });
+
+  it('renders bid-shaped examples, not the car defaults, on a bid-comparison case', () => {
+    renderWithWebMcp({ packId: 'bid-comparison' });
+    const phrases = screen.getByTestId('how-sift-works-phrases');
+    for (const phrase of BID_COMPARISON_ASSISTANT_PHRASES) {
+      expect(within(phrases).getByText(`“${phrase.phrase}”`)).toBeInTheDocument();
+    }
+    expect(within(phrases).queryByText(/dog crate/i)).not.toBeInTheDocument();
+    expect(within(phrases).queryByText(/test drive/i)).not.toBeInTheDocument();
+    expect(within(phrases).queryByText(/driving comfort/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps rendering the car defaults when no case is open yet', () => {
+    renderWithWebMcp();
+    const phrases = screen.getByTestId('how-sift-works-phrases');
+    expect(
+      within(phrases).getByText('“Look into the safety record on these.”'),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the car defaults for a pack id with no list of its own (home-energy-guardian)', () => {
+    renderWithWebMcp({ packId: 'home-energy-guardian' });
+    const phrases = screen.getByTestId('how-sift-works-phrases');
+    expect(
+      within(phrases).getByText('“Look into the safety record on these.”'),
+    ).toBeInTheDocument();
+  });
+
+  it('has no axe violations rendering the bid-comparison phrase set', async () => {
+    const rendered = renderWithWebMcp({ packId: 'bid-comparison' });
+    expect(await axe(rendered.container)).toHaveNoViolations();
   });
 });
 

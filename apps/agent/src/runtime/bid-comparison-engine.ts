@@ -115,7 +115,15 @@ import {
   extractCitedSourceIds,
   foldExecutionResult,
   loadSnapshotOrThrow,
+  stripInlineSourceCitations,
 } from './car-purchase-scenario.js';
+// Re-exported so this file's own callers, and `bid-comparison-engine.test.ts`,
+// keep importing it from here -- see `car-purchase-scenario.ts`'s
+// `stripInlineSourceCitations` doc comment for why it now lives in the
+// shared module both this file and `home-energy-engine.ts` import from,
+// mirroring that same module's own `export { publisherFor };` re-export
+// idiom just above `extractCitedSourceIds`.
+export { stripInlineSourceCitations };
 import {
   BID_COMPARISON_SEQUENTIAL_SPECIALIST_IDS,
   executeBidComparisonSwarm,
@@ -555,7 +563,7 @@ function recordRecommendationAndProposal(
         id: deps.idGenerator.next('rec'),
         status: 'ready',
         favoredOptionId: favoredBidId,
-        rationale: swarmResult.decisionSynthesizerText,
+        rationale: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
         facts: scored.facts,
         hypotheses: [],
         confidence: scored.confidence,
@@ -692,7 +700,7 @@ export function foldBidComparisonRound1(
       disposition: 'evidence_found',
       claims: [
         {
-          statement: swarmResult.decisionSynthesizerText,
+          statement: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
           stance: 'supports',
           confidence: 0.8,
           sourceIds,
@@ -759,7 +767,7 @@ export function foldBidComparisonRound2(
       disposition: 'evidence_found',
       claims: [
         {
-          statement: swarmResult.decisionSynthesizerText,
+          statement: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
           stance: 'supports',
           confidence: 0.85,
           sourceIds,

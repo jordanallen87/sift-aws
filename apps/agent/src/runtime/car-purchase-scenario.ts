@@ -1339,3 +1339,60 @@ export function humanizeDecisionText(text: string, labels: ReadonlyMap<string, s
   }
   return result;
 }
+
+/**
+ * The bid-comparison and home-energy-guardian live engines' own §34 (DoD
+ * item 34) strategy -- a sibling to `humanizeDecisionText` above, not a
+ * duplicate. `bid-comparison-engine.ts`'s `foldBidComparisonRound1`/
+ * `foldBidComparisonRound2`/`recordRecommendationAndProposal` and
+ * `home-energy-engine.ts`'s `foldHomeEnergyRound1`/`foldHomeEnergyRound2`
+ * already call `extractCitedSourceIds` (above) on a decision-synthesizer's
+ * raw text to build `Recommendation.sourceIds` -- the data that already
+ * renders, correctly, as its own citation chips beneath the rationale
+ * (`RecommendationCard.tsx`). Rendering that same raw text a second time,
+ * inline, cited every source twice: once as an unreadable machine id in
+ * running prose (e.g. "per source-current-bill-household-demo-energy-01"),
+ * once as a proper chip. Neither engine needs `humanizeDecisionText`'s
+ * substitute-a-real-label treatment for its own response-option/bid ids --
+ * both packs' scripted decision-synthesizer prose already names the winning
+ * option/contractor in plain words, never its raw id (see
+ * `bid-comparison-engine.ts`'s own header comment, difference 2) -- so only
+ * the inline source citations need removing here, not id substitution.
+ *
+ * Both packs' `GoalLoop` validators genuinely require at least one
+ * `source-...` citation to accept the synthesis, so every caller MUST call
+ * `extractCitedSourceIds` (and build `evidenceResults`/`sourceIds`) from the
+ * ORIGINAL, unstripped text first -- once a source id is stripped here it
+ * can no longer be recovered from the stripped copy. This function is the
+ * display-only half of that split; it never runs before validation or
+ * extraction, only before rendering.
+ *
+ * Three citation shapes are stripped, covering both packs' real shipped
+ * prose (`scripted-beats/bid-comparison.ts`'s `DECISION_TEXT_ROUND1`/
+ * `DECISION_TEXT_ROUND2`, `scripted-beats/home-energy-guardian.ts`'s own):
+ *  - bid-comparison's standalone parenthetical whose entire content is one
+ *    source id -- `"... is $279,000.00 (source-bid-calculator-bid-cedar-
+ *    adjusted-total), not ..."` -- the whole `" (source-...)"` span is
+ *    removed;
+ *  - bid-comparison's source id appended, comma-separated, inside a
+ *    parenthetical that also carries other content -- `"($276,000.00,
+ *    source-bid-calculator-bid-northgate-adjusted-total)"` -- only the
+ *    `", source-..."` tail is removed, leaving `"($276,000.00)"` intact;
+ *  - home-energy-guardian's bare, un-parenthesized citation clause --
+ *    `"...before taking further action, per source-current-bill-household-
+ *    demo-energy-01 and source-household-event-event-thermostat-failure-
+ *    2026-07."` -- the whole `", per source-... [and/, source-...]*"` clause
+ *    is removed, leaving the sentence's own period untouched.
+ *
+ * Also normalizes the literal `--` a scripted/model response uses for an em
+ * dash into the real `—` character the rest of the product's prose uses
+ * (e.g. `CaseInsightsPanel.tsx`'s "measured across 100% of the weight — none
+ * of which you have set yet").
+ */
+export function stripInlineSourceCitations(text: string): string {
+  return text
+    .replace(/,\s*source-[a-z0-9-]+(?=\))/gi, '')
+    .replace(/ \(source-[a-z0-9-]+\)/gi, '')
+    .replace(/,\s*per\s+source-[a-z0-9-]+(?:\s*(?:,|and)\s*source-[a-z0-9-]+)*/gi, '')
+    .replace(/ -- /g, ' — ');
+}

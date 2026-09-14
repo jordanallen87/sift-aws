@@ -120,6 +120,7 @@ import {
   extractCitedSourceIds,
   foldExecutionResult,
   loadSnapshotOrThrow,
+  stripInlineSourceCitations,
 } from './car-purchase-scenario.js';
 import { diffJsonValues, normalizeCaseStateChange, type RuntimeEvent } from './event-normalizer.js';
 import {
@@ -139,6 +140,13 @@ import {
   type HomeEnergySwarmScriptedProviders,
 } from './scripted-beats/home-energy-guardian.js';
 import { deriveScoredRecommendationFields, mergeLimitations } from './recommendation-scoring.js';
+
+// Re-exported for the same direct-unit-testability reason
+// `bid-comparison-engine.ts` re-exports it: see
+// `car-purchase-scenario.ts`'s `stripInlineSourceCitations` doc comment for
+// why this text-cleanup helper is shared, not duplicated, between the two
+// live Swarm-hero engines.
+export { stripInlineSourceCitations };
 
 /**
  * Exported for the same reason `car-purchase-scenario.ts`'s
@@ -686,7 +694,7 @@ export function foldHomeEnergyRound1(
       disposition: 'evidence_found',
       claims: [
         {
-          statement: swarmResult.decisionSynthesizerText,
+          statement: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
           stance: 'supports',
           confidence: 0.8,
           sourceIds,
@@ -730,7 +738,7 @@ export function foldHomeEnergyRound1(
         id: deps.idGenerator.next('rec'),
         status: 'ready',
         favoredOptionId,
-        rationale: swarmResult.decisionSynthesizerText,
+        rationale: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
         facts: scored.facts,
         hypotheses: [],
         confidence: scored.confidence,
@@ -801,7 +809,7 @@ export function foldHomeEnergyRound2(
       disposition: 'evidence_found',
       claims: [
         {
-          statement: swarmResult.decisionSynthesizerText,
+          statement: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
           stance: 'supports',
           confidence: 0.85,
           sourceIds,
@@ -847,7 +855,7 @@ export function foldHomeEnergyRound2(
         id: deps.idGenerator.next('rec'),
         status: 'ready',
         favoredOptionId,
-        rationale: swarmResult.decisionSynthesizerText,
+        rationale: stripInlineSourceCitations(swarmResult.decisionSynthesizerText),
         facts: scored.facts,
         hypotheses: [],
         confidence: scored.confidence,

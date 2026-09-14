@@ -322,7 +322,7 @@ const SAFETY_RESULT: ExecutionResult = {
     },
   ],
   limitations: [
-    "candidate-outback's reliability rating cannot be resolved to a single value -- both sources are current and traceable but measure different things (realized owner complaints vs. predicted powertrain risk).",
+    "candidate-outback's reliability rating cannot be resolved to a single value — both sources are current and traceable but measure different things (realized owner complaints vs. predicted powertrain risk).",
   ],
   suggestedStatus: 'accepted_uncertainty',
 };
@@ -386,7 +386,7 @@ const HOUSEHOLD_FIT_ROUND2_RESULT: ExecutionResult = {
     summary: `Known cargo/rear-seat specifications re-confirmed for ${candidateId}.`,
   })),
   limitations: [
-    "Whether a rear-facing seat fits behind the driver without moving the driver's seat forward cannot be established from published specifications for any candidate -- it is a physical fit check in the vehicle itself, with this household's own seat.",
+    "Whether a rear-facing seat fits behind the driver without moving the driver's seat forward cannot be established from published specifications for any candidate — it is a physical fit check in the vehicle itself, with this household's own seat.",
     'Driving comfort remains subjective and unresolved for every candidate pending a test drive.',
   ],
   suggestedStatus: 'accepted_uncertainty',
@@ -426,7 +426,7 @@ const CHALLENGE_ROUND1_RESULT: ExecutionResult = {
   claims: [
     {
       statement:
-        "Verified: candidate-rav4's true out-the-door price of $33,291.30 (after a mandatory $2,394.00 Value Protection Package and a 75-month financing term) is a real, sourced conflict with its $27,995.00 advertised price -- $1,291.30 over the household's $32,000.00 maximum budget, not a data error.",
+        "Verified: candidate-rav4's true out-the-door price of $33,291.30 (after a mandatory $2,394.00 Value Protection Package and a 75-month financing term) is a real, sourced conflict with its $27,995.00 advertised price — $1,291.30 over the household's $32,000.00 maximum budget, not a data error.",
       stance: 'opposes',
       confidence: 0.95,
       sourceIds: ['source-dealer-offer-candidate-rav4'],
@@ -512,7 +512,7 @@ export const PROPOSAL_ROUND1: CarPurchaseProposal = {
 };
 
 const DECISION_TEXT_ROUND1 =
-  'Recommend candidate-rav4 per source-national-crash-safety-consortium, source-northfield-vehicle-safety-lab, and source-consumer-drive-index -- the strongest, least-disputed safety and reliability record, and the best fuel economy of the four candidates. Its deal terms remain under review (source-dealer-offer-candidate-rav4).';
+  'Recommend candidate-rav4 per source-national-crash-safety-consortium, source-northfield-vehicle-safety-lab, and source-consumer-drive-index — the strongest, least-disputed safety and reliability record, and the best fuel economy of the four candidates. Its deal terms remain under review (source-dealer-offer-candidate-rav4).';
 
 /** Round 2's `propose_recommendation` call: revised to favor `candidate-crv`, with `candidate-outback` as the close alternative. */
 export const PROPOSAL_ROUND2: CarPurchaseProposal = {

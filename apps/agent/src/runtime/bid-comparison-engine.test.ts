@@ -28,9 +28,14 @@ import {
   createBidComparisonEngine,
   determineBidComparisonRound,
   extractFavoredBidId,
+  stripInlineSourceCitations,
   type BidComparisonEngine,
 } from './bid-comparison-engine.js';
-import { ROUND2_CRITERIA_WEIGHTS } from './scripted-beats/bid-comparison.js';
+import {
+  DECISION_TEXT_ROUND1,
+  DECISION_TEXT_ROUND2,
+  ROUND2_CRITERIA_WEIGHTS,
+} from './scripted-beats/bid-comparison.js';
 
 const SKILLS_ROOT_DIR = fileURLToPath(new URL('../../skills', import.meta.url));
 const FIXED_CLOCK: Clock = { now: () => '2026-08-27T00:00:00.000Z' };
@@ -530,6 +535,61 @@ describe('extractFavoredBidId', () => {
 
   it('returns null when the text names no known contractor anywhere', () => {
     expect(extractFavoredBidId('No bid is clearly favored yet.', bidIdByName)).toBeNull();
+  });
+});
+
+/**
+ * `stripInlineSourceCitations` is the display-only half of the split
+ * documented on its own declaration: `decision-synthesizer`'s raw text
+ * cites a `source-...` id inline for every claim (required by
+ * `DEFAULT_SYNTHESIZER_VALIDATOR` and consumed by `extractCitedSourceIds`
+ * to build `Recommendation.sourceIds`), but that same raw text used to be
+ * rendered to a person verbatim -- so every citation showed up twice: once
+ * as an unreadable machine id in running prose, once as a proper chip
+ * (`RecommendationCard.tsx`). This suite pins the two citation shapes this
+ * pack's real shipped prose (`DECISION_TEXT_ROUND1`/`DECISION_TEXT_ROUND2`)
+ * actually uses, plus the literal `--`-as-em-dash the same prose also
+ * carries.
+ */
+describe('stripInlineSourceCitations', () => {
+  it('removes a standalone parenthetical whose entire content is one source id', () => {
+    expect(
+      stripInlineSourceCitations(
+        'its scope-normalized adjusted total is $279,000.00 (source-bid-calculator-bid-cedar-adjusted-total), not $223,500.00.',
+      ),
+    ).toBe('its scope-normalized adjusted total is $279,000.00, not $223,500.00.');
+  });
+
+  it('removes only the comma-separated source id inside a parenthetical that also carries other content', () => {
+    expect(
+      stripInlineSourceCitations(
+        'adjusted total ($276,000.00, source-bid-calculator-bid-northgate-adjusted-total) remains lower',
+      ),
+    ).toBe('adjusted total ($276,000.00) remains lower');
+  });
+
+  it('converts a spaced literal "--" into a real em dash, matching the rest of the product\'s prose convention', () => {
+    expect(stripInlineSourceCitations('two -- Westbrook and Brightwater -- are each silent')).toBe(
+      'two — Westbrook and Brightwater — are each silent',
+    );
+  });
+
+  it('leaves text with no citation or em-dash pattern untouched', () => {
+    const plain = 'Recommend awarding to Northgate Plumbing.';
+    expect(stripInlineSourceCitations(plain)).toBe(plain);
+  });
+
+  it('strips every source id and literal "--" out of the real shipped round1/round2 rationale, while keeping the dollar figures and contractor names a person needs', () => {
+    for (const raw of [DECISION_TEXT_ROUND1, DECISION_TEXT_ROUND2]) {
+      const cleaned = stripInlineSourceCitations(raw);
+      expect(cleaned).not.toMatch(/\bsource-[a-z0-9-]+\b/i);
+      expect(cleaned).not.toMatch(/ -- /);
+      expect(cleaned).not.toMatch(/ {2}/);
+      expect(cleaned).toContain('279,000');
+      expect(cleaned).toContain('276,000');
+      expect(cleaned).toContain('Cedar');
+      expect(cleaned).toContain('Northgate');
+    }
   });
 });
 

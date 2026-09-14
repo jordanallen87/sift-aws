@@ -860,6 +860,28 @@ describe('deriveNextMoves: the pane always has a next action', () => {
     expect(moves[0]?.kind).toBe('review_blind_spots');
   });
 
+  it('never offers the blind-spot review to a pack that declares no contextual checks', () => {
+    // `bid-comparison` declares no `blindSpots` at all. Offering the review
+    // anyway made "Check for anything missed" the pane's primary action and
+    // opened a sheet reading "This decision pack does not declare any
+    // contextual checks for this case yet" -- a dead end reached through the
+    // front door, which this function's own fallback exists to prevent.
+    const answeredTopics = [
+      topic(),
+      topic({ topicId: 'vehicle.occupants', valueSummary: 'Two adults, two children' }),
+      topic({ topicId: 'vehicle.budget', valueSummary: 'Under 40,000' }),
+    ];
+
+    const moves = deriveNextMoves(
+      caseWith(answeredTopics),
+      pack({ discovery: { ...DISCOVERY, blindSpots: [] } }),
+    );
+
+    expect(moves.map((move) => move.kind)).not.toContain('review_blind_spots');
+    // and the pane still has somewhere to go, rather than going quiet.
+    expect(moves.length).toBeGreaterThan(0);
+  });
+
   it('leads with discovering candidates once the case is ready and has none', () => {
     const moves = deriveNextMoves(answeredCase(), pack());
     expect(moves[0]?.kind).toBe('discover_candidates');

@@ -55,6 +55,7 @@ import {
   SIFT_WEBMCP_TOOL_NAMES,
   type SiftWebMcpToolName,
 } from '../model-context/register-sift-tools.js';
+import { DEMO_OPTIONS } from './demo-options.js';
 
 /** Shared between the first-run guide and the Help sheet, so the two can never announce themselves differently. */
 export const HOW_SIFT_WORKS_TITLE = 'How Sift works';
@@ -85,8 +86,13 @@ export interface AssistantPhrase {
  * something the pack never anticipated, record a human impression, change
  * the view.
  *
- * Car-flavoured because Choose Our Next Car is the WebMCP hero pack and the
- * first case a judge opens, but every tool cited is pack-agnostic.
+ * Car-flavoured because Choose Our Next Car was the original WebMCP hero
+ * pack, and this is still the default set -- shown before any case exists
+ * (the launcher's own `HelpButton`) and for every pack that has not earned
+ * its own list below. Every tool cited is pack-agnostic; only the wording
+ * is car-specific. See `resolveAssistantPhrases` for how a pack-specific
+ * list (currently just `BID_COMPARISON_ASSISTANT_PHRASES`) overrides this
+ * default once a case is open.
  */
 export const ASSISTANT_PHRASES: readonly AssistantPhrase[] = [
   {
@@ -120,6 +126,84 @@ export const ASSISTANT_PHRASES: readonly AssistantPhrase[] = [
     tools: ['sift_set_view'],
   },
 ];
+
+/**
+ * Bid Comparison's own examples (Professional Agents track, ADR 0017) --
+ * this project's hero pack now, so its Help sheet earns wording that
+ * actually matches what is on screen (subcontractor bids, not vehicles)
+ * rather than inheriting `ASSISTANT_PHRASES`' car-flavoured defaults. Same
+ * six-slot shape and the same tools, in the same order, as `ASSISTANT_PHRASES`
+ * above -- only the phrase/effect prose changes per pack; the underlying
+ * WebMCP capability being demonstrated does not.
+ *
+ * The two pack-agnostic entries ("What's driving the ranking?", "Show me
+ * these side by side.") are shared verbatim with `ASSISTANT_PHRASES` on
+ * purpose -- they read naturally for any pack, so duplicating them with
+ * different words would be drift waiting to happen, not an improvement.
+ */
+export const BID_COMPARISON_ASSISTANT_PHRASES: readonly AssistantPhrase[] = [
+  {
+    phrase: 'Check their licenses and insurance.',
+    effect: 'Starts a real investigation run; sourced findings land in this pane as they arrive.',
+    tools: ['sift_request_investigation'],
+  },
+  {
+    phrase: "What's driving the ranking?",
+    effect: "Reads out Sift's own scoring, criterion by criterion, instead of guessing at one.",
+    tools: ['sift_explain_ranking'],
+  },
+  {
+    phrase: 'Make warranty term matter more than price.',
+    effect: 'Reweights the criteria, and marks whatever that invalidates as needing another look.',
+    tools: ['sift_update_criteria'],
+  },
+  {
+    phrase:
+      'I need the contractor to pull their own permits — make that one of the things we compare.',
+    effect: 'Defines a typed concern the pack never anticipated, then gives it weight.',
+    tools: ['sift_define_case_attribute', 'sift_update_criteria'],
+  },
+  {
+    phrase: 'Add a note that the low bidder seemed rushed during the walkthrough.',
+    effect: 'Files your observation on the case. A note is never treated as evidence.',
+    tools: ['sift_add_note'],
+  },
+  {
+    phrase: 'Show me these side by side.',
+    effect: 'Switches the pane to the Compare view. Presentation only — nothing is re-decided.',
+    tools: ['sift_set_view'],
+  },
+];
+
+/**
+ * Every pack-specific example set, keyed by `CompiledDecisionPack.identity.id`
+ * (`car-purchase` deliberately absent -- `ASSISTANT_PHRASES` already covers
+ * it as the default `resolveAssistantPhrases` falls back to).
+ */
+const ASSISTANT_PHRASES_BY_PACK_ID: Readonly<Record<string, readonly AssistantPhrase[]>> = {
+  'bid-comparison': BID_COMPARISON_ASSISTANT_PHRASES,
+};
+
+/**
+ * Which example set the Help sheet shows for the given active case, keyed
+ * by its Decision Pack id. Falls back to the car-flavoured `ASSISTANT_PHRASES`
+ * for `null`/`undefined` (no case open yet -- the launcher's `HelpButton`)
+ * and for any pack id that has not earned its own list (`car-purchase`
+ * itself, and `home-energy-guardian`, which reads acceptably generic today).
+ *
+ * Takes a plain `string` rather than a typed pack-id union deliberately:
+ * the pack id on a live case comes from `CompiledDecisionPack.identity.id`
+ * (`packages/contracts`' `PackIdentitySchema`, an open string, not a
+ * closed enum -- packs are user-authorable), so this can never fail to
+ * compile against a real pack id and simply falls back safely for one it
+ * does not recognise.
+ */
+export function resolveAssistantPhrases(
+  packId: string | null | undefined,
+): readonly AssistantPhrase[] {
+  if (packId === null || packId === undefined) return ASSISTANT_PHRASES;
+  return ASSISTANT_PHRASES_BY_PACK_ID[packId] ?? ASSISTANT_PHRASES;
+}
 
 /**
  * A labelled block. Lifted out of `HelpButton.tsx` unchanged when this
@@ -227,11 +311,21 @@ export interface HowSiftWorksContentProps {
    * titled "What gets checked" that says nothing.
    */
   readonly compliance?: PackCompliance | null | undefined;
+  /**
+   * The active case's Decision Pack id (`CompiledDecisionPack.identity.id`),
+   * used only to choose which `ASSISTANT_PHRASES`-shaped example set
+   * `resolveAssistantPhrases` returns for "Talking to your assistant" --
+   * see that function's own doc comment. `null`/omitted (no active case,
+   * or a pack with no dedicated list yet) falls back to the car-flavoured
+   * default, exactly like `compliance` above.
+   */
+  readonly packId?: string | null | undefined;
 }
 
 export function HowSiftWorksContent({
   webMcpSupported,
   compliance,
+  packId,
 }: HowSiftWorksContentProps = {}) {
   const detected = useWebMcpSupported();
   const supported = webMcpSupported ?? detected;
@@ -242,6 +336,7 @@ export function HowSiftWorksContent({
   // `compliance` (and therefore this string) is genuinely present.
   const standards = compliance?.standards ?? [];
   const complianceDisclaimer = compliance?.disclaimer ?? '';
+  const assistantPhrases = resolveAssistantPhrases(packId);
 
   return (
     <div className="flex flex-col gap-[var(--space-5)]">
@@ -251,14 +346,15 @@ export function HowSiftWorksContent({
             browse the bundled catalog, build your own shortlist, and start a real case.
           </ControlRow>
           <ControlRow name="Or try a finished example">
-            two ready-made cases, already part-way through, if you would rather start mid-flight.
+            {DEMO_OPTIONS.length} ready-made cases, already part-way through, if you would rather
+            start mid-flight.
           </ControlRow>
         </ul>
       </HelpSection>
 
       <HelpSection label="The controls in this pane" testId="how-sift-works-controls">
         <ul className="flex list-none flex-col gap-[var(--space-1-5)] p-0">
-          <ControlRow name="Ask Sift to look into this">
+          <ControlRow name="Have Sift investigate">
             sends Sift to work the open questions and bring back sourced findings.
           </ControlRow>
           <ControlRow name="Findings">
@@ -293,7 +389,7 @@ export function HowSiftWorksContent({
         </p>
 
         <dl data-testid="how-sift-works-phrases" className="flex flex-col gap-[var(--space-3)]">
-          {ASSISTANT_PHRASES.map((entry) => (
+          {assistantPhrases.map((entry) => (
             <div
               key={entry.phrase}
               /*

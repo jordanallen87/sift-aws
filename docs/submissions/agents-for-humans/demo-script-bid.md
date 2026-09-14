@@ -26,7 +26,7 @@ Every quoted UI string below was read off a rendered baseline image or the compo
 
 > **You still must rehearse this once in a browser before recording.** The e2e suite proves each beat happens; it does not prove they are *findable on camera in this order* at your window size. Scroll positions in particular are unverified prose here.
 
-> **Start the service with `SIFT_DEMO_PACING_MS=250`.** Without it there is nothing to watch — a scripted model turn returns instantly and the whole six-specialist investigation is over before you can narrate it. Pacing changes nothing but wall-clock: identical events, counts, ordering.
+> **Start the service with `SIFT_DEMO_PACING_MS=2000`.** Pacing changes nothing but wall-clock: identical events, counts, ordering. Use the maximum, not 250. Measured by driving the real product on 2026-09-13: at `250` the whole six-specialist investigation is over in **about 6 seconds**, which leaves beats 2 and 3 — ninety seconds of narration — talking over a screen that has already finished. At `2000` the same run takes **62.7 seconds** (scope analyst 10.1s, price analyst 18.1s, credential checker 12.0s, schedule analyst 10.0s, source check 6.0s, recommendation 6.0s), so beat 2 has live activity under it and beat 3 lands while the run is still going. `2000` is the ceiling the config allows (`apps/agent/src/config.ts`: `integerFromEnvString(0, 2000)`).
 
 > **Keep the window at 390–480px.** This is a ChatGPT-right-pane product; a maximized desktop window misrepresents it.
 
@@ -53,9 +53,9 @@ Everything else in the video serves that sentence.
 
 ### Beat 2 — a real Strands Swarm, and two interventions you can see (0:30–1:20, 50s)
 
-Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEAM"** panel fills in live.
+Press **"Have Sift investigate"**. With pacing on, the **"INVESTIGATION TEAM"** panel fills in live, and ends on **"All 6 specialists finished."**
 
-**On screen:** six specialists in sequence — scope analyst, price analyst, credential checker, schedule analyst, source challenger, recommendation. Four AgentSkills activate, one per obligation. Two moments to point at as they land:
+**On screen:** six specialists in sequence — **"Scope analyst"**, **"Price analyst"**, **"Credential checker"**, **"Schedule analyst"**, **"Source check"**, **"Recommendation"** (the panel's own labels; the fifth is "Source check" on screen, not "source challenger"). Four AgentSkills activate, one per obligation. Two moments to point at as they land:
 
 - **Scope analyst** ends **"Completed · Redirected once"**. That is a real `Guide` intervention: it ran the same scope comparison twice with no new angle, and RetrySteering pushed it to the third bid.
 - In the activity stream, **"Action blocked"**. That is a `Deny`: the price analyst reached for the licence registry, a tool this pack grants only to the credential checker.
@@ -91,7 +91,9 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 
 ### Beat 5 — it still won't call two questions closed (2:45–3:15, 30s)
 
-**On screen:** the amber band with a findings count and a **"Review findings"** button. Open it. (Round 1 leaves two obligations open; the count on the band rises to three once you reweight in beat 6.)
+**On screen:** the amber band with a findings count and a **"Review findings"** button. Open it.
+
+**Corrected 2026-09-13 by driving it:** the band reads **"3 findings need your attention."** in **round 1**, before any reweight. This script previously said the band showed two in round 1 and rose to three after beat 6's reweight; that was wrong, and it is the count that is actually on camera. Two *obligations* do end round 1 `open` (`bid.scope_normalization` and `bid.credential_verification`) — that is the separate, and still correct, claim the narration below makes. Findings and obligations are different counts of different things; do not read the band as an obligation count. Re-check the round-2 band during your own rehearsal before narrating any number for it.
 
 **Narration:**
 > "It recommended a winner and it still won't mark two of these questions answered. Cedar's scope comparison came back incomplete, and two of the twelve fail credential verification on two different grounds — a certificate naming the wrong company, and a licence class with no plumbing endorsement. Evidence here is fail-closed: a degraded answer doesn't get to count as settled just because everything else passed."
@@ -102,7 +104,31 @@ Press **"Ask Sift to look into this"**. With pacing on, the **"INVESTIGATION TEA
 
 ### Beat 6 — your priorities, and a constraint that outranks a winning score (3:15–3:55, 40s)
 
-**On screen:** app bar **"Add"** ("Add or adjust") → **"Adjust priorities"**. Raise **warranty term** and **payment risk**, lower **scope-normalized adjusted total**. Save, then **"Ask Sift to look into this"** again.
+**On screen:** app bar **"Add"** (the `+` icon, labelled "Add or adjust") → **"Adjust priorities"**. Set the five weights to **exactly** these values, then **"Save weights"**, then **"Have Sift investigate"** again.
+
+| Slider, as labelled on screen | From | **To** |
+| --- | --- | --- |
+| Lowest scope-normalized cost | 45 | **15** |
+| Scope completeness | 20 | **10** |
+| Payment risk (deposit requested) | 15 | **40** |
+| Schedule fit (start date and duration) | 10 | **5** |
+| Warranty term | 10 | **30** |
+| | | *(totals 100)* |
+
+**These exact numbers matter, and this script used not to state them.** They are `ROUND2_CRITERIA_WEIGHTS` (`apps/agent/src/runtime/scripted-beats/bid-comparison.ts:192`). The round-2 rationale is a **fixed scripted string**, keyed only to which side of the round-1/round-2 threshold the run lands on — never recomputed from the weights you actually supply. So any other weighting that still crosses the threshold produces a *correct* ranking underneath narration that describes **this** weighting: the prose will say Two Rivers leads on "a 36-month warranty and a 20% deposit" whether or not you upweighted warranty at all. The ranking is always honest; only the prose is fixed. Set these five numbers and the words match the screen. (`tests/e2e/bid-comparison-journey.spec.ts` records this same limitation in its header, deliberately using a *different* weighting to prove the mechanics are independent of the narrative text.)
+
+The sixth criterion, **"License and insurance credentials are valid,"** has no slider — the sheet states it "is set by the pack and cannot be reweighted." That is the hard constraint this beat is about, and it is worth pointing at on camera.
+
+**Then switch to the ranked list, or the narration has nothing to point at.** The twelve ranked bids are NOT on the recommendation view — they live behind the **List** view tab (the second of four icon-only tabs in the view strip, above the option cards; the others are Best Match, Compare and Board). This script previously narrated "eleventh of twelve, ninety-one percent" without ever saying to go there. Verified rendering on 2026-09-13, after the reweight above:
+
+| | rendered position | rendered score |
+| --- | --- | --- |
+| Northgate Plumbing | **#1 of 12** | **72%** |
+| Two Rivers Mechanical | **#11 of 12** | **91%** |
+| Fieldstone Plumbing Co. | **#12 of 12** | **37%** |
+| Cedar & Sons | **#10 of 12** | **24%** |
+
+Two Rivers' card carries the flag verbatim: **"Misses — License and insurance credentials are valid"** and **"Flagged, not removed — still ranked, and still yours to decide."** That sentence is the beat. Point the camera at it.
 
 **Narration:**
 > "Say you care less about price and more about warranty and a sane deposit. Change the weights — the ranking is arithmetic the model never touches. And now Two Rivers scores highest of all twelve. Ninety-one percent, the biggest number on the board; the winner is on seventy-two. It still doesn't win. Its insurance names TRM Holdings, not Two Rivers Mechanical — and credentials are a hard constraint, not a preference. Look what the product does with it: it doesn't hide it. Eleventh of twelve, ninety-one percent still showing, and it says 'flagged, not removed — still ranked, and still yours to decide.'"
@@ -124,7 +150,12 @@ Both flagged bids hold the 2nd and 3rd highest raw totals of the twelve in round
 
 ### Beat 7 — the agent recommends; it never awards (3:55–4:25, 30s)
 
-**On screen:** the pending award proposal. Press **"Confirm what moves forward"** yourself, on camera.
+**On screen:** the pending award proposal. Two controls, in this order, and the script used to name only the first:
+
+1. **"Confirm what moves forward"** — the pane's primary action at the bottom. This does **not** award anything; it takes you to the pending proposal. Pressing it and expecting the award to land is the mistake this note exists to prevent.
+2. **"Select Northgate Plumbing"** — the actual human approval, on the proposal card itself, beside **"Pass"** and **"Continue investigation"**. Press this one on camera. The case status flips to **"Decided"**.
+
+Verified end to end on 2026-09-13: after "Select Northgate Plumbing", the case reads `Decided` and the pane's primary action becomes "Review what was decided".
 
 **Narration:**
 > "Awarding a contract is real money leaving a real business. So this is gated — a `Confirm` intervention, and the proposal sits pending with no approving actor until a person acts. The agent got to recommend. I'm the one who awards. That boundary is structural, not a setting I could switch off."
@@ -166,6 +197,36 @@ Both flagged bids hold the 2nd and 3rd highest raw totals of the twelve in round
 If you run long, take it from beat 8, not from beats 3 or 6.
 
 **Word budget.** At a normal 150 words per minute, every narration block above fits its window with room for the on-screen action: beats 1-9 measure 72 / 60 / 68 / 71 / 65 / 103 / 52 / 52 / 21 words, i.e. roughly 29 / 24 / 27 / 28 / 26 / 41 / 21 / 21 / 8 seconds. Beat 6 is the only one with no slack. Anyone editing a narration line should re-count it — this script went over budget once already when the case grew from three bids to twelve and every figure in it had to be restated.
+
+## Strongest material this script does not use
+
+Held back deliberately, because the nine beats already sum to 300s and the cap is
+disqualifying — but this is the best answer to a judge's question, and worth knowing
+is there. Open **Help ("?" in the app bar) → "What gets checked"** on a bid case.
+
+The pack declares the real-world rules its domain is actually governed by, each with a
+citation, a "Sift checks" line saying what the product verifies itself, and a "Your
+responsibility" line saying what it does not:
+
+- **FAR 13.104(b)** (48 C.F.R. § 13.104(b)) — consider at least three sources on federal
+  simplified acquisitions.
+- **N.C. Gen. Stat. § 143-132** — no award without at least three competitive bids, with
+  the temporary water/sewer carve-out effective 2026-07-07 called out.
+- Comparable minimum-bid thresholds in **Idaho, Pennsylvania and Louisiana**, explicitly
+  noted as differing in both trigger amount and required bid count.
+- **Active licence and insurance covering the scope of work** — which is the rule the
+  demo's own Two Rivers and Fieldstone flags come from.
+
+Why it is strong for *Professional Agents* specifically: it is the clearest evidence that
+this is a professional tool that knows its domain's rules, rather than a ranking UI with a
+construction theme. It also models the honest boundary the whole submission argues for —
+the product states plainly which checks it performs and which remain the human's, and it
+disclaims legal advice outright.
+
+Use it if a judge asks "how does it know what matters here?", or if a beat runs short.
+Shipped in `6c68610`.
+
+---
 
 ## What this script does not claim
 

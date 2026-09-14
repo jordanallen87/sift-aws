@@ -61,6 +61,7 @@ import { CardDescription, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { HelpButton } from './HelpButton.js';
+import { DEMO_OPTIONS } from './demo-options.js';
 
 export interface DemoLauncherProps {
   /** Called once `startDemo` resolves, with the real `CommandReceipt` (carrying the fresh `caseId`) -- lets `App` transition from the launcher to the case workspace. */
@@ -68,34 +69,6 @@ export interface DemoLauncherProps {
   /** Called when the primary "Compare vehicles" action is clicked (docs/decisions/0003-vehicle-catalog-and-normal-case-creation.md) -- lets `App` transition into `VehicleCatalogFlow`. Optional so this component still renders correctly (minus that one action) in isolation/tests that don't need it. */
   onCompareVehicles?: () => void;
 }
-
-interface DemoOption {
-  demoId: DemoId;
-  testId: string;
-  label: string;
-  description: string;
-}
-
-const DEMO_OPTIONS: readonly DemoOption[] = [
-  {
-    demoId: 'car-purchase',
-    testId: 'demo-launcher-car-purchase',
-    label: 'Choose our next car',
-    description: 'Compare shortlisted vehicles and dealer offers before you buy.',
-  },
-  {
-    demoId: 'home-energy-guardian',
-    testId: 'demo-launcher-home-energy-guardian',
-    label: 'Investigate my energy bill',
-    description: 'Find out why a utility bill changed and what to do about it.',
-  },
-  {
-    demoId: 'bid-comparison',
-    testId: 'demo-launcher-bid-comparison',
-    label: 'Compare these bids',
-    description: 'Put subcontractor bids on the same footing before you award one.',
-  },
-];
 
 type LauncherStatus =
   | { kind: 'idle' }
@@ -256,7 +229,7 @@ export function DemoLauncher({ onDemoStarted, onCompareVehicles }: DemoLauncherP
               Start a Sift case
             </h1>
             <p className="text-[length:var(--font-size-sm)] text-muted-foreground">
-              Compare real vehicles from the bundled catalog, or try a finished example.
+              Compare your options side by side, backed by evidence — try a finished example below.
             </p>
           </div>
         </div>

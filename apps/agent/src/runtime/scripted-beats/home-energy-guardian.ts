@@ -324,7 +324,7 @@ export const HOUSEHOLD_CHANGE_CONTEXT: ExecutionResult = {
     },
   ],
   limitations: [
-    'A plausible, not certain, explanation -- household-events.json supports correlation, not proof.',
+    'A plausible, not certain, explanation — household-events.json supports correlation, not proof.',
   ],
   suggestedStatus: 'accepted_uncertainty',
 };
@@ -435,7 +435,15 @@ export const ROUND1_RECOMMENDED_OPTION_ID = 'monitor-one-cycle';
 export const ROUND2_COST_WEIGHT = 20;
 export const ROUND2_CONSERVATION_WEIGHT = 80;
 
-const DECISION_TEXT_ROUND1 =
+/**
+ * Exported (not module-private) for the same direct-unit-testability reason
+ * `scripted-beats/bid-comparison.ts` exports its own `DECISION_TEXT_ROUND1`/
+ * `DECISION_TEXT_ROUND2`: `home-energy-engine.test.ts`'s
+ * `stripInlineSourceCitations` suite pins its cleanup against this pack's
+ * real shipped prose, not a hand-typed stand-in that could silently drift
+ * from what a person actually sees.
+ */
+export const DECISION_TEXT_ROUND1 =
   "Given the household's current criteria (energy.cost weight 80, energy.conservation weight 20), the lowest-cost options score highest: monitor-one-cycle and change-rate-plan both score 0.80, versus request-hvac-inspection's 0.47. Recommend monitoring for one more billing cycle (monitor-one-cycle) before taking further action, per source-current-bill-household-demo-energy-01 and source-household-event-event-thermostat-failure-2026-07. No inspection is proposed at this weighting.";
 
 export const PROPOSED_INSPECTION_ROUND2 = {
@@ -444,7 +452,7 @@ export const PROPOSED_INSPECTION_ROUND2 = {
     "Addresses the confirmed thermostat sensor-drift root cause (event-thermostat-failure-2026-07); scores 0.87 under the household's now conservation-weighted criteria (energy.cost weight 20, energy.conservation weight 80) versus monitor-one-cycle's 0.20.",
 };
 
-const DECISION_TEXT_ROUND2 =
+export const DECISION_TEXT_ROUND2 =
   'Recommend requesting an HVAC/thermostat inspection (request-hvac-inspection) to address the confirmed thermostat sensor-drift root cause, per source-household-event-event-thermostat-failure-2026-07. Under the reweighted conservation-focused criteria this scores highest (0.87) versus monitor-one-cycle (0.20).';
 
 function buildDecisionSynthesizerProvider(): ScriptedModelProvider {

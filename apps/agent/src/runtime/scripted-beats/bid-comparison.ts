@@ -551,7 +551,7 @@ export const SCOPE_CONTEXT: ExecutionResult = {
   claims: [
     {
       statement:
-        'Northgate Plumbing and Two Rivers Mechanical each price all 8 required scope items, and so do seven of the other nine bids. Two of those nine -- Westbrook Mechanical Contractors and Brightwater Mechanical -- are each silent on one required item of their own. Cedar & Sons is missing 3 of 8 required scope items -- shower valve rough-in and blocking for the gymnasium locker-room showers, plumbing permit filing and inspection scheduling, and haul-away and disposal of demolition debris -- so its $223,500.00 quoted total is not yet comparable to the others on the same scope basis.',
+        'Northgate Plumbing and Two Rivers Mechanical each price all 8 required scope items, and so do seven of the other nine bids. Two of those nine — Westbrook Mechanical Contractors and Brightwater Mechanical — are each silent on one required item of their own. Cedar & Sons is missing 3 of 8 required scope items — shower valve rough-in and blocking for the gymnasium locker-room showers, plumbing permit filing and inspection scheduling, and haul-away and disposal of demolition debris — so its $223,500.00 quoted total is not yet comparable to the others on the same scope basis.',
       stance: 'supports',
       confidence: 0.95,
       sourceIds: [
@@ -567,7 +567,7 @@ export const SCOPE_CONTEXT: ExecutionResult = {
       level: 'E3',
       verdict: 'pass',
       summary:
-        'Northgate Plumbing (bid-northgate) prices all 8 required scope items -- nothing absent.',
+        'Northgate Plumbing (bid-northgate) prices all 8 required scope items — nothing absent.',
     },
     {
       sourceId: 'source-scope-diff-bid-cedar',
@@ -581,7 +581,7 @@ export const SCOPE_CONTEXT: ExecutionResult = {
       level: 'E3',
       verdict: 'pass',
       summary:
-        'Two Rivers Mechanical (bid-tworivers) prices all 8 required scope items -- nothing absent.',
+        'Two Rivers Mechanical (bid-tworivers) prices all 8 required scope items — nothing absent.',
     },
   ],
   limitations: [],
@@ -654,7 +654,7 @@ export const PRICE_CONTEXT: ExecutionResult = {
   claims: [
     {
       statement:
-        "Cedar & Sons' bid quotes $223,500.00 for 5 of 8 required scope items (62.5% scope completeness); adjusted for the three items it leaves absent using Northgate Plumbing's own priced amounts as plug numbers (permits-inspections $18,000.00, shower-valve-rough-in $31,500.00, debris-haul-away $6,000.00), its scope-normalized adjusted total is $279,000.00 -- higher than Northgate Plumbing's own adjusted total of $276,000.00. Two Rivers Mechanical's adjusted total equals its quoted total, $288,750.00, since it prices every required item. The same plug-number discipline applies to the two other bids silent on part of the scope: Westbrook Mechanical Contractors' $284,000.00 quote, missing debris haul-away, adjusts to $290,000.00; Brightwater Mechanical's $278,000.00 quote, missing permits and inspections, adjusts to $296,000.00. Neither adjustment comes close to undercutting Northgate Plumbing's own adjusted total.",
+        "Cedar & Sons' bid quotes $223,500.00 for 5 of 8 required scope items (62.5% scope completeness); adjusted for the three items it leaves absent using Northgate Plumbing's own priced amounts as plug numbers (permits-inspections $18,000.00, shower-valve-rough-in $31,500.00, debris-haul-away $6,000.00), its scope-normalized adjusted total is $279,000.00 — higher than Northgate Plumbing's own adjusted total of $276,000.00. Two Rivers Mechanical's adjusted total equals its quoted total, $288,750.00, since it prices every required item. The same plug-number discipline applies to the two other bids silent on part of the scope: Westbrook Mechanical Contractors' $284,000.00 quote, missing debris haul-away, adjusts to $290,000.00; Brightwater Mechanical's $278,000.00 quote, missing permits and inspections, adjusts to $296,000.00. Neither adjustment comes close to undercutting Northgate Plumbing's own adjusted total.",
       stance: 'supports',
       confidence: 0.95,
       sourceIds: [
@@ -672,7 +672,7 @@ export const PRICE_CONTEXT: ExecutionResult = {
       level: 'E3',
       verdict: 'pass',
       summary:
-        "Northgate Plumbing's bid quotes $276,000.00 and prices all 8 required scope items -- no plug-number adjustment needed.",
+        "Northgate Plumbing's bid quotes $276,000.00 and prices all 8 required scope items — no plug-number adjustment needed.",
     },
     {
       sourceId: 'source-bid-calculator-bid-cedar-adjusted-total',
@@ -686,7 +686,7 @@ export const PRICE_CONTEXT: ExecutionResult = {
       level: 'E3',
       verdict: 'pass',
       summary:
-        "Two Rivers Mechanical's bid quotes $288,750.00 and prices all 8 required scope items -- no plug-number adjustment needed.",
+        "Two Rivers Mechanical's bid quotes $288,750.00 and prices all 8 required scope items — no plug-number adjustment needed.",
     },
     {
       sourceId: 'source-bid-calculator-bid-westbrook-adjusted-total',
@@ -792,7 +792,7 @@ export const CREDENTIAL_CONTEXT: ExecutionResult = {
   claims: [
     {
       statement:
-        'Northgate Plumbing\'s and Cedar & Sons\' licenses are active, cover this scope, and their insurance certificates name the license holder exactly -- the same is true of eight of the other nine bids. The remaining two fail on two different, genuine grounds: Two Rivers Mechanical\'s license and insurance are active, but its certificate of insurance names "TRM Holdings LLC", not the license holder "Two Rivers Mechanical Inc" -- its credentials do not verify as valid. Fieldstone Plumbing Co. -- whose $268,000.00 bid is the lowest scope-normalized adjusted total of all twelve -- has active, correctly-named insurance, but its license class carries no plumbing trade endorsement for this scope, so its credentials do not verify as valid either.',
+        'Northgate Plumbing\'s and Cedar & Sons\' licenses are active, cover this scope, and their insurance certificates name the license holder exactly — the same is true of eight of the other nine bids. The remaining two fail on two different, genuine grounds: Two Rivers Mechanical\'s license and insurance are active, but its certificate of insurance names "TRM Holdings LLC", not the license holder "Two Rivers Mechanical Inc" — its credentials do not verify as valid. Fieldstone Plumbing Co. — whose $268,000.00 bid is the lowest scope-normalized adjusted total of all twelve — has active, correctly-named insurance, but its license class carries no plumbing trade endorsement for this scope, so its credentials do not verify as valid either.',
       stance: 'supports',
       confidence: 0.95,
       sourceIds: [
@@ -844,14 +844,14 @@ export const CREDENTIAL_CONTEXT: ExecutionResult = {
       level: 'E1',
       verdict: 'degraded',
       summary:
-        'Certificate of insurance names "TRM Holdings LLC", which does not match the licence holder "Two Rivers Mechanical Inc" -- needs a human answer before this bid\'s credentials can be marked verified.',
+        'Certificate of insurance names "TRM Holdings LLC", which does not match the licence holder "Two Rivers Mechanical Inc" — needs a human answer before this bid\'s credentials can be marked verified.',
     },
     {
       sourceId: 'source-license-pl-7734-fs',
       level: 'E1',
       verdict: 'degraded',
       summary:
-        'Fieldstone Plumbing Co. (PL-7734-FS): licence active, Class B General Building Contractor (fictional state classification) -- no plumbing trade endorsement on file does not cover this scope, insurance active.',
+        'Fieldstone Plumbing Co. (PL-7734-FS): licence active, Class B General Building Contractor (fictional state classification) — no plumbing trade endorsement on file does not cover this scope, insurance active.',
     },
     {
       sourceId: 'source-license-pl-7734-fs-named-insured',
@@ -896,7 +896,7 @@ export const SCHEDULE_CONTEXT: ExecutionResult = {
   claims: [
     {
       statement:
-        "Every one of the twelve bids' stated start dates and durations is credible for this scope of work: Northgate Plumbing starts in 3 weeks over 45 working days, Cedar & Sons in 1 week over 35 working days, and Two Rivers Mechanical in 5 weeks over 40 working days. The other nine bids fall in the same range -- 1 to 8 weeks to start, 35 to 55 working days to complete -- none implausibly fast or slow for a full restroom and locker-room re-rough and fixture-set installation of this size.",
+        "Every one of the twelve bids' stated start dates and durations is credible for this scope of work: Northgate Plumbing starts in 3 weeks over 45 working days, Cedar & Sons in 1 week over 35 working days, and Two Rivers Mechanical in 5 weeks over 40 working days. The other nine bids fall in the same range — 1 to 8 weeks to start, 35 to 55 working days to complete — none implausibly fast or slow for a full restroom and locker-room re-rough and fixture-set installation of this size.",
       stance: 'supports',
       confidence: 0.75,
       sourceIds: ['source-bid-northgate', 'source-bid-cedar', 'source-bid-tworivers'],
@@ -1034,10 +1034,10 @@ export const PROPOSED_AWARD_ROUND2 = {
  * gate was green, because no gate read the prose.
  */
 export const DECISION_TEXT_ROUND1_DRAFT =
-  "Cedar & Sons offers the lowest total of all twelve bids at $223,500.00 (source-bid-cedar) -- undercutting even Fieldstone Plumbing Co.'s $268,000.00 (source-bid-fieldstone) -- versus Northgate Plumbing's $276,000.00 (source-bid-northgate) and Two Rivers Mechanical's $288,750.00 (source-bid-tworivers). Recommend awarding to Cedar & Sons on lowest price.";
+  "Cedar & Sons offers the lowest total of all twelve bids at $223,500.00 (source-bid-cedar) — undercutting even Fieldstone Plumbing Co.'s $268,000.00 (source-bid-fieldstone) — versus Northgate Plumbing's $276,000.00 (source-bid-northgate) and Two Rivers Mechanical's $288,750.00 (source-bid-tworivers). Recommend awarding to Cedar & Sons on lowest price.";
 
 export const DECISION_TEXT_ROUND1 =
-  "Correcting for scope: Cedar & Sons' $223,500.00 quote is missing three required items -- permits and inspections ($18,000.00), shower-valve rough-in ($31,500.00), and debris haul-away ($6,000.00) -- so its scope-normalized adjusted total is $279,000.00 (source-bid-calculator-bid-cedar-adjusted-total), not $223,500.00. That is higher than Northgate Plumbing's adjusted total of $276,000.00 (source-bid-calculator-bid-northgate-adjusted-total), which already prices every required item and carries fully valid license and insurance credentials (source-license-pl-4417-ng). Of the other nine bids, seven price every required item outright; two -- Westbrook Mechanical Contractors and Brightwater Mechanical -- are each silent on one item of their own, and neither's adjustment closes the gap. Two Rivers Mechanical's adjusted total is $288,750.00 (source-bid-calculator-bid-tworivers-adjusted-total) and its insurance certificate does not name its license holder (source-license-pl-8801-tr-named-insured), so its credentials do not verify as valid. Exactly one bid of the twelve comes in under Northgate Plumbing once every bid is on the same scope basis: Fieldstone Plumbing Co., whose $268,000.00 is the lowest scope-normalized adjusted total of all twelve (source-bid-calculator-bid-fieldstone-adjusted-total) -- but its license class carries no plumbing trade endorsement for this scope (source-license-pl-7734-fs), so its credentials do not verify as valid either. Recommend awarding to Northgate Plumbing.";
+  "Correcting for scope: Cedar & Sons' $223,500.00 quote is missing three required items — permits and inspections ($18,000.00), shower-valve rough-in ($31,500.00), and debris haul-away ($6,000.00) — so its scope-normalized adjusted total is $279,000.00 (source-bid-calculator-bid-cedar-adjusted-total), not $223,500.00. That is higher than Northgate Plumbing's adjusted total of $276,000.00 (source-bid-calculator-bid-northgate-adjusted-total), which already prices every required item and carries fully valid license and insurance credentials (source-license-pl-4417-ng). Of the other nine bids, seven price every required item outright; two — Westbrook Mechanical Contractors and Brightwater Mechanical — are each silent on one item of their own, and neither's adjustment closes the gap. Two Rivers Mechanical's adjusted total is $288,750.00 (source-bid-calculator-bid-tworivers-adjusted-total) and its insurance certificate does not name its license holder (source-license-pl-8801-tr-named-insured), so its credentials do not verify as valid. Exactly one bid of the twelve comes in under Northgate Plumbing once every bid is on the same scope basis: Fieldstone Plumbing Co., whose $268,000.00 is the lowest scope-normalized adjusted total of all twelve (source-bid-calculator-bid-fieldstone-adjusted-total) — but its license class carries no plumbing trade endorsement for this scope (source-license-pl-7734-fs), so its credentials do not verify as valid either. Recommend awarding to Northgate Plumbing.";
 
 /**
  * No score numeral appears in this text, deliberately.
@@ -1063,7 +1063,7 @@ export const DECISION_TEXT_ROUND1 =
  * stay too: those are tool outputs carrying their own source ids.
  */
 export const DECISION_TEXT_ROUND2 =
-  'With warranty length and payment risk now weighted most heavily, Two Rivers Mechanical scores highest of the twelve bids -- it leads on both upweighted criteria: a 36-month warranty (source-bid-tworivers) and a 20% deposit (source-bid-tworivers), the lowest payment risk of the twelve. It is still not recommended: its certificate of insurance names "TRM Holdings LLC," not its license holder "Two Rivers Mechanical Inc" (source-license-pl-8801-tr-named-insured), so its credentials do not verify as valid. Of the ten bids whose credentials are fully valid, Northgate Plumbing scores higher, and its scope-normalized adjusted total ($276,000.00, source-bid-calculator-bid-northgate-adjusted-total) remains lower than Cedar & Sons\' ($279,000.00, source-bid-calculator-bid-cedar-adjusted-total). Recommend awarding to Northgate Plumbing. Correcting the named-insured discrepancy on Two Rivers Mechanical\'s certificate of insurance would reopen this recommendation.';
+  'With warranty length and payment risk now weighted most heavily, Two Rivers Mechanical scores highest of the twelve bids — it leads on both upweighted criteria: a 36-month warranty (source-bid-tworivers) and a 20% deposit (source-bid-tworivers), the lowest payment risk of the twelve. It is still not recommended: its certificate of insurance names "TRM Holdings LLC," not its license holder "Two Rivers Mechanical Inc" (source-license-pl-8801-tr-named-insured), so its credentials do not verify as valid. Of the ten bids whose credentials are fully valid, Northgate Plumbing scores higher, and its scope-normalized adjusted total ($276,000.00, source-bid-calculator-bid-northgate-adjusted-total) remains lower than Cedar & Sons\' ($279,000.00, source-bid-calculator-bid-cedar-adjusted-total). Recommend awarding to Northgate Plumbing. Correcting the named-insured discrepancy on Two Rivers Mechanical\'s certificate of insurance would reopen this recommendation.';
 
 /**
  * `decision-synthesizer`'s round 1 begins with a draft that sounds entirely

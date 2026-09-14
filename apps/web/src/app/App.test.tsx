@@ -442,6 +442,54 @@ describe('App', () => {
       });
       expect(localStorage.getItem('sift:activeCaseId')).toBeNull();
     });
+
+    // Regression gate for a real defect: restoration used to clear the
+    // stored pointer on ANY non-ok response, a 5xx included -- indistinguishable
+    // from a confirmed 404. A transient server error has not confirmed the
+    // case is gone, so unlike the 404 test just above, the pointer must
+    // survive so a later reload can retry it. There is still no working
+    // case to show right now, so this still falls back to the launcher --
+    // it just does not throw away the one piece of state that would let a
+    // retry succeed.
+    it('keeps the stored caseId when restoring it fails with a transient 5xx, unlike a confirmed 404', async () => {
+      localStorage.setItem('sift:activeCaseId', CASE_ID);
+      server.use(
+        http.get(`/api/cases/${CASE_ID}`, () =>
+          HttpResponse.json({ error: 'internal error' }, { status: 500 }),
+        ),
+      );
+
+      render(
+        <AppProviders commandsClient={createFakeSiftCommands()}>
+          <App />
+        </AppProviders>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('demo-launcher')).toBeInTheDocument();
+      });
+      expect(localStorage.getItem('sift:activeCaseId')).toBe(CASE_ID);
+    });
+
+    // Same claim as the 5xx test above, for a network-level failure (the
+    // fetch itself rejecting -- offline, DNS, the server not reachable yet)
+    // rather than an HTTP error response. Neither one is a confirmed 404,
+    // so neither one may swallow the stored pointer.
+    it('keeps the stored caseId when restoring it fails at the network level, not a confirmed 404', async () => {
+      localStorage.setItem('sift:activeCaseId', CASE_ID);
+      server.use(http.get(`/api/cases/${CASE_ID}`, () => HttpResponse.error()));
+
+      render(
+        <AppProviders commandsClient={createFakeSiftCommands()}>
+          <App />
+        </AppProviders>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('demo-launcher')).toBeInTheDocument();
+      });
+      expect(localStorage.getItem('sift:activeCaseId')).toBe(CASE_ID);
+    });
   });
 
   describe('live workspace wiring', () => {
@@ -621,7 +669,7 @@ describe('App', () => {
     // `skill.activated`, `specialist.completed`) legitimately report
     // `phase: 'completed'` while the run continues. So on any render that
     // landed on one of those, the hero reverted to "Nothing's been looked
-    // into yet." with a primary-emphasis "Ask Sift to look into this"
+    // into yet." with a primary-emphasis "Have Sift investigate"
     // button, mid-investigation. Invisible only because today's whole burst
     // lands inside ~70 ms; once the runtime streams events as the graph
     // progresses it becomes a visible flicker of "nothing has happened" in

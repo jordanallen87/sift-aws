@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { WorkspaceAppBar, type WorkspaceAppBarProps } from './WorkspaceAppBar.js';
@@ -297,6 +297,19 @@ describe('WorkspaceAppBar', () => {
     render(<WorkspaceAppBar {...buildProps()} />);
     await user.click(screen.getByTestId('help-button'));
     expect(screen.queryByTestId('how-sift-works-compliance')).not.toBeInTheDocument();
+  });
+
+  // Same class of proof as the `compliance` test above, for `packId`: a
+  // bid-comparison case must reach Help's "Talking to your assistant"
+  // section as bid-shaped examples, not the car defaults every other pack
+  // (and no case at all) still shows.
+  it('forwards a supplied packId through Help into pack-specific assistant phrases', async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceAppBar {...buildProps({ packId: 'bid-comparison' })} />);
+    await user.click(screen.getByTestId('help-button'));
+    const phrases = screen.getByTestId('how-sift-works-phrases');
+    expect(within(phrases).getByText('“Check their licenses and insurance.”')).toBeInTheDocument();
+    expect(within(phrases).queryByText(/dog crate/i)).not.toBeInTheDocument();
   });
 
   it('renders a discoverable developer-view control and calls onOpenDeveloperView when activated', async () => {

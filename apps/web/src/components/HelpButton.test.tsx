@@ -22,9 +22,10 @@ describe('HelpButton', () => {
     expect(within(sheet).getByText(HOW_SIFT_WORKS_TITLE)).toBeInTheDocument();
     expect(within(sheet).getByText('Compare vehicles')).toBeInTheDocument();
     // The real current label (`RecommendationHero.tsx`). This assertion read
-    // "Request investigation" for as long as that button had been renamed --
-    // the exact drift the shared `HowSiftWorks` module exists to prevent.
-    expect(within(sheet).getByText('Ask Sift to look into this')).toBeInTheDocument();
+    // "Ask Sift to look into this" for as long as that button had been
+    // renamed -- the exact drift the shared `HowSiftWorks` module exists to
+    // prevent.
+    expect(within(sheet).getByText('Have Sift investigate')).toBeInTheDocument();
     expect(within(sheet).getByText('Inspect run')).toBeInTheDocument();
     expect(within(sheet).getByTestId('how-sift-works-phrases-lead')).toHaveTextContent(/WebMCP/);
   });

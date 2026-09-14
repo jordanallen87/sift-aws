@@ -83,9 +83,22 @@ export interface FirstRunGuideProps {
    * `HowSiftWorksContentProps.compliance`'s own doc comment.
    */
   readonly compliance?: PackCompliance | null | undefined;
+  /**
+   * The active case's Decision Pack id, forwarded straight to
+   * `HowSiftWorksContent` so "Talking to your assistant" shows examples
+   * shaped for the pack this first case actually opened with -- see
+   * `HowSiftWorksContentProps.packId`'s own doc comment.
+   */
+  readonly packId?: string | null | undefined;
 }
 
-export function FirstRunGuide({ open, onDismiss, returnFocusTo, compliance }: FirstRunGuideProps) {
+export function FirstRunGuide({
+  open,
+  onDismiss,
+  returnFocusTo,
+  compliance,
+  packId,
+}: FirstRunGuideProps) {
   return (
     <Sheet
       open={open}
@@ -143,7 +156,7 @@ export function FirstRunGuide({ open, onDismiss, returnFocusTo, compliance }: Fi
           role="region"
           aria-label={HOW_SIFT_WORKS_TITLE}
         >
-          <HowSiftWorksContent compliance={compliance} />
+          <HowSiftWorksContent compliance={compliance} packId={packId} />
         </SheetBody>
         {/*
           A `shrink-0` footer OUTSIDE `SheetBody`, so the dismiss control is

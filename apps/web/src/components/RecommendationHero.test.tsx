@@ -266,7 +266,7 @@ describe('RecommendationHero', () => {
     expect(onInspectRun).toHaveBeenCalledWith('run-42');
   });
 
-  it('disables the "Ask Sift to look into this" action while a request is pending or explicitly disabled', () => {
+  it('disables the "Have Sift investigate" action while a request is pending or explicitly disabled', () => {
     const { rerender } = render(<RecommendationHero {...buildProps({ requestPending: true })} />);
     expect(screen.getByTestId('request-investigation')).toBeDisabled();
 

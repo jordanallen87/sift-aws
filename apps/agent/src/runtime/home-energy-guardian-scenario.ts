@@ -492,7 +492,7 @@ export async function runHomeEnergyGuardianScenario(
       disposition: 'evidence_found',
       claims: [
         {
-          statement: round1Result.decisionSynthesizerText,
+          statement: humanizeDecisionText(round1Result.decisionSynthesizerText, optionLabels),
           stance: 'supports',
           confidence: 0.8,
           sourceIds: round1SourceIds,
@@ -613,7 +613,7 @@ export async function runHomeEnergyGuardianScenario(
       disposition: 'evidence_found',
       claims: [
         {
-          statement: round2Result.decisionSynthesizerText,
+          statement: humanizeDecisionText(round2Result.decisionSynthesizerText, optionLabels),
           stance: 'supports',
           confidence: 0.85,
           sourceIds: round2SourceIds,

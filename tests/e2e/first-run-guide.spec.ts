@@ -44,8 +44,13 @@ test.describe('first-run guide', () => {
     await expect(guide.getByTestId('how-sift-works-phrase-sift-explain-ranking')).toBeVisible();
     await expect(guide.getByTestId('how-sift-works-authority')).toContainText('cannot approve');
 
-    // Named exactly as the pane's own controls render them.
-    await expect(guide.getByText('Ask Sift to look into this')).toBeVisible();
+    // Named exactly as the pane's own controls render them. This assertion
+    // used to expect "Ask Sift to look into this", which is the one thing it
+    // exists to rule out: the guide said that while the control itself
+    // (`RecommendationHero.tsx`) has always read "Have Sift investigate", so
+    // the guide was naming a button no one could find. The label below is
+    // read off that control, which is the canonical one.
+    await expect(guide.getByText('Have Sift investigate')).toBeVisible();
 
     // The dismiss control is reachable without scrolling: it lives outside
     // the sheet's scrolling body precisely so this holds at 390px.

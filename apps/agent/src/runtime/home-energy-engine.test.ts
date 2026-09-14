@@ -37,9 +37,14 @@ import {
   foldHomeEnergyRound1,
   foldHomeEnergyRound2,
   homeEnergyCapabilityCatalog,
+  stripInlineSourceCitations,
   type HomeEnergyEngine,
   type HomeEnergyEngineDeps,
 } from './home-energy-engine.js';
+import {
+  DECISION_TEXT_ROUND1,
+  DECISION_TEXT_ROUND2,
+} from './scripted-beats/home-energy-guardian.js';
 
 const SKILLS_ROOT_DIR = fileURLToPath(new URL('../../skills', import.meta.url));
 const FIXED_CLOCK: Clock = { now: () => '2026-08-27T00:00:00.000Z' };
@@ -552,7 +557,17 @@ describe('home-energy-engine (live, real Swarm, real SQLite)', () => {
     const finalSnapshot = caseStore.load(caseId);
     expect(finalSnapshot).not.toBeNull();
     expect(finalSnapshot?.recommendation?.status).toBe('ready');
-    expect(finalSnapshot?.recommendation?.rationale).toMatch(/source-/);
+    // Retargeted, not weakened: this used to assert the citation by matching
+    // a raw `source-...` id inside `rationale` itself, back when that field
+    // carried decision-synthesizer's text verbatim. `rationale` is now
+    // display-cleaned (`stripInlineSourceCitations`, `home-energy-engine.ts`)
+    // -- see that function's doc comment (`car-purchase-scenario.ts`) for why
+    // -- so "the retry cites its sources" is now proven the same way
+    // `car-purchase-engine.test.ts`'s own §34/DoD item 34 assertion proves
+    // it: the structured `sourceIds` the citation chips actually render from,
+    // plus a positive check that no raw id leaked into the display text.
+    expect(finalSnapshot?.recommendation?.sourceIds.length).toBeGreaterThan(0);
+    expect(finalSnapshot?.recommendation?.rationale).not.toMatch(/\bsource-[a-z0-9-]+\b/i);
 
     // Ordering matters for anyone watching: the withheld draft precedes the
     // recommendation it was replaced by.
@@ -899,6 +914,74 @@ describe('extractFavoredResponseOptionId', () => {
 
   it('returns null when the text names no known response option anywhere', () => {
     expect(extractFavoredResponseOptionId('No option is clearly favored yet.')).toBeNull();
+  });
+});
+
+/**
+ * `stripInlineSourceCitations` (imported here from `home-energy-engine.js`,
+ * re-exported from the same shared `car-purchase-scenario.ts` helper
+ * `bid-comparison-engine.test.ts` pins its own citation shapes against) is
+ * the display-only half of the same §34/DoD item 34 split that pack's suite
+ * documents: `decision-synthesizer`'s raw text cites a `source-...` id for
+ * every claim (required by `DEFAULT_SYNTHESIZER_VALIDATOR` and consumed by
+ * `extractCitedSourceIds` to build `Recommendation.sourceIds`), but that raw
+ * text used to be rendered to a person verbatim in both `rationale`
+ * (`RecommendationCard.tsx`) and `claims[0].statement`
+ * (`EvidenceCard.tsx`/`FindingsSheet.tsx`) -- so every citation showed up
+ * twice: once as an unreadable machine id in running prose, once as a proper
+ * citation chip. Unlike bid-comparison's prose, this pack's real shipped
+ * text (`DECISION_TEXT_ROUND1`/`DECISION_TEXT_ROUND2`,
+ * `scripted-beats/home-energy-guardian.ts`) never wraps a citation in
+ * parentheses -- it cites bare, mid-sentence ("...before taking further
+ * action, per source-current-bill-household-demo-energy-01 and
+ * source-household-event-event-thermostat-failure-2026-07.") -- so this
+ * suite pins that third citation shape specifically, on top of the two
+ * bid-comparison's own suite already covers.
+ */
+describe('stripInlineSourceCitations (home-energy-guardian prose)', () => {
+  it('removes a bare, comma-introduced "per source-x and source-y" citation clause, leaving the sentence\'s own period intact', () => {
+    expect(
+      stripInlineSourceCitations(
+        'Recommend monitoring for one more billing cycle (monitor-one-cycle) before taking further action, per source-current-bill-household-demo-energy-01 and source-household-event-event-thermostat-failure-2026-07. No inspection is proposed at this weighting.',
+      ),
+    ).toBe(
+      'Recommend monitoring for one more billing cycle (monitor-one-cycle) before taking further action. No inspection is proposed at this weighting.',
+    );
+  });
+
+  it('removes a bare, comma-introduced "per source-x" clause naming just one source', () => {
+    expect(
+      stripInlineSourceCitations(
+        'Recommend requesting an HVAC/thermostat inspection (request-hvac-inspection) to address the confirmed thermostat sensor-drift root cause, per source-household-event-event-thermostat-failure-2026-07. Under the reweighted conservation-focused criteria this scores highest (0.87) versus monitor-one-cycle (0.20).',
+      ),
+    ).toBe(
+      'Recommend requesting an HVAC/thermostat inspection (request-hvac-inspection) to address the confirmed thermostat sensor-drift root cause. Under the reweighted conservation-focused criteria this scores highest (0.87) versus monitor-one-cycle (0.20).',
+    );
+  });
+
+  it('leaves text with no citation or em-dash pattern untouched', () => {
+    const plain = 'Recommend monitoring for one more billing cycle (monitor-one-cycle).';
+    expect(stripInlineSourceCitations(plain)).toBe(plain);
+  });
+
+  it('strips every source id out of the real shipped round1/round2 rationale, while keeping the option ids, weights, and scores a person needs', () => {
+    for (const raw of [DECISION_TEXT_ROUND1, DECISION_TEXT_ROUND2]) {
+      const cleaned = stripInlineSourceCitations(raw);
+      expect(cleaned).not.toMatch(/\bsource-[a-z0-9-]+\b/i);
+      expect(cleaned).not.toMatch(/ -- /);
+      expect(cleaned).not.toMatch(/ {2}/);
+    }
+    const round1Cleaned = stripInlineSourceCitations(DECISION_TEXT_ROUND1);
+    expect(round1Cleaned).toContain('monitor-one-cycle');
+    expect(round1Cleaned).toContain('0.80');
+    expect(round1Cleaned).toContain('0.47');
+    expect(round1Cleaned).toContain('80');
+    expect(round1Cleaned).toContain('20');
+    const round2Cleaned = stripInlineSourceCitations(DECISION_TEXT_ROUND2);
+    expect(round2Cleaned).toContain('request-hvac-inspection');
+    expect(round2Cleaned).toContain('monitor-one-cycle');
+    expect(round2Cleaned).toContain('0.87');
+    expect(round2Cleaned).toContain('0.20');
   });
 });
 

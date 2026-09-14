@@ -500,6 +500,20 @@ export function App() {
   // the real server. `null` means either nothing was stored, or nothing is
   // being restored (both render the plain launcher immediately).
   const [restoringCaseId, setRestoringCaseId] = useState<string | null>(() => readStoredCaseId());
+  /**
+   * One-shot signal from the reload-restore verification effect below to
+   * the pointer-persistence effect just after it: restoration just failed,
+   * but NOT because the server confirmed the case is gone (a 404) -- a 5xx
+   * response, or the fetch itself rejecting (offline, DNS, the server not
+   * up yet, ...), where the honest read is "could not check right now," not
+   * "gone." A `ref` rather than another `useState`: it only needs to be
+   * read once, by an effect that already re-runs on `restoringCaseId`'s own
+   * change, so setting it never needs to *cause* a render on its own.
+   * Consumed (reset to `false`) the moment the persistence effect reads it,
+   * so it can never leak into an unrelated later transition (an explicit
+   * reset-demo/return-to-launcher, which must still clear the pointer).
+   */
+  const restoreFailureWasTransientRef = useRef(false);
   const [installedPacks, setInstalledPacks] = useState<CompiledDecisionPack[]>([]);
   /**
    * What Sift is currently working on, read from `GET /api/cases/:id/run-plan`.
@@ -889,10 +903,23 @@ export function App() {
   // Reload-restore verification: a stored caseId is never trusted directly
   // (product.md "Canonical snapshots update only from committed case
   // events") -- it is confirmed against the real `GET /api/cases/:caseId`
-  // route first. A case that no longer resolves (deleted, a stale id from a
-  // previous server/data directory, ...) clears the stored pointer and
-  // falls through to the plain launcher rather than leaving the workspace
-  // stuck showing a perpetual loading state.
+  // route first, and the two ways that check can fail are handled
+  // differently on purpose:
+  //
+  // - A 404 means the server has positively confirmed the case is gone
+  //   (deleted, or a stale id left over from a previous server/data
+  //   directory) -- there is nothing to retry, so the stored pointer is
+  //   cleared immediately and this falls through to the plain launcher
+  //   rather than leaving the workspace stuck showing a perpetual loading
+  //   state.
+  // - Any other failure -- a 5xx, or the fetch itself rejecting (offline,
+  //   DNS, the server not up yet, ...) -- has NOT confirmed anything about
+  //   the case. Clearing the pointer here would be swallowing a transient
+  //   problem as though it were a real "gone," so this still falls through
+  //   to the launcher for now (there is no working case to show either
+  //   way) but leaves the pointer in `localStorage` alone via
+  //   `restoreFailureWasTransientRef`, so a later reload gets to try again
+  //   rather than starting over at a fresh case with no memory of this one.
   useEffect(() => {
     if (restoringCaseId === null) return;
     let cancelled = false;
@@ -903,14 +930,16 @@ export function App() {
         if (cancelled) return;
         if (response.ok) {
           setActiveCaseId(restoringCaseId);
-        } else {
+        } else if (response.status === 404) {
           clearStoredCaseId();
+        } else {
+          restoreFailureWasTransientRef.current = true;
         }
         setRestoringCaseId(null);
       })
       .catch(() => {
         if (cancelled) return;
-        clearStoredCaseId();
+        restoreFailureWasTransientRef.current = true;
         setRestoringCaseId(null);
       });
     return () => {
@@ -933,8 +962,15 @@ export function App() {
     } else if (restoringCaseId === null) {
       // Only clears once restoration (if any) has settled -- clearing while
       // `restoringCaseId` is still non-null would erase the very pointer
-      // the verification effect above is about to check.
-      clearStoredCaseId();
+      // the verification effect above is about to check. And even once
+      // settled, a transient (non-404) restore failure does NOT clear it --
+      // see `restoreFailureWasTransientRef`'s own doc comment -- so this
+      // still checks and consumes that one-shot flag before deciding.
+      if (restoreFailureWasTransientRef.current) {
+        restoreFailureWasTransientRef.current = false;
+      } else {
+        clearStoredCaseId();
+      }
     }
   }, [activeCaseId, restoringCaseId]);
 
@@ -2729,6 +2765,7 @@ export function App() {
             resetPending={resetPending}
             helpButtonRef={helpButtonRef}
             compliance={activePack?.compliance ?? null}
+            packId={activePack?.identity.id ?? null}
             layout={layout}
           />
         ) : (
@@ -3622,6 +3659,7 @@ export function App() {
         onDismiss={handleDismissFirstRunGuide}
         returnFocusTo={helpButtonRef}
         compliance={activePack?.compliance ?? null}
+        packId={activePack?.identity.id ?? null}
       />
 
       {runtimeInspectorOpen ? (

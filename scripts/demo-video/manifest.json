@@ -20,9 +20,9 @@
     "elevenLabsVoiceId": "mHV5m7DLaQM0bIAP6BTK"
   },
   "timing": {
-    "leadInSeconds": 0.7,
-    "lineGapSeconds": 0.42,
-    "tailSeconds": 1.0,
+    "leadInSeconds": 0.5,
+    "lineGapSeconds": 0.32,
+    "tailSeconds": 0.8,
     "cardSeconds": 0.0
   },
   "titleCard": {
@@ -205,7 +205,8 @@
       "minSeconds": 22,
       "lines": [
         "This is the Runtime Inspector. The SDK's lifecycle hooks, before and after every tool call and model call, on every node and every handoff, are normalized into these events and correlated by one trace id.",
-        "Four hundred and thirty-three runtime events in that first run. It is deployed and live, and every mechanism you just watched has a test that fails if it stops being true."
+        "Four hundred and thirty-three runtime events, and a hundred and five spans - every one carrying the SDK's own instrumentation scope, which a class merely named after Strands cannot produce.",
+        "It is deployed and live, and every mechanism has a test that fails if it stops being true."
       ]
     },
     {

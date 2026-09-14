@@ -62,9 +62,15 @@ the model never touches" a claim you can check rather than one you have to belie
 **Everything non-deterministic sits behind a Strands adapter,** using the SDK where it does real
 work:
 
-- A bounded **Swarm** across six specialists — scope, price, credential, schedule, source check,
-  synthesis — with model-decided handoffs (6 nodes, 5 handoffs in a measured run).
-- **AgentSkills** loading the technique the active obligation needs.
+- Two multi-agent topologies from `@strands-agents/sdk/multiagent`, chosen per problem shape:
+  a bounded **`Swarm`** where the handoffs should be the model's call — six specialists across
+  scope, price, credential, schedule, source check and synthesis (6 nodes, 6 stages, 5 handoffs in
+  a measured run), used by bid comparison and Home Energy Guardian — and a **`Graph`** where the
+  order is fixed, used by car purchase.
+- **`AgentSkills`** loading the technique the active obligation needs. It, the Context Injector and
+  GoalLoop below are the SDK's own vended plugins (`@strands-agents/sdk/vended-plugins/skills`,
+  `/context-injector`, `/goal`) — not Sift abstractions wearing Strands names, which an import line
+  settles in a second.
 - **Interventions** that are load-bearing, not decorative. `Guide` redirects the scope analyst when
   it repeats a query family with no new angle. `Deny` refuses the price analyst's reach for the
   licence registry — a tool this pack grants only to the credential checker — before it runs.
@@ -82,9 +88,11 @@ review commands by construction rather than by check.
 
 **The Strands usage is independently checkable.** `claim-evidence-matrix.md` maps each capability
 to its implementing file, the test that fails if the claim stops being true, and the event name and
-count in an exported run (`GET /api/debug/runs/:runId/export`). In a measured run: 433 runtime
-events, 105 spans, and every span carries `"otel.scope": "strands-agents"` — the SDK's own
-instrumentation scope, which a local class named after Strands cannot produce.
+count in an exported run (`GET /api/debug/runs/:runId/export`). Re-verified on the run that appears
+in the demo video (`run-8e8b57d5`): 433 runtime events, 28 context injections, 4 skill activations,
+and 105 spans — every one of which carries `"otel.scope": "strands-agents"`, the SDK's own
+instrumentation scope, with no other value present anywhere in the export. A local class named
+after Strands cannot produce that.
 
 The pack also declares the real rules its domain is governed by — FAR 13.104(b), N.C. Gen. Stat.
 § 143-132, comparable Idaho/Pennsylvania/Louisiana thresholds, licence and insurance scope

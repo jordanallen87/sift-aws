@@ -42,6 +42,8 @@ const LEFT = { x: 110, y: 520, width: 1110, height: 430 } as const;
 const STILL_BOX = { x: 210, y: 316, width: 1500, height: 520 } as const;
 const STILL_CAPTION = { x: 210, y: 880, width: 1500, height: 150 } as const;
 const RADIUS = 26;
+/** Headroom kept under the hard cap so rounding never lands us on it. */
+const CAP_MARGIN_SECONDS = 4;
 /** Caption dissolve, and the film's open and close. Kept here so the three read together. */
 const CAPTION_FADE = 0.18;
 const OPEN_FADE = 0.6;
@@ -65,6 +67,8 @@ interface PlannedBeat {
   readonly beat: Beat;
   readonly lines: readonly Line[];
   readonly audio: string;
+  /** Measured length of the assembled narration, the floor a beat can never go below. */
+  readonly voiceSeconds: number;
   /** Caption windows relative to the start of this beat's segment. */
   readonly windows: readonly { readonly from: number; readonly to: number }[];
   readonly seconds: number;
@@ -247,7 +251,7 @@ async function narrate(manifest: Manifest): Promise<PlannedBeat[]> {
       audio,
     ]);
 
-    planned.push({ beat, lines, audio, windows, seconds });
+    planned.push({ beat, lines, audio, windows, seconds, voiceSeconds: audioSeconds });
     console.log(
       `  ${beat.id}: ${String(lines.length)} lines, voice ${audioSeconds.toFixed(1)}s, segment ${seconds.toFixed(1)}s`,
     );
@@ -805,27 +809,68 @@ function gate(file: string, manifest: Manifest): void {
     throw new Error(`rendering gate failed:\n  - ${failures.join('\n  - ')}`);
 }
 
+/**
+ * Brings the running time under the cap by spending each beat's slack -- the
+ * dwell it holds beyond its own narration -- never by speeding the voice up or
+ * dropping a line. Beats give up slack in proportion to how much they have, so
+ * a long hold yields more than a tight one, and none is cut below the audio it
+ * has to carry.
+ *
+ * This exists because narration length is provider-dependent: the same script
+ * measured on `say` and on ElevenLabs differs by seconds per beat, so one fixed
+ * set of floors cannot fit both.
+ */
+function fitToCap(planned: readonly PlannedBeat[], manifest: Manifest): PlannedBeat[] {
+  const target = manifest.hardCapSeconds - manifest.timing.cardSeconds - CAP_MARGIN_SECONDS;
+  const total = planned.reduce((sum, plan) => sum + plan.seconds, 0);
+  if (total <= target) return [...planned];
+
+  const slack = planned.map((plan) => Math.max(0, plan.seconds - plan.voiceSeconds));
+  const available = slack.reduce((sum, value) => sum + value, 0);
+  if (available <= 0) return [...planned];
+
+  const share = Math.min(1, (total - target) / available);
+  console.log(
+    `  over by ${(total - target).toFixed(1)}s; spending ${(share * 100).toFixed(0)}% of ` +
+      `${available.toFixed(1)}s of hold time`,
+  );
+  return planned.map((plan, index) => {
+    const cut = (slack[index] ?? 0) * share;
+    if (cut <= 0.05) return plan;
+    const seconds = plan.seconds - cut;
+    // The last caption of a beat runs to the beat's end, so it shortens with it.
+    const windows = plan.windows.map((w, i) =>
+      i === plan.windows.length - 1 ? { from: w.from, to: Math.max(w.from + 0.5, seconds) } : w,
+    );
+    return { ...plan, seconds, windows };
+  });
+}
+
 async function main(): Promise<void> {
   const manifest = loadManifest();
   mkdirSync(OUT_DIR, { recursive: true });
 
   console.log('narration:');
   const planned = await narrate(manifest);
-  const total = planned.reduce((sum, plan) => sum + plan.seconds, 0) + manifest.timing.cardSeconds;
+  const fitted = fitToCap(planned, manifest);
+  const total = fitted.reduce((sum, plan) => sum + plan.seconds, 0) + manifest.timing.cardSeconds;
   console.log(`  total ${total.toFixed(1)}s against a ${String(manifest.hardCapSeconds)}s cap`);
   if (total > manifest.hardCapSeconds)
-    throw new Error(`planned runtime ${total.toFixed(1)}s exceeds the cap before rendering starts`);
+    throw new Error(
+      `planned runtime ${total.toFixed(1)}s exceeds the cap even with every beat trimmed to its ` +
+        `own narration. Shorten the script; the voice is never sped up to fit.`,
+    );
 
   console.log('panels:');
-  await renderPanels(manifest, planned);
+  await renderPanels(manifest, fitted);
 
   console.log('segments:');
-  const files = composeBeats(manifest, planned);
+  const files = composeBeats(manifest, fitted);
 
   const out = join(OUT_DIR, 'sift-agents-for-humans.mp4');
   stitch(files, out);
   const srt = join(OUT_DIR, 'sift-agents-for-humans.srt');
-  writeSrt(planned, srt);
+  writeSrt(fitted, srt);
   gate(out, manifest);
 
   const bytes = readFileSync(out).byteLength;

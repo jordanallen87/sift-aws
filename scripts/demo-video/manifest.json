@@ -20,9 +20,9 @@
     "elevenLabsVoiceId": "mHV5m7DLaQM0bIAP6BTK"
   },
   "timing": {
-    "leadInSeconds": 0.5,
-    "lineGapSeconds": 0.32,
-    "tailSeconds": 0.8,
+    "leadInSeconds": 0.35,
+    "lineGapSeconds": 0.25,
+    "tailSeconds": 0.55,
     "cardSeconds": 0.0
   },
   "titleCard": {
@@ -44,7 +44,7 @@
       "lines": [
         "Sift is decision infrastructure: one live case that a person and a Strands agent work on together.",
         "A decision pack declares what has to be established before an answer is allowed - the obligations, the criteria, and the interventions that police them.",
-        "Three decision packs share one engine here: subcontractor bids, a car purchase, and a household energy bill. This is the bids one."
+        "Three decision packs, one engine: bids, a car purchase, a household energy bill."
       ]
     },
     {
@@ -53,15 +53,12 @@
       "title": "Two Strands topologies",
       "minSeconds": 10,
       "lines": [
-        "Where the handoffs should be the model's call, that engine runs a Strands Swarm - bids, home energy."
+        "Where handoffs should be the model's call, it runs a Strands Swarm - bids, home energy."
       ],
       "still": {
         "kind": "code",
         "path": "apps/agent/src/runtime/bid-comparison-swarm.ts",
-        "lines": [
-          79,
-          85
-        ]
+        "lines": [79, 85]
       }
     },
     {
@@ -69,16 +66,11 @@
       "number": 2,
       "title": "Two Strands topologies",
       "minSeconds": 10,
-      "lines": [
-        "Where the order is fixed, it runs a Strands Graph instead. Same pack format either way."
-      ],
+      "lines": ["Where the order is fixed, a Strands Graph. Same pack format either way."],
       "still": {
         "kind": "code",
         "path": "apps/agent/src/runtime/car-purchase-graph.ts",
-        "lines": [
-          65,
-          70
-        ]
+        "lines": [65, 70]
       }
     },
     {
@@ -112,7 +104,7 @@
       "minSeconds": 22,
       "lines": [
         "One request starts the Swarm: six nodes, six stages, five handoffs - and the handoffs are the model's decision.",
-        "Each specialist loads only the AgentSkill its obligation needs: scope normalization, price arithmetic, credential verification, schedule analysis. Four activations in this run.",
+        "Each specialist loads only the AgentSkill its obligation needs: scope normalization, price arithmetic, credential verification. Four activations here.",
         "A Context Injector refreshes the weights, the open scope gaps and the remaining budget every turn. Twenty-eight injections."
       ]
     },

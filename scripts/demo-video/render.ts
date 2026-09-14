@@ -35,6 +35,16 @@ import {
   type Manifest,
 } from './manifest.js';
 
+// Narration credentials come from the environment or from a gitignored
+// `.env.local`, never from a manifest, an argument, or this file. The file
+// route exists so the key can be written once by its owner and never pasted
+// into a command again.
+try {
+  process.loadEnvFile(join(process.cwd(), '.env.local'));
+} catch {
+  /* absent is the normal case; the run falls back to the `say` voice */
+}
+
 const CANVAS = { width: 1920, height: 1080 } as const;
 const PANE = { x: 1299, y: 40, width: 511, height: 1000 } as const;
 const LEFT = { x: 110, y: 520, width: 1110, height: 430 } as const;
@@ -141,7 +151,12 @@ async function speak(manifest: Manifest, text: string, out: string): Promise<voi
     if (!response.ok) throw new Error(`elevenlabs ${String(response.status)}`);
     const mp3 = join(AUDIO_DIR, 'tmp.mp3');
     writeFileSync(mp3, Buffer.from(await response.arrayBuffer()));
-    ffmpeg(['-i', mp3, '-ar', '48000', '-ac', '2', out]);
+    // Normalized like the fallback voice, or the two render at different
+    // levels: raw ElevenLabs output measured -23.3 LUFS against `say`'s -15.3,
+    // which is quiet enough that a platform's own normalization lifts the
+    // noise floor with it. No compressor here -- unlike `say`, this source
+    // already has usable dynamics.
+    ffmpeg(['-i', mp3, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', '-ac', '2', out]);
     rmSync(mp3, { force: true });
     return;
   }

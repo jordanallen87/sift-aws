@@ -411,14 +411,16 @@ describe('checkVideoDuration', () => {
     dir = undefined;
   });
 
-  const webmcpSpec = VIDEO_CHECKS.find((spec) => spec.key === 'webmcp');
-  if (!webmcpSpec) throw new Error('webmcp video spec not found');
+  // `VIDEO_CHECKS` now holds only the agents-for-humans spec — the webmcp
+  // spec (and its 180s-limit test cases) was removed along with it. The
+  // OpenAI WebMCP Challenge is a separate, already-submitted contest, so
+  // this release's video-duration gate no longer covers it.
   const awsSpec = VIDEO_CHECKS.find((spec) => spec.key === 'agents-for-humans');
   if (!awsSpec) throw new Error('agents-for-humans video spec not found');
 
   it('skips when no video file is present at the conventional path', () => {
     dir = tempRoot();
-    const result = checkVideoDuration(dir, webmcpSpec, {});
+    const result = checkVideoDuration(dir, awsSpec, {});
     expect(result.status).toBe('skip');
     expect(result.message).toContain('no video file yet');
   });
@@ -426,38 +428,14 @@ describe('checkVideoDuration', () => {
   it('skips with an honest reason when ffprobe is unavailable but the file exists', () => {
     dir = tempRoot();
     mkdirSync(join(dir, 'docs', 'demo'), { recursive: true });
-    writeFileSync(join(dir, 'docs', 'demo', 'webmcp-recording.mp4'), Buffer.from([0]));
+    writeFileSync(join(dir, 'docs', 'demo', 'aws-recording.mp4'), Buffer.from([0]));
     const deps: VideoDurationDeps = {
       isFfprobeAvailable: () => false,
       probeDurationSeconds: () => null,
     };
-    const result = checkVideoDuration(dir, webmcpSpec, {}, deps);
+    const result = checkVideoDuration(dir, awsSpec, {}, deps);
     expect(result.status).toBe('skip');
     expect(result.message).toContain('ffprobe is not available');
-  });
-
-  it('fails when the webmcp recording is three minutes or longer', () => {
-    dir = tempRoot();
-    mkdirSync(join(dir, 'docs', 'demo'), { recursive: true });
-    writeFileSync(join(dir, 'docs', 'demo', 'webmcp-recording.mp4'), Buffer.from([0]));
-    const deps: VideoDurationDeps = {
-      isFfprobeAvailable: () => true,
-      probeDurationSeconds: () => 180,
-    };
-    const result = checkVideoDuration(dir, webmcpSpec, {}, deps);
-    expect(result.status).toBe('fail');
-  });
-
-  it('passes when the webmcp recording is under three minutes', () => {
-    dir = tempRoot();
-    mkdirSync(join(dir, 'docs', 'demo'), { recursive: true });
-    writeFileSync(join(dir, 'docs', 'demo', 'webmcp-recording.mp4'), Buffer.from([0]));
-    const deps: VideoDurationDeps = {
-      isFfprobeAvailable: () => true,
-      probeDurationSeconds: () => 179.9,
-    };
-    const result = checkVideoDuration(dir, webmcpSpec, {}, deps);
-    expect(result.status).toBe('pass');
   });
 
   it('passes when the AWS recording is exactly five minutes (inclusive limit)', () => {
@@ -494,8 +472,8 @@ describe('checkVideoDuration', () => {
     };
     const result = checkVideoDuration(
       dir,
-      webmcpSpec,
-      { SIFT_WEBMCP_VIDEO_PATH: 'custom/my-video.mp4' },
+      awsSpec,
+      { SIFT_AWS_VIDEO_PATH: 'custom/my-video.mp4' },
       deps,
     );
     expect(result.status).toBe('pass');
@@ -517,7 +495,10 @@ describe('checkReleaseMetadataPublicUrls', () => {
     expect(result.message).toContain('does not exist');
   });
 
-  it('fails and names the specific unset fields when some are missing', () => {
+  // `webmcpVideoUrl` was dropped from RELEASE_METADATA_REQUIRED_URL_FIELDS:
+  // the OpenAI WebMCP Challenge is a separate, already-submitted contest, so
+  // this release's metadata gate no longer requires that field.
+  it('fails and names the specific unset fields when some are missing, including agentsForHumansVideoUrl', () => {
     dir = tempRoot();
     mkdirSync(join(dir, 'docs', 'submissions'), { recursive: true });
     writeFileSync(
@@ -527,7 +508,7 @@ describe('checkReleaseMetadataPublicUrls', () => {
     const result = checkReleaseMetadataPublicUrls(dir);
     expect(result.status).toBe('fail');
     expect(result.message).toContain('deployedUrl');
-    expect(result.message).toContain('webmcpVideoUrl');
+    expect(result.message).toContain('agentsForHumansVideoUrl');
     expect(result.message).not.toContain('repositoryUrl,'); // repositoryUrl was set, should not be listed as unset
   });
 
@@ -539,7 +520,6 @@ describe('checkReleaseMetadataPublicUrls', () => {
       JSON.stringify({
         repositoryUrl: 'https://github.com/example/sift',
         deployedUrl: 'https://sift-hackathon-production.up.railway.app',
-        webmcpVideoUrl: 'https://youtube.com/watch?v=abc',
         agentsForHumansVideoUrl: 'https://youtube.com/watch?v=def',
       }),
     );

@@ -18,6 +18,14 @@
  *      recording exceeds five minutes, once the video files are present;
  *    - required public URL fields remain unset in the release metadata."
  *
+ * This script enforces only the agents-for-humans half of the video-length
+ * and URL-field bullets above. The OpenAI WebMCP Challenge was a separate
+ * contest, already submitted and closed; gating this (Agents for Humans)
+ * release on its still-unset `webmcpVideoUrl` or its 180s recording limit
+ * would check an artifact that is out of scope for this submission, not a
+ * relaxed standard for it. See the removal comments on `VIDEO_CHECKS` and
+ * `RELEASE_METADATA_REQUIRED_URL_FIELDS` below.
+ *
  * And the hard boundary immediately below that list: "The checker ... must
  * never mark eligibility, country, submitter type, learning, career-value,
  * AWS Builder ID ownership, rule agreement, or other personal/legal
@@ -483,7 +491,7 @@ export function checkReleaseVerificationSha(
 
 // --- 9. Video durations, once the files are present ---
 export interface VideoCheckSpec {
-  key: 'webmcp' | 'agents-for-humans';
+  key: 'agents-for-humans';
   envVar: string;
   defaultPath: string;
   /** Given a real measured duration in seconds, returns true if it FAILS this spec's limit. */
@@ -491,14 +499,11 @@ export interface VideoCheckSpec {
   limitDescription: string;
 }
 
+// The `webmcp` entry (SIFT_WEBMCP_VIDEO_PATH / docs/demo/webmcp-recording.mp4,
+// failing at >= 180s) was removed. The OpenAI WebMCP Challenge is a separate,
+// already-submitted contest; gating this Agents for Humans release on its
+// video artifact is out of scope for this release, not a loosened check.
 export const VIDEO_CHECKS: VideoCheckSpec[] = [
-  {
-    key: 'webmcp',
-    envVar: 'SIFT_WEBMCP_VIDEO_PATH',
-    defaultPath: 'docs/demo/webmcp-recording.mp4',
-    failsAt: (seconds) => seconds >= 180,
-    limitDescription: 'strictly under three minutes (180s)',
-  },
   {
     key: 'agents-for-humans',
     envVar: 'SIFT_AWS_VIDEO_PATH',
@@ -607,10 +612,12 @@ export function checkVideoDuration(
 // docs/submissions/README.md's "Shared facts to fill after implementation".
 // Only the fields this checker actually validates are named here; populating
 // the file is later submission-packaging work, not this tooling task.
+// `webmcpVideoUrl` was removed. The OpenAI WebMCP Challenge is a separate,
+// already-submitted contest; gating this Agents for Humans release on that
+// contest's video URL is out of scope for this release, not a loosened check.
 export const RELEASE_METADATA_REQUIRED_URL_FIELDS = [
   'repositoryUrl',
   'deployedUrl',
-  'webmcpVideoUrl',
   'agentsForHumansVideoUrl',
 ] as const;
 

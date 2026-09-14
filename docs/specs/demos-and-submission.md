@@ -171,9 +171,17 @@ Two constraints that bind regardless of which lane is used:
 - `docs/reuse-source-map.md` makes `praetor` read-only reference and forbids
   importing it through a filesystem path. Those scripts are run in place or
   copied and adapted; they never become a Sift dependency.
-- The caps this specification sets (WebMCP under 180s, Agents for Humans at or
-  under 300s) are the ones that apply. The reference `compose.mjs` hardcodes a
-  240-second cap from a different contest and must be changed.
+- The cap this specification sets (Agents for Humans at or under 300s) is the
+  one that applies. The reference `compose.mjs` hardcodes a 240-second cap from
+  a different contest and must be changed.
+
+  The WebMCP Challenge was a separate contest, submitted separately and closed.
+  Its 180-second cap and its video URL no longer gate this release, and
+  `scripts/test-submission.ts` no longer checks them -- a scope reduction, not a
+  relaxed standard. **WebMCP the technology is unchanged and still shipped:** the
+  26 registered tools, the testing instructions below, and the browser
+  interaction in the architecture diagram all remain in scope, and `webmcp`
+  remains in Built With.
 
 ## Submission deliverables
 
@@ -188,7 +196,7 @@ The repository must contain:
 - AgentCore deployment evidence and invocation instructions;
 - WebMCP testing instructions for ChatGPT and compatible Chrome;
 - automated verification report from the release commit;
-- separate public demo videos: WebMCP under three minutes with audio and AWS no longer than five minutes;
+- a public demo video no longer than five minutes, with audio;
 - text descriptions tailored to each hackathon;
 - the shared release checklist and exhaustive competition-specific requirements checklists under `docs/submissions/`;
 - an optional AWS Builder post draft.
@@ -205,7 +213,7 @@ The repository must contain:
 - fixture attribution is missing;
 - either deterministic scenario report is absent or failed;
 - the latest release verification SHA differs from the current Git SHA;
-- the WebMCP recording is three minutes or longer, or the AWS recording exceeds five minutes, once the video files are present;
+- the Agents for Humans recording exceeds five minutes, once the video file is present;
 - required public URL fields remain unset in the release metadata.
 
 The checker maps machine-verifiable checklist requirements to release metadata, files, URLs, test reports, or scenario evidence. It must never mark eligibility, country, submitter type, learning, career-value, AWS Builder ID ownership, rule agreement, or other personal/legal attestations complete. Those remain visible human gates in the Markdown checklists.

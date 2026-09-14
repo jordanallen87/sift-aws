@@ -39,6 +39,10 @@ const CANVAS = { width: 1920, height: 1080 } as const;
 const PANE = { x: 1299, y: 40, width: 511, height: 1000 } as const;
 const LEFT = { x: 110, y: 520, width: 1110, height: 430 } as const;
 const RADIUS = 26;
+/** Caption dissolve, and the film's open and close. Kept here so the three read together. */
+const CAPTION_FADE = 0.18;
+const OPEN_FADE = 0.6;
+const CLOSE_FADE = 0.9;
 
 const INK = '#0B1512';
 const TEXT = '#F4F7F5';
@@ -464,12 +468,27 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
         '-i',
         join(PANEL_DIR, `cap-${plan.beat.id}-${String(index).padStart(2, '0')}.png`),
       );
+      // Dissolve rather than pop. Each caption's own alpha is animated, so the
+      // overlay needs no `enable` window: the image is fully transparent
+      // outside its own [from, to]. Window `to` equals the next window's
+      // `from`, so the outgoing fade finishes exactly as the incoming one
+      // starts -- they never double-expose, and no transition duration has to
+      // be kept in step with a separate caption timing sheet.
+      const faded = `f${String(index)}`;
       const next = `c${String(index)}`;
+      const out1 = Math.max(window.from, window.to - CAPTION_FADE);
       steps.push(
-        `[${label}][${String(stream)}:v]overlay=${String(LEFT.x)}:${String(LEFT.y)}:` +
-          `enable='between(t,${window.from.toFixed(3)},${window.to.toFixed(3)})'[${next}]`,
+        `[${String(stream)}:v]format=rgba,` +
+          `fade=t=in:st=${window.from.toFixed(3)}:d=${CAPTION_FADE.toFixed(3)}:alpha=1,` +
+          `fade=t=out:st=${out1.toFixed(3)}:d=${CAPTION_FADE.toFixed(3)}:alpha=1[${faded}]`,
       );
+      steps.push(`[${label}][${faded}]overlay=${String(LEFT.x)}:${String(LEFT.y)}[${next}]`);
       label = next;
+    }
+    // The film opens out of black rather than cutting in cold.
+    if (index === 0) {
+      steps.push(`[${label}]fade=t=in:st=0:d=${OPEN_FADE.toFixed(3)}[opened]`);
+      label = 'opened';
     }
     inputs.push('-i', plan.audio);
     const audioStream = 3 + plan.windows.length;
@@ -511,6 +530,8 @@ function composeBeats(manifest: Manifest, planned: readonly PlannedBeat[]): stri
     seconds.toFixed(3),
     '-i',
     'anullsrc=r=48000:cl=stereo',
+    '-vf',
+    `fade=t=out:st=${(seconds - CLOSE_FADE).toFixed(3)}:d=${CLOSE_FADE.toFixed(3)}`,
     ...ENCODE,
     '-movflags',
     '+faststart',

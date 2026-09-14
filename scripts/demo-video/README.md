@@ -58,6 +58,33 @@ to be found again.
    document, which shears the app bar off the top of the pane. Move the
    workspace container's own `scrollTop` instead.
 
+## Transitions
+
+Deliberately quiet, and all of them computed from the same measured caption
+windows rather than from a transition-duration constant that has to be kept in
+step by hand -- trap 2 in
+[`docs/hackathons/demo-tooling/README.md`](../../docs/hackathons/demo-tooling/README.md),
+where `stitch.mjs` defaults to 0.5 and `mksrt.mjs` to 0.6 and the captions drift
+against the picture.
+
+- **Captions dissolve, 0.18s.** Each caption image animates its own alpha, so
+  the overlay needs no `enable` window. A window's `to` is exactly the next
+  window's `from`, so the outgoing fade finishes as the incoming one starts:
+  they never double-expose, and measured caption-area luma across a change runs
+  9 -> 6 -> 1 -> 4 -> 9.
+- **The pane fades in, 0.35s, once per numbered beat.** Sub-beats that share a
+  number and title are one visual beat split only so each part can align to its
+  own footage; fading at those joins would read as a flicker mid-thought.
+- **The film opens out of black over 0.6s and the closing card fades out over
+  0.9s.** Applied to those two segments, not to the stitched file, so the final
+  concat stays a stream copy and costs no second encode.
+- **Beat to beat is a hard cut.** A cross-dissolve between segments would mean
+  re-encoding the join and subtracting the overlap from every downstream
+  caption offset. The cut is the honest edit here: the screen genuinely changes.
+
+There is no music bed. The narration is synthesized and a bed would compete
+with it; add one only with a licensed asset and well under the voice.
+
 ## Narration
 
 Defaults to macOS `say` -- offline, deterministic, free, and good enough that

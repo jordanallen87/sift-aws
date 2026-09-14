@@ -201,6 +201,44 @@ Replace this draft with the exact public URL, scenario control labels, AgentCore
 
 **OpenTelemetry is now part of this list (2026-09-04).** Sift registers a real `NodeTracerProvider` through the Strands SDK's own `setupTracer({ provider })` and records the spans the SDK already emits into `runtime_events`, with real `span_id`/`parent_span_id` links and span-measured durations (`apps/agent/src/runtime/otel-span-recorder.ts`, installed at startup by `apps/agent/src/server.ts`). A standard `OTLPTraceExporter` additionally attaches, via a real `BatchSpanProcessor`, whenever `OTEL_EXPORTER_OTLP_ENDPOINT` is set; unset (the default), no exporter is constructed and nothing opens a socket. The lifecycle-hook correlation is unchanged and still real: hook events normalized in `apps/agent/src/runtime/event-normalizer.ts` under a Sift-minted `traceId`. Still not claimed: `setupMeter()`/OTEL metrics, W3C `traceparent` propagation to AgentCore/CloudWatch specifically, and any CloudWatch/AgentCore Observability correlation for this OTel span path. See `docs/submissions/webmcp/claim-evidence-matrix.md` rows E8/E9.
 
+
+> Moved here from `about-project.md` on 2026-09-14 so that file is a clean copy-paste of the
+> Devpost "About Project" field and nothing else. This is the Built With field, which Devpost
+> collects separately.
+
+### Built With — the tag string to paste
+
+```
+strands-agents-sdk, typescript, react, vite, tailwindcss, radix-ui, express, node.js, zod, drizzle-orm, sqlite, better-sqlite3, opentelemetry, webmcp, playwright, vitest, docker, railway, amazon-bedrock, amazon-nova
+```
+
+Every tag above is a real, load-bearing dependency, verified against `package.json` on 2026-09-13:
+`@strands-agents/sdk` ^1.14.0, TypeScript ^6.0.3, React 19, Vite (via `@vitejs/plugin-react` ^6.1.0),
+Tailwind CSS ^4.3.3, `radix-ui` ^1.6.7, Express ^5.2.1, Zod ^4.4.3, `drizzle-orm` ^0.45.2,
+`better-sqlite3` ^13.0.3, `@opentelemetry/api` ^1.9.1, `@playwright/test` ^1.62.1, Vitest ^4.1.11,
+plus the repo's own `Dockerfile` and the Railway deployment. `amazon-bedrock` and `amazon-nova`
+reach the service through the same SDK, via its `BedrockModel` class — not a separate npm
+dependency — and are verified live rather than by `package.json`: on 2026-09-14, with
+`SIFT_BID_DOCUMENT_READER_ENABLED=true`, `POST /api/cases/:caseId/bid-documents/read` constructed a
+real `BedrockModel` for **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) on **Amazon Bedrock**, region
+`us-east-1`, and returned a genuine model-read bid in 2.5 seconds. See "How we built it" above and
+`claim-evidence-matrix.md` for the full record.
+
+#### One tag deliberately omitted
+
+**Amazon Bedrock AgentCore.** The `/ping` and `/invocations` routes are implemented and verified
+against the local target, but `release-metadata.json` records `agentCore.deployed: false` — no AWS
+credentials existed in this build environment. Add this tag only if you deploy before submitting.
+
+**Amazon Bedrock is no longer on this list.** As of 2026-09-14 it is a real, verified tag: live
+inference reaches the bid-document-reading path described above. The scope is honest, not total —
+the hero bid-comparison trajectory you watch in the demo is still deterministic by design, for the
+release gates' no-network, no-credentials requirement, and does not use Bedrock. The tag is truthful
+for the capability it names; it does not claim the hero trajectory is model-chosen.
+
+Judges do check these against the repository. The AgentCore omission is recoverable later; a claim
+that does not survive inspection is not.
+
 ## Architecture diagram requirements
 
 The submitted export must visibly distinguish:

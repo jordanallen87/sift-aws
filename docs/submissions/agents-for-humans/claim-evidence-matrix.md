@@ -142,7 +142,7 @@ The redaction manifest is worth a judge's attention in its own right: the log pr
 
 ## D. Honest gaps
 
-- **AgentCore is not deployed.** The contract is served and exercised; no AWS credentials existed in the build environment. `aws sts get-caller-identity` → `NoCredentials`.
+- **AgentCore is not deployed.** The contract is served and exercised, and `/ping` answers on the live Railway deployment. The earlier reason recorded here — no AWS credentials in the build environment — stopped being true on 2026-09-14, when credentials became available and were used for the live Bedrock path (S12). `agentCore.deployed` remains `false` because the deployment was not done, not because it could not be.
 - **No CloudWatch correlation**, for the same reason. The architecture diagram deliberately draws none.
 - **The hero trajectory has no live model inference path.** `bid-comparison-engine.ts` and both other engines construct their scripted provider unconditionally, so every hero run — local and deployed — is scripted. The scripted provider is a real Strands `Model` subclass driving the genuine agent loop, tool-calling and structured-output validation, so **the orchestration in every row above is real**; what is absent from the hero path specifically is a call to Bedrock. Separately, `createBedrockModel`/`resolveModelProvider` (row S12) are exercised by a real production route as of 2026-09-14 — the opt-in bid-document reader, not the hero Swarm. See `docs/specs/strands-runtime.md` "What actually ships".
 - **The deployed build can lag the repository.** Nothing in the product reports which commit is live. Confirm the deployment before citing a log against a specific row.

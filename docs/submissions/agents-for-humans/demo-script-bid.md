@@ -117,7 +117,7 @@ investigation, then centres the flagged Two Rivers card in the List view.
 
 **Narration:**
 > "Awarding is gated by a Confirm intervention. The proposal sits pending, with no approving actor, until a person acts."
-> "So I act. Select Northgate Plumbing."
+> "And I just did. I selected Northgate Plumbing."
 > "Decided. The agent recommended. A human awarded. That line is structural."
 
 **On screen:** Centres on the pending approval card, clicks "Select Northgate Plumbing," then
@@ -126,8 +126,8 @@ scrolls to the top where the case now reads "Decided."
 ### Beat 12 — Proof it is really Strands
 
 **Narration:**
-> "This is the Runtime Inspector. Every tool call, model call, node and handoff comes through the SDK's own lifecycle hooks, under one trace id."
-> "Four hundred and thirty-three events. A hundred and five spans, every one stamped with the SDK's own instrumentation scope."
+> "This is the Runtime Inspector. Four hundred and thirty-three events from that one run, all through the SDK's own lifecycle hooks, under one trace id."
+> "The Swarm's own record: six nodes, five handoffs. And every span carries the SDK's own instrumentation scope."
 > "And every mechanism you just watched has a test that fails if it stops being true."
 
 **On screen:** Cycles the Runtime Inspector's Overview, Execution and Timeline tabs on the

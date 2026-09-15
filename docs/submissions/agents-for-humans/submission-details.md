@@ -270,7 +270,7 @@ Cover the real Strands trajectory, why deterministic readiness sits outside the 
 - [ ] Add the verified Railway URL.
 - [x] Deploy and verify AgentCore (runtime `sift_agentcore`, verified through InvokeAgentRuntime on 2026-09-14).
 - [ ] Record exact setup and deterministic testing instructions.
-- [ ] Record a public demo video no longer than five minutes.
+- [x] Record a public demo video no longer than five minutes. — <https://youtu.be/AFgXqNPnkVo>, 296.1s, public (resolves signed out).
 - [ ] Show the working product rather than slides or mockups.
 - [ ] Name Strands Agents SDK prominently in Built With, description, README, and video.
 - [ ] Publish and link the optional Builder post if pursuing bonus points.

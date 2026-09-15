@@ -1,6 +1,6 @@
 # Agents for Humans demo video — shot-by-shot
 
-Video URL: to be replaced after re-upload (previous cut: <https://youtu.be/T8Q0oQAExE4>) · Duration: measured at render, cap 300s
+Video URL: <https://youtu.be/AFgXqNPnkVo> (previous cut: <https://youtu.be/T8Q0oQAExE4>) · Duration: 296.1s, cap 300s
 Narration: ElevenLabs · Rendered from `scripts/demo-video/manifest.json` by `scripts/demo-video/render.ts`
 
 ## What this demo is about
